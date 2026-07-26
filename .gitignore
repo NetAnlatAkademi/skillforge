@@ -1,0 +1,41 @@
+## Build output
+bin/
+obj/
+artifacts/
+dist/
+[Dd]ebug/
+[Rr]elease/
+*.binlog
+
+## Test / coverage output
+TestResults/
+coverage/
+*.coverage
+*.trx
+*.opencover.xml
+*.cobertura.xml
+
+## IDE and tooling
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+## OS noise
+.DS_Store
+Thumbs.db
+
+## Local secrets — never commit
+*.env
+.env.*
+!.env.example
+secrets.json
+*.pfx

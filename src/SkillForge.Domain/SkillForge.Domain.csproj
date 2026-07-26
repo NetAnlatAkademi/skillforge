@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>SkillForge domain model: skills, diagnostics, packaging metadata. No framework dependencies.</Description>
+  </PropertyGroup>
+
+</Project>

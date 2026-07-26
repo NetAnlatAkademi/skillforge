@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>skillforge</AssemblyName>
+    <RootNamespace>SkillForge.Cli</RootNamespace>
+    <Description>SkillForge command line interface.</Description>
+    <!-- Global tool packaging is wired up in a later phase (Milestone v0.1.0). -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SkillForge.Infrastructure\SkillForge.Infrastructure.csproj" />
+    <ProjectReference Include="..\SkillForge.Reporting\SkillForge.Reporting.csproj" />
+  </ItemGroup>
+
+</Project>

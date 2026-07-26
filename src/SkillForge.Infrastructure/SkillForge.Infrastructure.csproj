@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>SkillForge infrastructure: file system access, YAML parsing, hashing and archive creation.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SkillForge.Application\SkillForge.Application.csproj" />
+  </ItemGroup>
+
+</Project>

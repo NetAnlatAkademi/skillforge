@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>SkillForge use cases: skill loading, validation, inspection and packaging orchestration.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SkillForge.Domain\SkillForge.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

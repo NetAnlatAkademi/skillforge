@@ -1,0 +1,82 @@
+# Architecture
+
+## Shape
+
+SkillForge is a **modular monolith** with a simplified Clean Architecture layering. There is no
+database, no service boundary and no container requirement.
+
+```text
+SkillForge.Cli            Commands, options, exit codes, DI bootstrap
+        │
+        ├──────────────► SkillForge.Reporting        Console / JSON / SARIF renderers
+        │                        │
+        └──────────────► SkillForge.Infrastructure   File system, YAML, ZIP, SHA-256
+                                 │
+                        SkillForge.Application       Use cases, validation orchestration
+                                 │
+                        SkillForge.Domain            Models, diagnostics, severities
+```
+
+## Dependency rules
+
+| Layer | May reference | Must not reference |
+|---|---|---|
+| `Domain` | nothing | any other project, any third-party framework |
+| `Application` | `Domain` | `Infrastructure`, `Reporting`, `Cli`, `System.IO` for real I/O |
+| `Infrastructure` | `Application`, `Domain` | `Reporting`, `Cli` |
+| `Reporting` | `Application`, `Domain` | `Infrastructure`, `Cli` |
+| `Cli` | all of the above | — |
+
+Consequences:
+
+- The Application layer reaches the file system only through abstractions it owns, so every rule is
+  unit-testable without touching disk.
+- Command classes contain no business logic. They parse input, call a use case and map the result to
+  an exit code.
+- Expected validation failures are returned as a result model, not thrown. Exceptions are reserved for
+  genuinely unexpected states.
+
+## Cross-cutting conventions
+
+- **Nullability:** enabled everywhere; `TreatWarningsAsErrors` keeps it honest.
+- **Async:** all I/O is async, methods end in `Async`, and every public async method accepts a
+  `CancellationToken`.
+- **Time:** UTC only, obtained through `TimeProvider` so tests can control it. `DateTime.UtcNow` is not
+  called directly in production code.
+- **Paths:** normalised before use. No hard-coded OS separators. Access outside the skill root is
+  rejected, including via symlinks and `..` segments.
+- **Diagnostics:** every rule owns a stable code (`SF0001`, `SF1001`, `SF2001`, …). Codes are never
+  reused or renumbered once released.
+- **Determinism:** diagnostic ordering and package contents are deterministic, so identical input
+  produces an identical hash.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success, no errors |
+| 1 | Validation error (or a warning under `--strict`) |
+| 2 | Invalid CLI usage |
+| 3 | Unexpected application failure |
+
+## Package inventory and justification
+
+Every NuGet dependency is declared centrally in `Directory.Packages.props`. New entries require a
+justification row here.
+
+| Package | Layer | Justification |
+|---|---|---|
+| `Microsoft.NET.Test.Sdk` | tests | Required test host for `dotnet test`. |
+| `xunit`, `xunit.runner.visualstudio` | tests | Test framework chosen by the roadmap. |
+| `FluentAssertions` 7.x | tests | Readable assertions. Pinned to 7.x because 8.x moved to a commercial license. |
+| `coverlet.collector` | tests | Coverage collection for the roadmap's coverage targets. |
+
+Packages named in the roadmap but **not yet added** — `System.CommandLine`, `YamlDotNet`,
+`FluentValidation`, `Spectre.Console`, `Microsoft.Extensions.*` — are introduced in the phase that
+first needs them, so that Phase 0 has no unused dependencies.
+
+## Testing strategy
+
+One test project per source project. Coverage targets: Domain 90%+, Application 80%+,
+Infrastructure 70%+, plus mandatory CLI smoke tests. Coverage alone is not the bar — every validation
+rule must have a test that asserts its diagnostic code.

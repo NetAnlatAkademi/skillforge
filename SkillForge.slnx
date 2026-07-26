@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SkillForge.Application/SkillForge.Application.csproj" />
+    <Project Path="src/SkillForge.Cli/SkillForge.Cli.csproj" />
+    <Project Path="src/SkillForge.Domain/SkillForge.Domain.csproj" />
+    <Project Path="src/SkillForge.Infrastructure/SkillForge.Infrastructure.csproj" />
+    <Project Path="src/SkillForge.Reporting/SkillForge.Reporting.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SkillForge.Application.Tests/SkillForge.Application.Tests.csproj" />
+    <Project Path="tests/SkillForge.Cli.Tests/SkillForge.Cli.Tests.csproj" />
+    <Project Path="tests/SkillForge.Domain.Tests/SkillForge.Domain.Tests.csproj" />
+    <Project Path="tests/SkillForge.Infrastructure.Tests/SkillForge.Infrastructure.Tests.csproj" />
+    <Project Path="tests/SkillForge.Reporting.Tests/SkillForge.Reporting.Tests.csproj" />
+  </Folder>
+</Solution>

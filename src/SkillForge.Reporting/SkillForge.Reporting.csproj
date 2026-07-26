@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>SkillForge report renderers: console summary, JSON report and SARIF 2.1.0 output.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SkillForge.Application\SkillForge.Application.csproj" />
+  </ItemGroup>
+
+</Project>
