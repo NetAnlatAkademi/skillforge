@@ -27,6 +27,10 @@ Last updated: 2026-07-26
 - [x] Add `NuGet.config` (not in the roadmap; required because CPM rejects unmapped machine feeds)
 - [x] Add `CHANGELOG.md`
 - [x] Initial commit
+- [x] Create the GitHub remote (`NetAnlatAkademi/skillforge`, private) and push `main`
+- [x] Verify the CI workflow green on `ubuntu-latest` and `windows-latest`
+- [x] Pin GitHub Actions to `@v5` (the `@v4` versions emit a Node 20 deprecation warning)
+- [-] Make the repository public — deferred until v0.1.0 is usable
 
 ### Deviations from the roadmap
 

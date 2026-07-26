@@ -14,5 +14,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   warnings as errors, XML documentation.
 - Central Package Management (`Directory.Packages.props`).
 - `.editorconfig` with C# formatting and naming conventions.
-- GitHub Actions CI workflow running restore, build and test on Linux and Windows.
-- Initial architecture document (`docs/architecture.md`).
+- GitHub Actions CI workflow running restore, format verification, build and test on Linux and Windows.
+- Initial architecture document (`docs/architecture.md`) and diagnostic code registry
+  (`docs/validation-rules.md`).
+- `NuGet.config` restricting restore to nuget.org so builds are reproducible.

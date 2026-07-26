@@ -4,6 +4,7 @@ A local, open source CLI for AI agent skills. SkillForge creates, validates, ins
 `SKILL.md`-based skills, and reports findings as human-readable console output, JSON or SARIF.
 
 > Status: **pre-alpha**. Phase 0 (repository bootstrap) is complete; no CLI commands are implemented yet.
+> CI builds and tests on Linux and Windows.
 > See [SKILLFORGE_ROADMAP.md](SKILLFORGE_ROADMAP.md) for scope and [TODO.md](TODO.md) for progress.
 
 ## Why
