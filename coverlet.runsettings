@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+
+          <!--
+            Source-generated code is not ours to test. [GeneratedRegex] alone emits several hundred
+            lines of matcher per pattern, which would otherwise dominate the numbers and hide real gaps
+            in hand-written code.
+          -->
+          <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute,Obsolete</ExcludeByAttribute>
+
+          <!-- Test helpers and fakes are exercised by definition; measuring them says nothing. -->
+          <Exclude>[*.Tests]*</Exclude>
+
+          <SkipAutoProps>true</SkipAutoProps>
+          <UseSourceLink>true</UseSourceLink>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+
+</RunSettings>

@@ -27,6 +27,7 @@ public sealed class SkillModelTests
         skill.SkillFilePath.Should().Be("/skills/demo/SKILL.md");
         skill.Resources.Should().ContainSingle();
         skill.Body.Should().Be("# Demo");
+        skill.BodyStartLine.Should().Be(6);
         skill.SkillFileLineCount.Should().Be(7);
         skill.Frontmatter.Name.Should().Be("demo");
     }
@@ -130,5 +131,6 @@ public sealed class SkillModelTests
             frontmatter ?? CreateFrontmatter(),
             resources ?? [new SkillResource("SKILL.md", "/skills/demo/SKILL.md", SkillResourceKind.SkillDocument, 42)],
             "# Demo",
-            7);
+            BodyStartLine: 6,
+            SkillFileLineCount: 7);
 }

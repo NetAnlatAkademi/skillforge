@@ -39,8 +39,11 @@ dotnet test
 With coverage:
 
 ```bash
-dotnet test --collect:"XPlat Code Coverage"
+dotnet test --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 ```
+
+The run settings exclude source-generated code. Without them, the matchers emitted by
+`[GeneratedRegex]` dominate the numbers and hide real gaps in hand-written code.
 
 Run the CLI from source:
 

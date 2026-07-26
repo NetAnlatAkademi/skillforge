@@ -90,22 +90,43 @@ I/O failure, so it is left alone deliberately.
 - **Record equality does not look inside collection members.** `SkillDefinition` compares `Resources`
   and `Metadata` by reference. Anything comparing skills must compare the parts it cares about.
 
-## Phase 2 — Validation Engine (next)
+## Phase 2 — Validation Engine ✅ complete
 
-- [ ] `ISkillValidationRule` interface
-- [ ] Rule discovery and execution pipeline (one failing rule must not stop the others)
-- [ ] Required field rules (SF0004, SF0005)
-- [ ] Name format rules (SF0006)
-- [ ] Description quality rules (SF1001, SF1002)
-- [ ] File reference rules (SF0007)
-- [ ] Path traversal rules (SF0008)
-- [ ] Length rules (SF1003)
-- [ ] License and compatibility warnings (SF1009, SF1010)
-- [ ] Summary calculation
-- [ ] Strict mode
-- [ ] Deterministic diagnostic ordering
+- [x] `ISkillValidationRule` interface — one rule, one code, independently testable
+- [x] Rule set and execution pipeline — a rule reporting an error does not stop the others
+- [x] Required field rules (SF0004, SF0005)
+- [x] Name format rules (SF0006)
+- [x] Description quality rules (SF1001, SF1002)
+- [x] File reference rules (SF0007) — Markdown links in the body checked against the file inventory
+- [x] Path traversal rules (SF0008) — body references that escape the skill directory
+- [x] Length rules (SF1003)
+- [x] License and compatibility warnings (SF1009, SF1010)
+- [x] Package version rule (SF0010)
+- [x] Summary calculation (`ValidationSummary`)
+- [x] Strict mode (`ValidationReport.HasFailed(strict)`)
+- [x] Deterministic diagnostic ordering (`DiagnosticOrdering`, stable)
+- [x] 266 tests; line coverage Domain 92.3%, Application 99.6%, Infrastructure 98.1%
+- [x] `coverlet.runsettings` so source-generated code stops hiding real coverage gaps
 
-## Phase 3 — CLI Foundation
+### Decisions taken in this phase
+
+- **A rule that throws is a bug and is not swallowed.** "One failing rule must not stop the others"
+  means a rule *reporting an error* does not short-circuit the run. An exception is different: it means
+  the rule itself is broken, and hiding it would hand the user a quietly incomplete report. It surfaces
+  as exit code 3. This also keeps the codebase free of `catch (Exception)`.
+- **Precedence between codes**, so one mistake yields one finding: SF0004 suppresses SF0006; SF0005
+  suppresses SF1001 and SF1002; SF0008 suppresses SF0007 for the same reference.
+- **SF0007 compares paths case-sensitively on every platform.** `References/Notes.md` for a file named
+  `references/notes.md` works on Windows and breaks on Linux; reporting it everywhere names the
+  portability bug instead of deferring it.
+- **Links inside fenced code blocks are ignored.** They are examples shown to the reader, not files the
+  skill depends on.
+- **An explicit rule list, not assembly scanning.** Reflection would make the active rule set depend on
+  what happens to be loaded, and a rule silently disappearing is worse than one added by hand.
+- **Thresholds are documented with their reasoning** in `docs/validation-rules.md` so they can be argued
+  with rather than guessed at.
+
+## Phase 3 — CLI Foundation (next)
 
 - [ ] Root command and global options (introduces `System.CommandLine`)
 - [ ] DI bootstrap and logging

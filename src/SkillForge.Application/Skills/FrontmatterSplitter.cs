@@ -42,15 +42,23 @@ public static class FrontmatterSplitter
         }
 
         var yaml = string.Join('\n', lines[(openingIndex.Value + 1)..closingIndex.Value]);
-        var body = closingIndex.Value + 1 < lines.Length
-            ? string.Join('\n', lines[(closingIndex.Value + 1)..]).TrimStart('\n')
-            : string.Empty;
+
+        // Blank lines between the block and the first line of prose are skipped, but counted, so that a
+        // diagnostic about the body can still name the right line of the file.
+        var bodyIndex = closingIndex.Value + 1;
+        while (bodyIndex < lines.Length && lines[bodyIndex].Trim().Length == 0)
+        {
+            bodyIndex++;
+        }
+
+        var body = bodyIndex < lines.Length ? string.Join('\n', lines[bodyIndex..]) : string.Empty;
 
         return new FrontmatterSplit(
             Yaml: yaml,
             Body: body,
             StartLine: openingIndex.Value + 1,
             EndLine: closingIndex.Value + 1,
+            BodyStartLine: bodyIndex + 1,
             TotalLineCount: lines.Length);
     }
 
@@ -112,10 +120,15 @@ public static class FrontmatterSplitter
 /// <param name="Body">Markdown body following the block.</param>
 /// <param name="StartLine">One-based line of the opening delimiter.</param>
 /// <param name="EndLine">One-based line of the closing delimiter.</param>
+/// <param name="BodyStartLine">
+/// One-based line of <see cref="Body"/>'s first line within the file, so a finding about the body can
+/// name the line the reader will see in their editor.
+/// </param>
 /// <param name="TotalLineCount">Total number of lines in the file.</param>
 public sealed record FrontmatterSplit(
     string Yaml,
     string Body,
     int StartLine,
     int EndLine,
+    int BodyStartLine,
     int TotalLineCount);

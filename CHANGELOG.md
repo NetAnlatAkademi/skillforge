@@ -30,3 +30,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   propagating an I/O exception.
 - Four sample skills under `samples/` used as test fixtures: `valid-skill`, `invalid-frontmatter`,
   `broken-references` and `dotnet-api-review`.
+- Validation engine: `ISkillValidationRule`, `SkillValidator`, `ValidationReport`, `ValidationSummary`
+  and deterministic diagnostic ordering. A rule reporting an error does not stop the others.
+- Eleven validation rules covering SF0004, SF0005, SF0006, SF0007, SF0008 (body references), SF0010,
+  SF1001, SF1002, SF1003, SF1009 and SF1010.
+- `MarkdownLinkExtractor` and `SkillRelativePath`: find the local file references in a skill's body,
+  ignoring external URLs, anchors and fenced code blocks.
+- `coverlet.runsettings` excluding source-generated code from coverage.

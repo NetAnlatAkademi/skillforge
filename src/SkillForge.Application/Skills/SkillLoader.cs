@@ -115,6 +115,7 @@ public sealed class SkillLoader : ISkillLoader
             Frontmatter: frontmatter,
             Resources: resources,
             Body: split.Body,
+            BodyStartLine: split.BodyStartLine,
             SkillFileLineCount: split.TotalLineCount);
 
         return OperationResult<SkillDefinition>.Success(definition, diagnostics);

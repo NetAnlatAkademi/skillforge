@@ -17,6 +17,10 @@ namespace SkillForge.Domain.Skills;
 /// Every file inside the skill directory, including <c>SKILL.md</c>, ordered by relative path.
 /// </param>
 /// <param name="Body">The Markdown body: everything after the closing frontmatter delimiter.</param>
+/// <param name="BodyStartLine">
+/// One-based line of <see cref="Body"/>'s first line within <c>SKILL.md</c>, so findings about the body
+/// can name the line the reader sees in their editor.
+/// </param>
 /// <param name="SkillFileLineCount">Total number of lines in <c>SKILL.md</c>, frontmatter included.</param>
 public sealed record SkillDefinition(
     string Name,
@@ -26,6 +30,7 @@ public sealed record SkillDefinition(
     SkillFrontmatter Frontmatter,
     IReadOnlyList<SkillResource> Resources,
     string Body,
+    int BodyStartLine,
     int SkillFileLineCount)
 {
     /// <summary>The conventional file name of a skill's entry point.</summary>

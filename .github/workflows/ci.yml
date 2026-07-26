@@ -46,6 +46,7 @@ jobs:
         run: >
           dotnet test --no-build --configuration Release
           --collect:"XPlat Code Coverage"
+          --settings coverlet.runsettings
           --results-directory ./TestResults
 
       - name: Upload test results
