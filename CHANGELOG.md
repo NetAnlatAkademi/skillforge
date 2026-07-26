@@ -37,3 +37,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `MarkdownLinkExtractor` and `SkillRelativePath`: find the local file references in a skill's body,
   ignoring external URLs, anchors and fenced code blocks.
 - `coverlet.runsettings` excluding source-generated code from coverage.
+- Working CLI: `skillforge validate <path>` with `--strict`, `--quiet`, `--verbose` and `--no-color`,
+  plus help and version. Exit codes are 0 clean, 1 validation failure, 2 usage error, 3 unexpected.
+- Console report renderer: errors first, summary last, every finding tagged with its code and a text
+  marker so output survives without colour. `NO_COLOR` is honoured.
+- Composition root wiring every layer, validated at build so a missing registration cannot reach a user.

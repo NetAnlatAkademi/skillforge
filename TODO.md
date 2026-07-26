@@ -126,18 +126,56 @@ I/O failure, so it is left alone deliberately.
 - **Thresholds are documented with their reasoning** in `docs/validation-rules.md` so they can be argued
   with rather than guessed at.
 
-## Phase 3 — CLI Foundation (next)
+## Phase 3 — CLI Foundation ✅ complete
 
-- [ ] Root command and global options (introduces `System.CommandLine`)
-- [ ] DI bootstrap and logging
-- [ ] Global exception handler
-- [ ] Exit code mapping (0/1/2/3)
-- [ ] Console renderer (introduces `Spectre.Console`)
-- [ ] `--verbose`, `--quiet`, `--no-color`
-- [ ] Help text
-- [ ] CLI smoke tests
+- [x] Root command (`SkillForgeCommandLine`) with a working `validate` subcommand
+- [x] Global options, recursive so they work before or after the subcommand
+- [x] DI bootstrap (`CompositionRoot`) with `ValidateOnBuild`
+- [x] Global exception handler in `Program`
+- [x] Exit code mapping: 0 clean, 1 validation failure, 2 usage error, 3 unexpected
+- [x] Console renderer (`ConsoleReportRenderer`, Spectre.Console)
+- [x] `--verbose`, `--quiet`, `--no-color`, plus the `NO_COLOR` environment convention
+- [x] Help text, asserted to exist for every command and option
+- [x] CLI smoke tests — 299 tests overall
+- [-] Logging — `Microsoft.Extensions.Logging` is registered but nothing logs yet. Deferred until a
+  command has something worth logging; `--verbose` currently affects report detail, not log level.
 
-## Phase 4 — `init`
+### Verified against the built executable
+
+```text
+skillforge validate samples/valid-skill          -> 0, VALID
+skillforge validate samples/broken-references    -> 1, 2 errors + 1 warning
+skillforge validate samples/invalid-frontmatter  -> 1, SF0003 with a line number
+skillforge validate --stict                      -> 2, "Unrecognized option"
+skillforge --help / --version                    -> 0
+skillforge (no arguments)                        -> 2
+```
+
+### Decisions taken in this phase
+
+- **A skill that cannot be loaded still gets a report**, in the same shape as any other failure rather
+  than a bare error line. Loader diagnostics are merged into the report so a duplicated frontmatter field
+  is not lost.
+- **Global options are recursive.** Without it they are accepted only before the subcommand, which is not
+  how anyone types a command line.
+- **An unrecognised option is a usage error, not a path.** `Argument<string>` would otherwise swallow
+  `--stict` as the directory to validate. A validator rejects values starting with `-`.
+- **Colour is never the only signal.** Every finding carries a text marker (`x`, `!`, `i`) so output reads
+  correctly in a log, and `NO_COLOR` is honoured without a flag.
+- **`ValidateOnBuild` is on**, so a missing registration fails at startup and in tests instead of on the
+  user's first run — see the bug below.
+- **`FluentValidation` was dropped from the plan.** Rules are plain classes behind an interface; the
+  library would add indirection without removing code. Recorded in `docs/architecture.md`.
+
+### Bug this phase produced, and what it changed
+
+The CLI threw `InvalidOperationException` on every run — the DI container will only use a **public**
+constructor, even for an internal type — while the whole suite stayed green. The smoke test named
+"resolves every dependency the commands need" only built the command tree, which resolves nothing. It now
+resolves the runner for real, and `ValidateOnBuild` makes the container refuse to start in that
+situation.
+
+## Phase 4 — `init` (next)
 
 - [ ] Template model
 - [ ] Directory creation

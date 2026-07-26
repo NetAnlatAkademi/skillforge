@@ -66,15 +66,18 @@ justification row here.
 
 | Package | Layer | Justification |
 |---|---|---|
+| `System.CommandLine` | Cli | Argument parsing, help generation and completions. The Microsoft-owned option; hand-rolling a parser would mean reimplementing help text and error reporting badly. |
+| `Spectre.Console` | Reporting | Console rendering with colour that can be switched off. Chosen over raw `Console` for markup escaping and testable output via `IAnsiConsole`. |
+| `Microsoft.Extensions.DependencyInjection` | Cli | Composition root. Small enough to hand-wire today, but the rule set already benefits from `GetServices<T>()`. |
+| `Microsoft.Extensions.Logging`(`.Console`) | Cli | Diagnostic logging behind `--verbose`. Abstractions only in the lower layers. |
 | `YamlDotNet` | Infrastructure | YAML frontmatter parsing. The de-facto .NET YAML library; writing a YAML parser by hand is out of the question, and the alternatives are unmaintained. Confined to Infrastructure so Application stays parser-agnostic behind `IFrontmatterParser`. |
 | `Microsoft.NET.Test.Sdk` | tests | Required test host for `dotnet test`. |
 | `xunit`, `xunit.runner.visualstudio` | tests | Test framework chosen by the roadmap. |
 | `FluentAssertions` 7.x | tests | Readable assertions. Pinned to 7.x because 8.x moved to a commercial license. |
 | `coverlet.collector` | tests | Coverage collection for the roadmap's coverage targets. |
 
-Packages named in the roadmap but **not yet added** — `System.CommandLine`, `YamlDotNet`,
-`FluentValidation`, `Spectre.Console`, `Microsoft.Extensions.*` — are introduced in the phase that
-first needs them, so that Phase 0 has no unused dependencies.
+`FluentValidation` is named by the roadmap but has not been needed: validation rules are plain classes
+behind `ISkillValidationRule`, and a rule library would add indirection without removing any code.
 
 ## Testing strategy
 

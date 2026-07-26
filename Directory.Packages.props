@@ -14,6 +14,14 @@
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
+  <ItemGroup Label="CLI and reporting">
+    <PackageVersion Include="System.CommandLine" Version="2.0.10" />
+    <PackageVersion Include="Spectre.Console" Version="0.57.2" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
     <!-- xUnit + FluentAssertions 7.x (Apache-2.0; 8.x moved to a commercial license). -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />

@@ -3,8 +3,33 @@
 A local, open source CLI for AI agent skills. SkillForge creates, validates, inspects and packages
 `SKILL.md`-based skills, and reports findings as human-readable console output, JSON or SARIF.
 
-> Status: **pre-alpha**. Phase 0 (repository bootstrap) is complete; no CLI commands are implemented yet.
-> CI builds and tests on Linux and Windows.
+> Status: **pre-alpha**. `validate` works end to end; `init`, `inspect` and `pack` are not implemented
+> yet. CI builds and tests on Linux and Windows.
+
+## Try it
+
+```bash
+dotnet run --project src/SkillForge.Cli -- validate ./samples/valid-skill
+dotnet run --project src/SkillForge.Cli -- validate ./samples/broken-references --verbose
+```
+
+```text
+SkillForge Validate
+
+Skill: broken-references
+Path:  ./samples/broken-references
+
+x SF0007 The referenced file 'references/checklist.md' does not exist in the skill. (SKILL.md:16)
+x SF0007 The referenced file 'scripts/analyze.ps1' does not exist in the skill. (SKILL.md:17)
+! SF1010 No agent compatibility is declared. (SKILL.md:1)
+
+Result: INVALID
+Errors: 2  Warnings: 1  Info: 0
+```
+
+Exit codes: `0` clean · `1` validation failure, or a warning under `--strict` · `2` usage error ·
+`3` unexpected failure. Options: `--strict`, `--quiet`, `--verbose`, `--no-color` (the `NO_COLOR`
+environment variable works too).
 > See [SKILLFORGE_ROADMAP.md](SKILLFORGE_ROADMAP.md) for scope and [TODO.md](TODO.md) for progress.
 
 ## Why
