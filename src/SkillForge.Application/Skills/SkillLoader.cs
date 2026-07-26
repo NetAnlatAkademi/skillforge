@@ -58,8 +58,23 @@ public sealed class SkillLoader : ISkillLoader
         }
 
         var (directoryPath, skillFilePath) = location.Value;
-        var content = await _fileSystem.ReadAllTextAsync(skillFilePath, cancellationToken)
-            .ConfigureAwait(false);
+
+        string content;
+        try
+        {
+            content = await _fileSystem.ReadAllTextAsync(skillFilePath, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The file is there but unreadable — locked by another process, or permission denied.
+            // From the user's point of view this is still "SkillForge could not read your skill".
+            return OperationResult<SkillDefinition>.Failure(Diagnostic.Error(
+                DiagnosticCodes.SkillFileNotFound,
+                $"{SkillDefinition.SkillFileName} could not be read: {exception.Message}",
+                SkillDefinition.SkillFileName,
+                suggestion: "Check the file's permissions and make sure no other program is holding it open."));
+        }
 
         var split = FrontmatterSplitter.TrySplit(content);
         if (split is null)

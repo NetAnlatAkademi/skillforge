@@ -10,7 +10,10 @@ namespace SkillForge.Domain.Diagnostics;
 /// </remarks>
 public static class DiagnosticCodes
 {
-    /// <summary><c>SKILL.md</c> was not found.</summary>
+    /// <summary>
+    /// <c>SKILL.md</c> was not found, or exists but could not be read. Both read the same way to the
+    /// person running the CLI: SkillForge could not get at the skill.
+    /// </summary>
     public const string SkillFileNotFound = "SF0001";
 
     /// <summary>The YAML frontmatter block was not found.</summary>

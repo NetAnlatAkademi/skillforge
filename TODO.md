@@ -63,6 +63,22 @@ Last updated: 2026-07-26
 - [x] Unit and integration tests — 133 tests; Domain 100%, Application 98.7%, Infrastructure 98% line coverage
 - [x] Update `docs/validation-rules.md` and `CHANGELOG.md`
 
+### Hardening pass (TDD, after the first Phase 1 commit)
+
+Two crash paths were found by asking what happens when the file system says no. Both were reproduced as
+failing tests first.
+
+- [x] `FileSystem.ResolveLinkTarget` threw `DirectoryNotFoundException` for a path that does not exist.
+  The SF0007 rule will ask exactly that question about every broken reference it finds, so a missing
+  path — and a dangling link — now answers `null`.
+- [x] An unreadable `SKILL.md` (locked, or permission denied) propagated the exception out of the
+  loader. It now returns SF0001 with the underlying reason and a permissions hint.
+- [x] Pinned an empty `SKILL.md` to SF0002 as a regression test (this already behaved correctly).
+
+Known, accepted risk: a file deleted between enumeration and `GetFileSizeInBytes` would throw. The
+window is a single in-process pass over one directory, and guarding it would mean swallowing a genuine
+I/O failure, so it is left alone deliberately.
+
 ### Decisions taken in this phase
 
 - **The loader only reports what stops a model being built.** SF0004 (`name` missing) and SF0005

@@ -15,6 +15,7 @@ internal sealed class FakeFileSystem : IFileSystem
     private readonly Dictionary<string, string> _files = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _directories = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _links = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Exception> _readFailures = new(StringComparer.OrdinalIgnoreCase);
 
     internal FakeFileSystem AddFile(string path, string content)
     {
@@ -47,6 +48,17 @@ internal sealed class FakeFileSystem : IFileSystem
         return this;
     }
 
+    /// <summary>
+    /// Makes reading <paramref name="path"/> fail, so callers can be tested against a file that exists
+    /// but cannot be read — a locked file, or one the process has no permission for.
+    /// </summary>
+    internal FakeFileSystem FailReadWith(string path, Exception exception)
+    {
+        AddFile(path, string.Empty);
+        _readFailures[Normalise(path)] = exception;
+        return this;
+    }
+
     public bool FileExists(string path) => _files.ContainsKey(Normalise(path));
 
     public bool DirectoryExists(string path) => _directories.Contains(Normalise(path));
@@ -68,10 +80,19 @@ internal sealed class FakeFileSystem : IFileSystem
             .ToArray();
     }
 
-    public Task<string> ReadAllTextAsync(string path, CancellationToken cancellationToken) =>
-        _files.TryGetValue(Normalise(path), out var content)
+    public Task<string> ReadAllTextAsync(string path, CancellationToken cancellationToken)
+    {
+        var normalised = Normalise(path);
+
+        if (_readFailures.TryGetValue(normalised, out var failure))
+        {
+            return Task.FromException<string>(failure);
+        }
+
+        return _files.TryGetValue(normalised, out var content)
             ? Task.FromResult(content)
             : throw new FileNotFoundException($"Fake file system has no file at '{path}'.", path);
+    }
 
     /// <summary>
     /// Collapses separators and relative segments. Mirrors what <c>Path.GetFullPath</c> does to the

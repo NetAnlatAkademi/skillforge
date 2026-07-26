@@ -16,11 +16,15 @@ missing `name` or `description` — is a rule that runs on the loaded model.
 When one mistake would trigger two codes, the more precise one wins. A duplicated frontmatter field
 also makes the YAML parser fail, so SF0009 is reported and SF0003 is suppressed.
 
+SF0001 covers both "not found" and "found but unreadable" — a locked file or a permission error reads
+the same way to the person running the CLI, and inventing a code outside the roadmap's table would
+break the fixed set of 24.
+
 ## Errors
 
 | Code | Rule | Status |
 |---|---|---|
-| SF0001 | `SKILL.md` was not found | **Implemented** (loader) |
+| SF0001 | `SKILL.md` was not found, or exists but could not be read | **Implemented** (loader) |
 | SF0002 | YAML frontmatter was not found | **Implemented** (loader) |
 | SF0003 | YAML frontmatter could not be parsed | **Implemented** (loader) |
 | SF0004 | `name` field is missing | Planned |

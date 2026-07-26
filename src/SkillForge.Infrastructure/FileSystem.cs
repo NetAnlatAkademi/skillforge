@@ -22,10 +22,22 @@ public sealed class FileSystem : IFileSystem
     public string GetFullPath(string path) => Path.GetFullPath(path);
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Callers ask about paths that may not exist — a validation rule checks every reference it finds,
+    /// including broken ones — so a missing path answers <see langword="null"/> rather than throwing.
+    /// A dangling link answers <see langword="null"/> for the same reason: there is no target to
+    /// resolve, and an unresolvable link cannot leak anything outside the skill.
+    /// </remarks>
     public string? ResolveLinkTarget(string path)
     {
+        var isFile = File.Exists(path);
+        if (!isFile && !Directory.Exists(path))
+        {
+            return null;
+        }
+
         // Resolve the whole chain, not just one hop: a link to a link can still land outside the skill.
-        var target = File.Exists(path)
+        var target = isFile
             ? File.ResolveLinkTarget(path, returnFinalTarget: true)
             : Directory.ResolveLinkTarget(path, returnFinalTarget: true);
 

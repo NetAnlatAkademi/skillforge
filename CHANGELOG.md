@@ -26,6 +26,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `System.IO` and YamlDotNet.
 - `SkillPathGuard`: rejects paths and symbolic links that resolve outside the skill directory (SF0008).
 - Loader diagnostics SF0001, SF0002, SF0003, SF0008 and SF0009. Malformed YAML produces a diagnostic
-  with a line number instead of an exception.
+  with a line number instead of an exception, and an unreadable `SKILL.md` produces SF0001 rather than
+  propagating an I/O exception.
 - Four sample skills under `samples/` used as test fixtures: `valid-skill`, `invalid-frontmatter`,
   `broken-references` and `dotnet-api-review`.

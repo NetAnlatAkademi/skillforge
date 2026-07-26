@@ -61,6 +61,21 @@ public sealed class FileSystemTests : IDisposable
     }
 
     [Fact]
+    public void ResolveLinkTargetReturnsNullWhenThePathDoesNotExist()
+    {
+        // Validation rules ask about referenced files before knowing whether they exist.
+        _fileSystem.ResolveLinkTarget(Path.Combine(_root, "missing.md")).Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveLinkTargetReturnsNullForAnExistingDirectory()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "references"));
+
+        _fileSystem.ResolveLinkTarget(Path.Combine(_root, "references")).Should().BeNull();
+    }
+
+    [Fact]
     public void ResolveLinkTargetReturnsNullForARegularFile()
     {
         var file = WriteFile("SKILL.md", "content");

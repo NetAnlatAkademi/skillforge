@@ -74,6 +74,38 @@ public sealed class SkillLoaderTests
             .Which.Code.Should().Be(DiagnosticCodes.SkillFileNotFound);
     }
 
+    [Theory]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    [InlineData(typeof(IOException))]
+    public async Task ReportsSF0001WhenTheSkillFileExistsButCannotBeRead(Type failureType)
+    {
+        // A locked or permission-denied SKILL.md must read as a diagnostic, not a stack trace.
+        var failure = (Exception)Activator.CreateInstance(failureType, "denied")!;
+        var fileSystem = new FakeFileSystem().FailReadWith(SkillFile, failure);
+        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+
+        var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
+        var diagnostic = result.Diagnostics.Should().ContainSingle().Subject;
+        diagnostic.Code.Should().Be(DiagnosticCodes.SkillFileNotFound);
+        diagnostic.Message.Should().Contain("could not be read");
+        diagnostic.FilePath.Should().Be(SkillDefinition.SkillFileName);
+    }
+
+    [Fact]
+    public async Task AnEmptySkillFileReportsSF0002()
+    {
+        var fileSystem = new FakeFileSystem().AddFile(SkillFile, string.Empty);
+        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+
+        var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Diagnostics.Should().ContainSingle()
+            .Which.Code.Should().Be(DiagnosticCodes.FrontmatterNotFound);
+    }
+
     [Fact]
     public async Task ReportsSF0002WhenThereIsNoFrontmatter()
     {
