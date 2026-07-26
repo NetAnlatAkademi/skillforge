@@ -68,3 +68,4 @@ dotnet_naming_style.underscore_camel_case.required_prefix = _
 dotnet_diagnostic.CA2007.severity = none      # ConfigureAwait is not required in a CLI application
 dotnet_diagnostic.CA1848.severity = none      # LoggerMessage source generators are not worth it at this size
 dotnet_diagnostic.CA1031.severity = warning   # Never swallow a bare Exception (roadmap §23)
+dotnet_diagnostic.CA1000.severity = none      # OperationResult<T>.Success/Failure factories are the point of the type

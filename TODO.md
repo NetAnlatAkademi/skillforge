@@ -44,26 +44,37 @@ Last updated: 2026-07-26
 
 ---
 
-## Phase 1 — Skill Loader
+## Phase 1 — Skill Loader ✅ complete
 
-- [ ] Domain models: `SkillDefinition`, `SkillFrontmatter`, `SkillResource`, `Diagnostic`, `DiagnosticSeverity`
-- [ ] `OperationResult<T>` result model
-- [ ] Diagnostic code constants (`SF0001`…`SF2004`)
-- [ ] `IFileSystem` abstraction in Application, implementation in Infrastructure
-- [ ] Skill root detection
-- [ ] `SKILL.md` discovery
-- [ ] Frontmatter / body separation
-- [ ] YAML parsing (introduces `YamlDotNet` — justify in `docs/architecture.md`)
-- [ ] Markdown body reading
-- [ ] Resource file enumeration
-- [ ] Path normalisation
-- [ ] Symlink handling
-- [ ] Loader diagnostics (malformed YAML must not crash)
-- [ ] Sample skills: `valid-skill`, `invalid-frontmatter`, `broken-references`, `dotnet-api-review`
-- [ ] Unit and integration tests
-- [ ] Update `docs/validation-rules.md` and `CHANGELOG.md`
+- [x] Domain models: `SkillDefinition`, `SkillFrontmatter`, `SkillResource`, `Diagnostic`, `DiagnosticSeverity`
+- [x] `OperationResult<T>` result model
+- [x] Diagnostic code constants (`SF0001`…`SF2004`)
+- [x] `IFileSystem` abstraction in Application, implementation in Infrastructure
+- [x] Skill root detection (accepts a directory or the `SKILL.md` path itself)
+- [x] `SKILL.md` discovery
+- [x] Frontmatter / body separation (`FrontmatterSplitter`: LF, CRLF, BOM, `...` terminator)
+- [x] YAML parsing (`YamlDotNet`, justified in `docs/architecture.md`)
+- [x] Markdown body reading
+- [x] Resource file enumeration with extension-based classification
+- [x] Path normalisation
+- [x] Symlink handling (`SkillPathGuard` follows links and rejects escaping targets)
+- [x] Loader diagnostics: SF0001, SF0002, SF0003, SF0008, SF0009 — malformed YAML never crashes
+- [x] Sample skills: `valid-skill`, `invalid-frontmatter`, `broken-references`, `dotnet-api-review`
+- [x] Unit and integration tests — 133 tests; Domain 100%, Application 98.7%, Infrastructure 98% line coverage
+- [x] Update `docs/validation-rules.md` and `CHANGELOG.md`
 
-## Phase 2 — Validation Engine
+### Decisions taken in this phase
+
+- **The loader only reports what stops a model being built.** SF0004 (`name` missing) and SF0005
+  (`description` missing) are validation rules, not loader errors: a skill without a name still loads,
+  and `SkillDefinition.Name` is an empty string. This keeps the loader honest about what the file says
+  and leaves judgement to Phase 2.
+- **SF0009 supersedes SF0003 for a duplicated field.** A duplicate key also makes YamlDotNet fail;
+  reporting both would describe one mistake twice.
+- **Record equality does not look inside collection members.** `SkillDefinition` compares `Resources`
+  and `Metadata` by reference. Anything comparing skills must compare the parts it cares about.
+
+## Phase 2 — Validation Engine (next)
 
 - [ ] `ISkillValidationRule` interface
 - [ ] Rule discovery and execution pipeline (one failing rule must not stop the others)

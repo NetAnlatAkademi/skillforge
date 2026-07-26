@@ -66,6 +66,7 @@ justification row here.
 
 | Package | Layer | Justification |
 |---|---|---|
+| `YamlDotNet` | Infrastructure | YAML frontmatter parsing. The de-facto .NET YAML library; writing a YAML parser by hand is out of the question, and the alternatives are unmaintained. Confined to Infrastructure so Application stays parser-agnostic behind `IFrontmatterParser`. |
 | `Microsoft.NET.Test.Sdk` | tests | Required test host for `dotnet test`. |
 | `xunit`, `xunit.runner.visualstudio` | tests | Test framework chosen by the roadmap. |
 | `FluentAssertions` 7.x | tests | Readable assertions. Pinned to 7.x because 8.x moved to a commercial license. |

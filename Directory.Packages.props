@@ -10,6 +10,10 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
+  <ItemGroup Label="Infrastructure">
+    <PackageVersion Include="YamlDotNet" Version="16.3.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
     <!-- xUnit + FluentAssertions 7.x (Apache-2.0; 8.x moved to a commercial license). -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
