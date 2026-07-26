@@ -175,59 +175,104 @@ constructor, even for an internal type — while the whole suite stayed green. T
 resolves the runner for real, and `ValidateOnBuild` makes the container refuse to start in that
 situation.
 
-## Phase 4 — `init` (next)
+## Phase 4 — `init` ✅ complete
 
-- [ ] Template model
-- [ ] Directory creation
-- [ ] Frontmatter generation
-- [ ] `skillforge.yaml` generation
-- [ ] `--force`
-- [ ] Invalid name check
-- [ ] Existing directory check
-- [ ] Automatic validation after init
+- [x] Template model
+- [x] Directory creation
+- [x] Frontmatter generation
+- [x] `skillforge.yaml` generation
+- [x] `--force`
+- [x] Invalid name check
+- [x] Existing directory check
+- [x] Automatic validation after init
 
-## Phase 5 — `validate`
+## Phase 5 — `validate` ✅ complete
 
-- [ ] Console output
-- [ ] JSON output
-- [ ] `--output` file
-- [ ] Strict mode wiring
-- [ ] Exit codes
-- [ ] Summary
-- [ ] Diagnostic ordering
-- [ ] CI friendly output
+- [x] Console output
+- [x] JSON output
+- [x] `--output` file
+- [x] Strict mode wiring
+- [x] Exit codes
+- [x] Summary
+- [x] Diagnostic ordering
+- [x] CI friendly output
 
-## Phase 6 — `inspect`
+## Phase 6 — `inspect` ✅ complete
 
-- [ ] File inventory
-- [ ] External URL extraction
-- [ ] Script detection
-- [ ] Permission inference
-- [ ] Risk indicator summary
-- [ ] JSON output
-- [ ] Human-readable output
+- [x] File inventory
+- [x] External URL extraction
+- [x] Script detection
+- [x] Permission inference
+- [x] Risk indicator summary
+- [x] JSON output
+- [x] Human-readable output
 
-## Phase 7 — `pack`
+## Phase 7 — `pack` ✅ complete
 
-- [ ] Version resolution
-- [ ] Include/exclude handling
-- [ ] Deterministic ZIP
-- [ ] SHA-256 hash
-- [ ] Manifest JSON
-- [ ] Validation gate and `--skip-validation`
-- [ ] Output directory handling
-- [ ] Cross-platform path support
+- [x] Version resolution
+- [x] Include/exclude handling
+- [x] Deterministic ZIP
+- [x] SHA-256 hash
+- [x] Manifest JSON
+- [x] Validation gate and `--skip-validation`
+- [x] Output directory handling
+- [x] Cross-platform path support
 
-## Phase 8 — SARIF and GitHub Action
+## Phase 8 — SARIF and GitHub Action ✅ complete
 
-- [ ] SARIF 2.1.0 generator
-- [ ] Rule metadata
-- [ ] Location mapping
-- [ ] GitHub annotation compatibility
-- [ ] Example workflow
-- [ ] CI documentation
+- [x] SARIF 2.1.0 generator
+- [x] Rule metadata
+- [x] Location mapping
+- [x] GitHub annotation compatibility
+- [x] Example workflow
+- [x] CI documentation
 
 ---
+
+---
+
+## Milestone v0.1.0 — Local Validator: done
+
+All eight phases are complete. 373 tests; `dotnet format --verify-no-changes` clean; CI green on Linux and
+Windows, and CI now runs the built CLI over the sample skills including asserting that the broken sample
+exits 1.
+
+Verified against the built executable:
+
+```text
+init demo-skill                          -> 0, then validates clean (the template's own goal)
+inspect demo-skill                       -> 0, files + capabilities + URLs
+pack demo-skill                          -> 0, zip + .sha256 + manifest
+pack twice                               -> identical sha256
+pack samples/broken-references           -> 1, refused; --skip-validation is explicit
+validate --format json | --format sarif   -> schema 1.0 / SARIF 2.1.0
+```
+
+### Decisions taken in phases 4 to 8
+
+- **`init` generates a skill that passes `validate` with no findings**, including a placeholder description
+  that states an activation context. A template that immediately warns would train people to ignore
+  warnings. There is a test on the placeholder text for that reason.
+- **`SkillName` is the single definition of a valid name**, shared by `init` and SF0006, so `init` cannot
+  generate something `validate` rejects.
+- **Refusing to overwrite is the runner's job, not the initializer's.** The check happens before anything is
+  written, and an existing skill without `--force` is a usage error (exit 2), not a finding about a skill.
+- **Machine-readable output does not silence the console.** With `--output`, the file is for machines and the
+  console still shows the human-readable report, because a CI log that says nothing is useless.
+- **`inspect` describes, never judges.** Everything it reports is informational, it exits 0 even when it lists
+  scripts and URLs, and the output says outright that it is not a security verdict (ADR-006).
+- **`inspect` reads URLs from `SKILL.md` only**, and says so in the output. Scanning every referenced file is
+  a fuller answer and belongs to the security-signals milestone; the limit is stated rather than implied away.
+- **Determinism is enforced at the archive level**: entries sorted, timestamps pinned to 1980-01-01, paths
+  always `/`. The one field that legitimately varies between builds — creation time — lives in the manifest,
+  not in the archive, so the hash stays reproducible.
+- **`pack` writes a `.sha256` in `sha256sum -c` format**, so verification needs no SkillForge.
+- **A version that cannot be a file name is refused**, rather than producing an archive with a mangled name.
+- **SARIF locations are repository-relative.** An absolute agent path matches no file GitHub knows about, so
+  the annotation would silently never appear.
+- **SF1004 to SF1008 stay planned, with the reason recorded** in `docs/validation-rules.md`. Each needs a
+  decision this release does not make — what "unused" means, whether a URL is a problem, what a skill's
+  dependencies are.
 
 ## Out of scope for v0.1.0
 

@@ -14,11 +14,16 @@ namespace SkillForge.Domain.Validation;
 /// Every finding, in a deterministic order: most severe first, then by code, file and line.
 /// </param>
 /// <param name="Summary">Counts by severity.</param>
+/// <param name="SkillVersion">
+/// Version the skill declared, or <see langword="null"/> when it declared none. Machine-readable reports
+/// include it so a consumer can tell two runs of the same skill apart.
+/// </param>
 public sealed record ValidationReport(
     string SkillName,
     string SkillPath,
     IReadOnlyList<Diagnostic> Diagnostics,
-    ValidationSummary Summary)
+    ValidationSummary Summary,
+    string? SkillVersion = null)
 {
     /// <summary>
     /// Gets a value indicating whether the skill is usable, ignoring warnings.
@@ -58,6 +63,7 @@ public sealed record ValidationReport(
             skill.Name,
             skill.DirectoryPath,
             diagnostics,
-            ValidationSummary.FromDiagnostics(diagnostics));
+            ValidationSummary.FromDiagnostics(diagnostics),
+            skill.Frontmatter.Version);
     }
 }

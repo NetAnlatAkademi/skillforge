@@ -48,6 +48,30 @@ public interface IFileSystem
     /// <returns>Absolute paths of the files found, in unspecified order.</returns>
     IEnumerable<string> EnumerateFiles(string directoryPath);
 
+    /// <summary>Reads a file's raw bytes.</summary>
+    /// <param name="path">Path of the file.</param>
+    /// <param name="cancellationToken">Token used to cancel the read.</param>
+    /// <returns>The file's bytes.</returns>
+    Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken);
+
+    /// <summary>Creates a directory, including any missing parents. Does nothing if it exists.</summary>
+    /// <param name="path">Directory to create.</param>
+    void CreateDirectory(string path);
+
+    /// <summary>Writes a text file, replacing it if it exists.</summary>
+    /// <param name="path">Path of the file.</param>
+    /// <param name="content">Text to write.</param>
+    /// <param name="cancellationToken">Token used to cancel the write.</param>
+    /// <returns>A task that completes when the file is written.</returns>
+    Task WriteAllTextAsync(string path, string content, CancellationToken cancellationToken);
+
+    /// <summary>Writes a binary file, replacing it if it exists.</summary>
+    /// <param name="path">Path of the file.</param>
+    /// <param name="content">Bytes to write.</param>
+    /// <param name="cancellationToken">Token used to cancel the write.</param>
+    /// <returns>A task that completes when the file is written.</returns>
+    Task WriteAllBytesAsync(string path, byte[] content, CancellationToken cancellationToken);
+
     /// <summary>Reads a text file in full.</summary>
     /// <param name="path">Path of the file.</param>
     /// <param name="cancellationToken">Token used to cancel the read.</param>

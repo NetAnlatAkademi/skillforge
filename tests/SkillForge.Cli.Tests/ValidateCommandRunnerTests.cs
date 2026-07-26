@@ -5,6 +5,7 @@ using SkillForge.Domain;
 using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Skills;
 using SkillForge.Domain.Validation;
+using SkillForge.Reporting;
 
 namespace SkillForge.Cli.Tests;
 
@@ -13,14 +14,12 @@ namespace SkillForge.Cli.Tests;
 /// </summary>
 public sealed class ValidateCommandRunnerTests
 {
-    private static readonly ReportRenderOptions Defaults = new();
-
     [Fact]
     public async Task ACleanSkillExitsZero()
     {
         var runner = Build(out var renderer);
 
-        var exitCode = await runner.RunAsync("/skills/demo", strict: false, Defaults, CancellationToken.None);
+        var exitCode = await runner.RunAsync(Request(), CancellationToken.None);
 
         exitCode.Should().Be(0);
         renderer.Rendered.Should().NotBeNull();
@@ -32,9 +31,7 @@ public sealed class ValidateCommandRunnerTests
         var runner = Build(out _, validationFindings:
             [Diagnostic.Error(DiagnosticCodes.NameMissing, "no name")]);
 
-        var exitCode = await runner.RunAsync("/skills/demo", strict: false, Defaults, CancellationToken.None);
-
-        exitCode.Should().Be(1);
+        (await runner.RunAsync(Request(), CancellationToken.None)).Should().Be(1);
     }
 
     [Fact]
@@ -43,9 +40,9 @@ public sealed class ValidateCommandRunnerTests
         var findings = new[] { Diagnostic.Warning(DiagnosticCodes.LicenseMissing, "no license") };
 
         var lenient = await Build(out _, validationFindings: findings)
-            .RunAsync("/skills/demo", strict: false, Defaults, CancellationToken.None);
+            .RunAsync(Request(), CancellationToken.None);
         var strict = await Build(out _, validationFindings: findings)
-            .RunAsync("/skills/demo", strict: true, Defaults, CancellationToken.None);
+            .RunAsync(Request(strict: true), CancellationToken.None);
 
         lenient.Should().Be(0);
         strict.Should().Be(1);
@@ -57,7 +54,7 @@ public sealed class ValidateCommandRunnerTests
         var runner = Build(out var renderer, loadFailure:
             Diagnostic.Error(DiagnosticCodes.SkillFileNotFound, "no SKILL.md"));
 
-        var exitCode = await runner.RunAsync("/nowhere", strict: false, Defaults, CancellationToken.None);
+        var exitCode = await runner.RunAsync(Request("/nowhere"), CancellationToken.None);
 
         exitCode.Should().Be(1);
         renderer.Rendered!.SkillPath.Should().Be("/nowhere");
@@ -75,13 +72,43 @@ public sealed class ValidateCommandRunnerTests
             loadDiagnostics: [Diagnostic.Error(DiagnosticCodes.DuplicateMetadataField, "declared twice")],
             validationFindings: [Diagnostic.Warning(DiagnosticCodes.LicenseMissing, "no license")]);
 
-        var exitCode = await runner.RunAsync("/skills/demo", strict: false, Defaults, CancellationToken.None);
+        var exitCode = await runner.RunAsync(Request(), CancellationToken.None);
 
         exitCode.Should().Be(1);
         renderer.Rendered!.Diagnostics.Select(diagnostic => diagnostic.Code)
             .Should().Equal(DiagnosticCodes.DuplicateMetadataField, DiagnosticCodes.LicenseMissing);
         renderer.Rendered.Summary.Errors.Should().Be(1);
         renderer.Rendered.Summary.Warnings.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(OutputFormat.Json, "\"schemaVersion\"")]
+    [InlineData(OutputFormat.Sarif, "\"version\": \"2.1.0\"")]
+    public async Task MachineReadableOutputGoesToTheRequestedFile(string format, string expected)
+    {
+        var fileSystem = new FakeFileSystem();
+        var runner = Build(out _, fileSystem: fileSystem, validationFindings:
+            [Diagnostic.Warning(DiagnosticCodes.LicenseMissing, "no license", "SKILL.md", 3)]);
+
+        await runner.RunAsync(
+            Request(format: format, outputPath: "/out/report.txt"),
+            CancellationToken.None);
+
+        fileSystem.ReadText("/out/report.txt").Should().Contain(expected);
+    }
+
+    [Fact]
+    public async Task WritingToAFileStillShowsTheReportOnTheConsole()
+    {
+        // A CI log that says nothing about why a build failed is useless.
+        var fileSystem = new FakeFileSystem();
+        var runner = Build(out var renderer, fileSystem: fileSystem);
+
+        await runner.RunAsync(
+            Request(format: OutputFormat.Json, outputPath: "/out/report.json"),
+            CancellationToken.None);
+
+        renderer.Rendered.Should().NotBeNull();
     }
 
     [Fact]
@@ -92,17 +119,31 @@ public sealed class ValidateCommandRunnerTests
         act.Should().Throw<ArgumentNullException>();
     }
 
+    private static ValidateRequest Request(
+        string path = "/skills/demo",
+        bool strict = false,
+        string format = OutputFormat.Console,
+        string? outputPath = null) =>
+        new(path, strict, format, outputPath, new ReportRenderOptions());
+
     private static ValidateCommandRunner Build(
         out RecordingRenderer renderer,
+        FakeFileSystem? fileSystem = null,
         Diagnostic? loadFailure = null,
         IReadOnlyList<Diagnostic>? loadDiagnostics = null,
         IReadOnlyList<Diagnostic>? validationFindings = null)
     {
         renderer = new RecordingRenderer();
+
+        var output = new ReportOutput(
+            fileSystem ?? new FakeFileSystem(),
+            renderer,
+            [new JsonReportSerializer(), new SarifReportSerializer()]);
+
         return new ValidateCommandRunner(
             new StubLoader(loadFailure, loadDiagnostics ?? []),
             new StubValidator(validationFindings ?? []),
-            renderer);
+            output);
     }
 
     private sealed class StubLoader(Diagnostic? failure, IReadOnlyList<Diagnostic> diagnostics) : ISkillLoader

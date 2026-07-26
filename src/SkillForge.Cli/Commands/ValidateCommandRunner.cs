@@ -15,70 +15,92 @@ internal sealed class ValidateCommandRunner
 {
     private readonly ISkillLoader _loader;
     private readonly ISkillValidator _validator;
-    private readonly IValidationReportRenderer _renderer;
+    private readonly ReportOutput _output;
 
     /// <summary>Initialises the runner.</summary>
     /// <param name="loader">Loads the skill.</param>
     /// <param name="validator">Runs the rules.</param>
-    /// <param name="renderer">Presents the report.</param>
+    /// <param name="output">Writes the report where the user asked for it.</param>
     /// <remarks>
     /// Public because the dependency injection container will only use a public constructor, even for an
     /// internal type.
     /// </remarks>
-    public ValidateCommandRunner(
-        ISkillLoader loader,
-        ISkillValidator validator,
-        IValidationReportRenderer renderer)
+    public ValidateCommandRunner(ISkillLoader loader, ISkillValidator validator, ReportOutput output)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(validator);
-        ArgumentNullException.ThrowIfNull(renderer);
+        ArgumentNullException.ThrowIfNull(output);
 
         _loader = loader;
         _validator = validator;
-        _renderer = renderer;
+        _output = output;
     }
 
     /// <summary>
     /// Loads a skill, validates it, presents the result and decides the exit code.
     /// </summary>
-    /// <param name="path">Skill directory or <c>SKILL.md</c> path.</param>
-    /// <param name="strict">When set, warnings fail as well as errors.</param>
-    /// <param name="renderOptions">How to present the report.</param>
+    /// <param name="request">What to validate and how to report it.</param>
     /// <param name="cancellationToken">Token used to cancel the run.</param>
     /// <returns><see cref="ExitCodes.Success"/> or <see cref="ExitCodes.ValidationFailed"/>.</returns>
-    internal async Task<int> RunAsync(
-        string path,
-        bool strict,
-        ReportRenderOptions renderOptions,
+    internal async Task<int> RunAsync(ValidateRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var report = await BuildReportAsync(request, cancellationToken).ConfigureAwait(false);
+
+        await _output.WriteAsync(
+            report,
+            request.Format,
+            request.OutputPath,
+            request.RenderOptions,
+            cancellationToken).ConfigureAwait(false);
+
+        return report.HasFailed(request.Strict) ? ExitCodes.ValidationFailed : ExitCodes.Success;
+    }
+
+    private async Task<ValidationReport> BuildReportAsync(
+        ValidateRequest request,
         CancellationToken cancellationToken)
     {
-        var load = await _loader.LoadAsync(path, cancellationToken).ConfigureAwait(false);
+        var load = await _loader.LoadAsync(request.Path, cancellationToken).ConfigureAwait(false);
 
         // A skill that cannot be loaded still gets a report: the user needs to see why, in the same shape
         // as any other failure, rather than a bare error line.
         if (!load.IsSuccess || load.Value is null)
         {
-            var failure = ValidationReport.ForUnloadableSkill(path, load.Diagnostics);
-            _renderer.Render(failure, renderOptions);
-            return ExitCodes.ValidationFailed;
+            return ValidationReport.ForUnloadableSkill(request.Path, load.Diagnostics);
         }
 
         var report = await _validator.ValidateAsync(load.Value, cancellationToken).ConfigureAwait(false);
 
-        // Diagnostics the loader produced belong in the report too — a duplicated frontmatter field is
-        // not something the rules can see.
-        if (load.Diagnostics.Count > 0)
+        if (load.Diagnostics.Count == 0)
         {
-            report = report with
-            {
-                Diagnostics = DiagnosticOrdering.Sort([.. load.Diagnostics, .. report.Diagnostics]),
-                Summary = ValidationSummary.FromDiagnostics([.. load.Diagnostics, .. report.Diagnostics]),
-            };
+            return report;
         }
 
-        _renderer.Render(report, renderOptions);
+        // Diagnostics the loader produced belong in the report too — a duplicated frontmatter field is
+        // not something the rules can see.
+        var combined = DiagnosticOrdering.Sort([.. load.Diagnostics, .. report.Diagnostics]);
 
-        return report.HasFailed(strict) ? ExitCodes.ValidationFailed : ExitCodes.Success;
+        return report with
+        {
+            Diagnostics = combined,
+            Summary = ValidationSummary.FromDiagnostics(combined),
+        };
     }
 }
+
+/// <summary>
+/// Everything <c>validate</c> was asked to do.
+/// </summary>
+/// <param name="Path">Skill directory or <c>SKILL.md</c> path.</param>
+/// <param name="Strict">When set, warnings fail as well as errors.</param>
+/// <param name="Format">One of <see cref="OutputFormat"/>.</param>
+/// <param name="OutputPath">File to write machine-readable output to, or <see langword="null"/> for stdout.</param>
+/// <param name="RenderOptions">How to present console output.</param>
+internal sealed record ValidateRequest(
+    string Path,
+    bool Strict,
+    string Format,
+    string? OutputPath,
+    ReportRenderOptions RenderOptions);

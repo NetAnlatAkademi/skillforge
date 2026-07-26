@@ -49,6 +49,26 @@ jobs:
           --settings coverlet.runsettings
           --results-directory ./TestResults
 
+      # Dogfooding: the samples are fixtures, but running the real CLI over them is what proves the
+      # published exit codes still mean what the documentation says they mean.
+      - name: Validate the sample skills with the built CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          run() { dotnet run --project src/SkillForge.Cli --no-build --configuration Release -- "$@"; }
+
+          run validate ./samples/valid-skill --strict --no-color
+          run validate ./samples/dotnet-api-review --strict --no-color
+
+          # This one must fail with exit code 1; anything else is a regression.
+          if run validate ./samples/broken-references --no-color; then
+            echo "Expected broken-references to fail validation"
+            exit 1
+          fi
+
+          run inspect ./samples/dotnet-api-review --no-color > /dev/null
+          run pack ./samples/valid-skill --output ./artifacts/packages --no-color
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v5

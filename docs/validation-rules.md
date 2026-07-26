@@ -76,16 +76,31 @@ number in front of it.
 
 | Code | Rule | Status |
 |---|---|---|
-| SF2001 | The skill contains a script | Planned |
-| SF2002 | The skill contains an external URL | Planned |
-| SF2003 | The skill contains a binary file | Planned |
-| SF2004 | The skill contains an `evals` folder | Planned |
+| SF2001 | The skill contains a script | **Implemented** (inspect) |
+| SF2002 | The skill contains an external URL | **Implemented** (inspect) |
+| SF2003 | The skill contains a binary file | **Implemented** (inspect) |
+| SF2004 | The skill contains an `evals` folder | **Implemented** (inspect) |
+
+## What is still planned, and why it is not here yet
+
+SF1004 to SF1008 are reserved but unimplemented, and that is a scope decision rather than an oversight.
+Each needs something this release deliberately does not do:
+
+| Code | What it would need |
+|---|---|
+| SF1004 (unused file) | A definition of "used" beyond a Markdown link. A script invoked by another script, or a file an agent is expected to discover by convention, would be reported as unused today — a false positive that trains people to ignore warnings. |
+| SF1005 (external URL) | This is reported as an observation by `inspect` (SF2002). Promoting it to a warning means deciding that referencing a URL is a problem, which depends on policy SkillForge does not have. |
+| SF1006, SF1007 (permissions, privileges) | Reading `skillforge.yaml` and cross-checking declarations against contents, plus the shell pattern matching described below. This is Milestone v0.2.0. |
+| SF1008 (unpinned dependencies) | A definition of what a skill's dependencies are. Nothing in the format declares them yet. |
 
 ## Security signals
 
-Phase 2 and Milestone v0.2.0 detect the patterns listed in the roadmap (piped shell installers,
-`rm -rf`, `Invoke-Expression`, `chmod 777`, `sudo`, privileged containers; sensitive paths such as
-`.env`, `.ssh`, `/etc/`; network calls; secret-shaped identifiers).
+Milestone v0.2.0 detects the patterns listed in the roadmap: piped shell installers, `rm -rf`,
+`Invoke-Expression`, `chmod 777`, `sudo`, privileged containers; sensitive paths such as `.env`, `.ssh`
+and `/etc/`; network calls; secret-shaped identifiers.
+
+Today `inspect` reports the neutral facts underneath those signals — that a skill ships a script, points at
+a URL, or contains a binary — without interpreting them.
 
 These checks only ever produce diagnostics. SkillForge does not classify a skill as safe or malicious
 (ADR-006).

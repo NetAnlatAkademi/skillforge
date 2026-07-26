@@ -62,6 +62,21 @@ public sealed class FileSystem : IFileSystem
     }
 
     /// <inheritdoc />
+    public Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken) =>
+        File.ReadAllBytesAsync(path, cancellationToken);
+
+    /// <inheritdoc />
+    public void CreateDirectory(string path) => Directory.CreateDirectory(path);
+
+    /// <inheritdoc />
+    public Task WriteAllTextAsync(string path, string content, CancellationToken cancellationToken) =>
+        File.WriteAllTextAsync(path, content, cancellationToken);
+
+    /// <inheritdoc />
+    public Task WriteAllBytesAsync(string path, byte[] content, CancellationToken cancellationToken) =>
+        File.WriteAllBytesAsync(path, content, cancellationToken);
+
+    /// <inheritdoc />
     public Task<string> ReadAllTextAsync(string path, CancellationToken cancellationToken) =>
         File.ReadAllTextAsync(path, cancellationToken);
 }

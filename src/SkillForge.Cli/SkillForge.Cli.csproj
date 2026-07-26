@@ -5,7 +5,14 @@
     <AssemblyName>skillforge</AssemblyName>
     <RootNamespace>SkillForge.Cli</RootNamespace>
     <Description>SkillForge command line interface.</Description>
-    <!-- Global tool packaging is wired up in a later phase (Milestone v0.1.0). -->
+
+    <!-- Distributed as a .NET global tool; see docs/cli-reference.md for the install command. -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>skillforge</ToolCommandName>
+    <PackageId>SkillForge.Cli</PackageId>
+    <IsPackable>true</IsPackable>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>ai-agents;skills;cli;validation;sarif</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +24,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="SkillForge.Cli.Tests" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

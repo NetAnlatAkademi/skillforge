@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Application.Abstractions;
+using SkillForge.Application.Inspection;
+using SkillForge.Application.Packaging;
 using SkillForge.Application.Skills;
 using SkillForge.Application.Validation;
 using SkillForge.Cli.Commands;
@@ -13,9 +15,9 @@ namespace SkillForge.Cli;
 /// The one place where interfaces are bound to implementations.
 /// </summary>
 /// <remarks>
-/// Every dependency is registered here so no other class has to know what implements what. The rule set
-/// comes from <see cref="SkillValidationRules.CreateDefault"/> — an explicit list, not assembly scanning,
-/// so a rule cannot go missing without somebody removing a line.
+/// Every dependency is registered here so no other class has to know what implements what. The rule set comes
+/// from <see cref="SkillValidationRules.CreateDefault"/> — an explicit list, not assembly scanning, so a rule
+/// cannot go missing without somebody removing a line.
 /// </remarks>
 internal static class CompositionRoot
 {
@@ -25,10 +27,21 @@ internal static class CompositionRoot
     {
         var services = new ServiceCollection();
 
+        services.AddSingleton(TimeProvider.System);
+
         services.AddSingleton<IFileSystem, FileSystem>();
         services.AddSingleton<IFrontmatterParser, YamlFrontmatterParser>();
+        services.AddSingleton<IArchiveWriter, DeterministicZipArchiveWriter>();
+        services.AddSingleton<IHashCalculator, Sha256HashCalculator>();
+
         services.AddSingleton<ISkillLoader, SkillLoader>();
+        services.AddSingleton<ISkillInitializer, SkillInitializer>();
+        services.AddSingleton<ISkillInspector, SkillInspector>();
+        services.AddSingleton<ISkillPackager, SkillPackager>();
+
         services.AddSingleton<IValidationReportRenderer, ConsoleReportRenderer>();
+        services.AddSingleton<IValidationReportSerializer, JsonReportSerializer>();
+        services.AddSingleton<IValidationReportSerializer, SarifReportSerializer>();
 
         foreach (var rule in SkillValidationRules.CreateDefault())
         {
@@ -38,10 +51,14 @@ internal static class CompositionRoot
         services.AddSingleton<ISkillValidator>(provider =>
             new SkillValidator(provider.GetServices<ISkillValidationRule>()));
 
+        services.AddSingleton<ReportOutput>();
         services.AddSingleton<ValidateCommandRunner>();
+        services.AddSingleton<InitCommandRunner>();
+        services.AddSingleton<InspectCommandRunner>();
+        services.AddSingleton<PackCommandRunner>();
 
-        // ValidateOnBuild turns a missing or unresolvable registration into a failure here rather than
-        // when the user runs a command. It is what makes the composition smoke test meaningful.
+        // ValidateOnBuild turns a missing or unresolvable registration into a failure here rather than when
+        // the user runs a command. It is what makes the composition smoke test meaningful.
         return services.BuildServiceProvider(new ServiceProviderOptions
         {
             ValidateOnBuild = true,

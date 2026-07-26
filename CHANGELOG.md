@@ -7,7 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
+### Added — milestone v0.1.0, Local Validator
+
+- `skillforge init` — scaffolds a skill that passes `validate` with no findings.
+- `skillforge inspect` — file inventory, external URLs, inferred capabilities and declared tools, as
+  console text or JSON. Describes; never claims a security verdict.
+- `skillforge pack` — deterministic `.skill.zip` plus a `.sha256` in `sha256sum -c` format and a manifest.
+  Validation is a gate; `--skip-validation` is explicit and printed when used.
+- `--format json` and `--format sarif` on `validate`, with `--output` to write to a file.
+- SARIF 2.1.0 output with rule declarations, severity mapping and repository-relative locations, so
+  findings appear as pull request annotations.
+- Global tool packaging: `dotnet tool install --global SkillForge.Cli` installs `skillforge`.
+- Docs: `docs/cli-reference.md`, `docs/ci.md`, `docs/skillforge-manifest-rfc.md`.
+- CI runs the built CLI over the sample skills, including asserting that the broken sample exits 1.
+
+### Added — foundations
 
 - Repository bootstrap: solution with five source projects and five xUnit test projects.
 - Repository-wide build settings (`Directory.Build.props`): .NET 10, nullable reference types,

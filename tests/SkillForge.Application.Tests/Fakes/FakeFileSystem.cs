@@ -1,3 +1,4 @@
+using System.Text;
 using SkillForge.Application.Abstractions;
 
 namespace SkillForge.Application.Tests.Fakes;
@@ -16,6 +17,7 @@ internal sealed class FakeFileSystem : IFileSystem
     private readonly HashSet<string> _directories = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _links = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Exception> _readFailures = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, byte[]> _binaryFiles = new(StringComparer.OrdinalIgnoreCase);
 
     internal FakeFileSystem AddFile(string path, string content)
     {
@@ -79,6 +81,46 @@ internal sealed class FakeFileSystem : IFileSystem
             .Order(StringComparer.Ordinal)
             .ToArray();
     }
+
+    /// <summary>Every directory that was created through this fake, in creation order.</summary>
+    internal List<string> CreatedDirectories { get; } = [];
+
+    public void CreateDirectory(string path)
+    {
+        var normalised = Normalise(path);
+        CreatedDirectories.Add(normalised);
+        _directories.Add(normalised);
+    }
+
+    public Task WriteAllTextAsync(string path, string content, CancellationToken cancellationToken)
+    {
+        AddFile(path, content);
+        return Task.CompletedTask;
+    }
+
+    public Task WriteAllBytesAsync(string path, byte[] content, CancellationToken cancellationToken)
+    {
+        AddFile(path, Encoding.UTF8.GetString(content));
+        _binaryFiles[Normalise(path)] = content;
+        return Task.CompletedTask;
+    }
+
+    public Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken)
+    {
+        var normalised = Normalise(path);
+
+        if (_binaryFiles.TryGetValue(normalised, out var bytes))
+        {
+            return Task.FromResult(bytes);
+        }
+
+        return _files.TryGetValue(normalised, out var content)
+            ? Task.FromResult(Encoding.UTF8.GetBytes(content))
+            : throw new FileNotFoundException($"Fake file system has no file at '{path}'.", path);
+    }
+
+    /// <summary>Reads back what was written, so tests can assert on generated content.</summary>
+    internal string ReadText(string path) => _files[Normalise(path)];
 
     public Task<string> ReadAllTextAsync(string path, CancellationToken cancellationToken)
     {

@@ -3,8 +3,8 @@
 A local, open source CLI for AI agent skills. SkillForge creates, validates, inspects and packages
 `SKILL.md`-based skills, and reports findings as human-readable console output, JSON or SARIF.
 
-> Status: **pre-alpha**. `validate` works end to end; `init`, `inspect` and `pack` are not implemented
-> yet. CI builds and tests on Linux and Windows.
+> Status: **v0.1.0 in development.** All four commands work end to end. CI builds and tests on Linux and
+> Windows, and runs the CLI over the sample skills.
 
 ## Try it
 
@@ -40,14 +40,17 @@ notice a broken or risky skill in seconds — locally, and in CI — without sen
 SkillForge reports concrete diagnostics and risk signals. It deliberately does **not** label a skill
 "safe" or "unsafe".
 
-## Planned commands
+## Commands
 
 | Command | Purpose |
 |---|---|
-| `skillforge init <name>` | Scaffold a new skill folder |
+| `skillforge init <name>` | Scaffold a skill that already passes validation |
 | `skillforge validate <path>` | Validate structure, frontmatter and quality rules |
-| `skillforge inspect <path>` | Summarise files, links, scripts and inferred permissions |
+| `skillforge inspect <path>` | Summarise files, links, scripts and inferred capabilities |
 | `skillforge pack <path>` | Produce a deterministic `.skill.zip` with a SHA-256 hash and manifest |
+
+Full options are in [docs/cli-reference.md](docs/cli-reference.md); CI usage, including SARIF upload, is in
+[docs/ci.md](docs/ci.md).
 
 ## Requirements
 
@@ -74,6 +77,22 @@ Run the CLI from source:
 
 ```bash
 dotnet run --project src/SkillForge.Cli -- --help
+```
+
+## Install as a global tool
+
+Once published:
+
+```bash
+dotnet tool install --global SkillForge.Cli
+skillforge --help
+```
+
+Or build the package locally:
+
+```bash
+dotnet pack src/SkillForge.Cli -c Release
+dotnet tool install --global --add-source src/SkillForge.Cli/bin/Release SkillForge.Cli
 ```
 
 ## Repository layout
