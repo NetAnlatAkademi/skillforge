@@ -31,8 +31,14 @@ jobs:
     runs-on: ubuntu-latest
     # Required, not optional. The environment name lands in the OIDC claims and the nuget.org policy pins it,
     # so this must match the policy exactly — running without it fails the token exchange with
-    # "Environment mismatch for policy 'SkillForge.Cli': expected 'production', actual ''". It doubles as a
-    # gate you can attach required reviewers to, which is worth having: publishing is not undoable.
+    # "Environment mismatch for policy 'SkillForge.Cli': expected 'production', actual ''".
+    #
+    # It also carries a required reviewer, so a run reaching this job waits for a human before anything is
+    # published. That is deliberate: a NuGet version cannot be deleted once pushed, only unlisted.
+    #
+    # The environment's deployment branch policy allows the `main` branch and `v*` tags, which are the two ways
+    # this workflow starts. Adding a policy list without those entries silently blocks every run — an empty
+    # custom policy list permits nothing rather than everything.
     environment: production
 
     steps:
