@@ -14,12 +14,35 @@
     <DeterministicSourcePaths Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</DeterministicSourcePaths>
   </PropertyGroup>
 
+  <!--
+    Version scheme: YY.DayOfYear.Build — for example 26.208.1 for the first build on 27 July 2026.
+
+    The date parts are computed at build time in UTC, so a build's version says when it was made without anyone
+    maintaining a number. The build counter comes from SKILLFORGE_BUILD (CI sets it) and is 1 locally, which is
+    what you want when you are building the same day's code repeatedly.
+
+    No zero padding, deliberately: SemVer forbids leading zeroes in numeric identifiers, so "26.208.01" is not a
+    valid version and NuGet normalises it to 26.208.1 anyway. Padding the tag but not the package would mean two
+    different strings for one release, which is worse than losing the zero.
+
+    Consequence worth knowing: two builds of the same commit on different days carry different versions, and the
+    version appears as tool.version in JSON and SARIF reports. That is correct — a report should say which build
+    produced it — and it does not affect package hashes, which cover the skill's files and never SkillForge's own
+    version.
+  -->
+  <PropertyGroup>
+    <SkillForgeBuild Condition="'$(SkillForgeBuild)' == '' and '$(SKILLFORGE_BUILD)' != ''">$(SKILLFORGE_BUILD)</SkillForgeBuild>
+    <SkillForgeBuild Condition="'$(SkillForgeBuild)' == ''">1</SkillForgeBuild>
+    <SkillForgeYear>$([System.DateTime]::UtcNow.ToString('yy'))</SkillForgeYear>
+    <SkillForgeDayOfYear>$([System.DateTime]::UtcNow.DayOfYear)</SkillForgeDayOfYear>
+  </PropertyGroup>
+
   <!-- Shared package metadata. Individual projects override PackageId / Description. -->
   <PropertyGroup>
     <Product>SkillForge</Product>
     <Authors>SkillForge Contributors</Authors>
     <Company>SkillForge</Company>
-    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionPrefix>$(SkillForgeYear).$(SkillForgeDayOfYear).$(SkillForgeBuild)</VersionPrefix>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>

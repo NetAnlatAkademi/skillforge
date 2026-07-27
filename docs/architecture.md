@@ -50,6 +50,22 @@ Consequences:
 - **Determinism:** diagnostic ordering and package contents are deterministic, so identical input
   produces an identical hash.
 
+## Versioning
+
+`YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2026. The date parts are computed at build time
+in UTC; the counter comes from `SKILLFORGE_BUILD` and is `1` locally.
+
+Two things follow from this, and both are deliberate:
+
+- **No zero padding.** SemVer forbids leading zeroes in numeric identifiers, so `26.208.01` is not a valid version
+  and NuGet normalises it away. Padding the git tag but not the package would give one release two spellings.
+- **Two builds of the same commit on different days carry different versions.** That is what a dated scheme means.
+  It shows up as `tool.version` in JSON and SARIF, which is correct — a report should say which build produced it —
+  and it never affects a package hash, which covers the skill's files and not SkillForge's own version.
+
+**Milestone names are not version numbers.** "v0.1.0 — Local Validator" and "v0.2.0 — Security Signals" in the
+roadmap are labels for *scope*; releases are dated. A release note says which milestone's work it contains.
+
 ## Exit codes
 
 | Code | Meaning |

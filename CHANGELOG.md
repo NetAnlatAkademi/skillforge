@@ -2,8 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
-adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2026 — which is valid SemVer but
+carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
+Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
 ## [Unreleased]
 
