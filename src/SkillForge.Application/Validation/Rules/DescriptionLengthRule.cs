@@ -22,33 +22,28 @@ public sealed class DescriptionLengthRule : ISkillValidationRule
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<Diagnostic>> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
 
         // A missing description belongs to SF0005.
         if (string.IsNullOrWhiteSpace(skill.Description))
         {
-            return ValueTask.FromResult<IReadOnlyList<Diagnostic>>([]);
+            return RuleResult.None();
         }
 
         var length = skill.Description.Trim().Length;
-        IReadOnlyList<Diagnostic> diagnostics = length >= MinimumUsefulLength
-            ? []
-            :
-            [
-                Diagnostic.Warning(
-                    Code,
-                    "The description is "
-                        + length.ToString(CultureInfo.InvariantCulture)
-                        + " characters long, which is unlikely to tell an agent when to use this skill.",
-                    SkillDefinition.SkillFileName,
-                    skill.Frontmatter.StartLine,
-                    "Describe what the skill does and the situation it applies to, in at least "
-                        + MinimumUsefulLength.ToString(CultureInfo.InvariantCulture)
-                        + " characters."),
-            ];
-
-        return ValueTask.FromResult(diagnostics);
+        return length >= MinimumUsefulLength
+            ? RuleResult.None()
+            : RuleResult.One(Diagnostic.Warning(
+                Code,
+                "The description is "
+                    + length.ToString(CultureInfo.InvariantCulture)
+                    + " characters long, which is unlikely to tell an agent when to use this skill.",
+                SkillDefinition.SkillFileName,
+                skill.Frontmatter.StartLine,
+                "Describe what the skill does and the situation it applies to, in at least "
+                    + MinimumUsefulLength.ToString(CultureInfo.InvariantCulture)
+                    + " characters."));
     }
 }

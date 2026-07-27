@@ -21,9 +21,12 @@ public interface ISkillValidationRule
     /// Examines a loaded skill.
     /// </summary>
     /// <param name="skill">The skill to examine.</param>
-    /// <param name="cancellationToken">Token used to cancel the rule.</param>
+    /// <param name="cancellationToken">
+    /// Token used to cancel the rule. The validator checks this between rules, so a trivial synchronous
+    /// rule need not check it itself.
+    /// </param>
     /// <returns>The findings, or an empty list when the rule has nothing to report.</returns>
     ValueTask<IReadOnlyList<Diagnostic>> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken = default);
 }

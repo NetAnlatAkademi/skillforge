@@ -18,22 +18,17 @@ public sealed class DescriptionRequiredRule : ISkillValidationRule
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<Diagnostic>> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
 
-        IReadOnlyList<Diagnostic> diagnostics = string.IsNullOrWhiteSpace(skill.Description)
-            ?
-            [
-                Diagnostic.Error(
-                    Code,
-                    "The skill does not declare a description.",
-                    SkillDefinition.SkillFileName,
-                    skill.Frontmatter.StartLine,
-                    "Add a 'description' field saying what the skill does and when it applies."),
-            ]
-            : [];
-
-        return ValueTask.FromResult(diagnostics);
+        return string.IsNullOrWhiteSpace(skill.Description)
+            ? RuleResult.One(Diagnostic.Error(
+                Code,
+                "The skill does not declare a description.",
+                SkillDefinition.SkillFileName,
+                skill.Frontmatter.StartLine,
+                "Add a 'description' field saying what the skill does and when it applies."))
+            : RuleResult.None();
     }
 }

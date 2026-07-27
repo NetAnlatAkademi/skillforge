@@ -23,5 +23,5 @@ public interface ISkillPackager
         SkillDefinition skill,
         string outputDirectory,
         string? versionOverride,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken = default);
 }

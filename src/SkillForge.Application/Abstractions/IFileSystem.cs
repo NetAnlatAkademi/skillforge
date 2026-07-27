@@ -52,7 +52,7 @@ public interface IFileSystem
     /// <param name="path">Path of the file.</param>
     /// <param name="cancellationToken">Token used to cancel the read.</param>
     /// <returns>The file's bytes.</returns>
-    Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken);
+    Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>Creates a directory, including any missing parents. Does nothing if it exists.</summary>
     /// <param name="path">Directory to create.</param>
@@ -63,18 +63,18 @@ public interface IFileSystem
     /// <param name="content">Text to write.</param>
     /// <param name="cancellationToken">Token used to cancel the write.</param>
     /// <returns>A task that completes when the file is written.</returns>
-    Task WriteAllTextAsync(string path, string content, CancellationToken cancellationToken);
+    Task WriteAllTextAsync(string path, string content, CancellationToken cancellationToken = default);
 
     /// <summary>Writes a binary file, replacing it if it exists.</summary>
     /// <param name="path">Path of the file.</param>
     /// <param name="content">Bytes to write.</param>
     /// <param name="cancellationToken">Token used to cancel the write.</param>
     /// <returns>A task that completes when the file is written.</returns>
-    Task WriteAllBytesAsync(string path, byte[] content, CancellationToken cancellationToken);
+    Task WriteAllBytesAsync(string path, byte[] content, CancellationToken cancellationToken = default);
 
     /// <summary>Reads a text file in full.</summary>
     /// <param name="path">Path of the file.</param>
     /// <param name="cancellationToken">Token used to cancel the read.</param>
     /// <returns>The file's contents.</returns>
-    Task<string> ReadAllTextAsync(string path, CancellationToken cancellationToken);
+    Task<string> ReadAllTextAsync(string path, CancellationToken cancellationToken = default);
 }

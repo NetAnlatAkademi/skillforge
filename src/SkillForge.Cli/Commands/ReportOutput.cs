@@ -60,7 +60,7 @@ internal sealed class ReportOutput
 
         if (outputPath is null)
         {
-            Console.Out.Write(text);
+            await Console.Out.WriteAsync(text).ConfigureAwait(false);
             return;
         }
 

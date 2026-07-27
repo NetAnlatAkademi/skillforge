@@ -1,3 +1,4 @@
+using System.IO;
 using SkillForge.Application.Abstractions;
 using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Skills;
@@ -54,7 +55,7 @@ internal sealed class InitCommandRunner
 
         var target = request.Directory ?? request.Options.Name;
         var fullPath = _fileSystem.GetFullPath(target);
-        var skillFile = System.IO.Path.Combine(fullPath, SkillDefinition.SkillFileName);
+        var skillFile = Path.Combine(fullPath, SkillDefinition.SkillFileName);
 
         if (!request.Options.Force && _fileSystem.FileExists(skillFile))
         {
@@ -82,14 +83,16 @@ internal sealed class InitCommandRunner
 
         if (!request.RenderOptions.Quiet)
         {
-            Console.WriteLine($"Created skill '{request.Options.Name}' in {result.Value.DirectoryPath}");
+            await Console.Out.WriteLineAsync(
+                $"Created skill '{request.Options.Name}' in {result.Value.DirectoryPath}").ConfigureAwait(false);
 
             foreach (var file in result.Value.CreatedFiles)
             {
-                Console.WriteLine($"  {System.IO.Path.GetRelativePath(fullPath, file).Replace('\\', '/')}");
+                await Console.Out.WriteLineAsync(
+                    $"  {Path.GetRelativePath(fullPath, file).Replace('\\', '/')}").ConfigureAwait(false);
             }
 
-            Console.WriteLine();
+            await Console.Out.WriteLineAsync().ConfigureAwait(false);
         }
 
         // A generated skill that does not pass validation would be a bug in the template, so the check runs
@@ -104,16 +107,3 @@ internal sealed class InitCommandRunner
             cancellationToken).ConfigureAwait(false);
     }
 }
-
-/// <summary>
-/// Everything <c>init</c> was asked to do.
-/// </summary>
-/// <param name="Directory">
-/// Where to create the skill, or <see langword="null"/> to use the skill name as the directory.
-/// </param>
-/// <param name="Options">What to put in the generated files.</param>
-/// <param name="RenderOptions">How to present output.</param>
-internal sealed record InitRequest(
-    string? Directory,
-    SkillInitializationOptions Options,
-    ReportRenderOptions RenderOptions);

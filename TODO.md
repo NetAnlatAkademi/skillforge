@@ -274,6 +274,56 @@ validate --format json | --format sarif   -> schema 1.0 / SARIF 2.1.0
   decision this release does not make — what "unused" means, whether a URL is a problem, what a skill's
   dependencies are.
 
+---
+
+## Code-standards refactor pass (after v0.1.0 feature-complete)
+
+The whole codebase was scanned against a code-review rubric (one-type-per-file, async signatures,
+performance, magic values, dead code, test quality) and the findings applied. No critical findings. Package
+hash before and after the refactor is identical, which is the evidence that behaviour was preserved.
+
+Applied:
+
+- [x] **One type per file** — 13 source files and 5 test files split; 22 new files. Every request/options
+  record, helper static class and secondary interface now lives on its own.
+- [x] **`CancellationToken cancellationToken = default`** on every Task/ValueTask-returning declaration
+  and its implementations (~30 signatures).
+- [x] **Cancellation is checked between rules by the validator**, not repeated inside every synchronous
+  rule. Nine of the eleven rules took a token they never used; the check now lives where the loop is, and
+  `ISkillValidationRule`'s docs say so.
+- [x] **`RuleResult.None()` / `RuleResult.One(...)`** removes the repeated
+  `ValueTask.FromResult<IReadOnlyList<Diagnostic>>` plumbing from nine rules, leaving each rule's condition
+  and message as the only thing on screen. No base class — the rules stay independent.
+- [x] **O(n·m) fixed in `SarifReportSerializer`** — it re-scanned the whole diagnostic list once per code;
+  now one lookup is built first.
+- [x] **Magic values → constants**: default version, archive/hash/manifest suffixes, default path, default
+  licence, default output directory. `inspect` now shares `SkillForgeTool.ReportSchemaVersion` instead of
+  repeating `"1.0"`, so the two cannot drift.
+- [x] **Dead code removed**: an unused private `ToText` in `SkillPackager`, unused members in both test
+  fakes.
+- [x] **Synchronous `Console` writes inside `async` methods** replaced with their awaited equivalents.
+- [x] **`SkillLoader.LoadAsync` split** — the read-and-split step is now a named helper.
+- [x] **Five placeholder `BootstrapTests` deleted** — they asserted `true.Should().BeTrue()` and every
+  project has real tests now.
+- [x] **The real gap: `init`, `inspect` and `pack` runners had no tests at all**, while exit codes are the
+  CLI's entire contract with CI. All three now have them — 399 tests, up from 373.
+- [x] Direct tests for `SkillName`, the shared definition behind both `init` and SF0006.
+
+Reported, deliberately not changed:
+
+- **Diagnostic messages end with a full stop.** The rubric says error messages must not. These are
+  user-facing sentences in a report, not log lines — stripping the punctuation would make the console
+  output read worse. Kept, with the reasoning recorded here rather than silently ignored.
+- **The two link-walking rules keep their own loops.** They dedupe on different keys (normalised path vs
+  raw target); a shared abstraction over twenty lines each would cost more clarity than it saves.
+- **Command runners write to `Console` directly**, so asserting on stdout needs process-global
+  `Console.SetOut` — which is exactly what made one new test fail under xUnit's parallel classes. The test
+  now asserts the file content instead. The underlying fix is to inject a `TextWriter` into the runners;
+  worth doing when a command next needs to change its output, not as part of a standards pass.
+- **Two `FakeFileSystem` implementations remain.** The Application one simulates links and read failures;
+  the CLI one only needs file existence and content. Sharing them would import unused surface into the CLI
+  tests; the dead members were removed so "the smaller fake does less" is now actually true.
+
 ## Out of scope for v0.1.0
 
 Web panel · public marketplace · private registry · user and organisation management · Auth0 ·

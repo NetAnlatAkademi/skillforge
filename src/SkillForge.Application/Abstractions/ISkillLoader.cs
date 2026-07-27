@@ -20,5 +20,5 @@ public interface ISkillLoader
     /// The loaded skill, or a failure when the skill cannot be modelled at all — a missing
     /// <c>SKILL.md</c>, a missing frontmatter block, or YAML that cannot be parsed.
     /// </returns>
-    Task<OperationResult<SkillDefinition>> LoadAsync(string path, CancellationToken cancellationToken);
+    Task<OperationResult<SkillDefinition>> LoadAsync(string path, CancellationToken cancellationToken = default);
 }

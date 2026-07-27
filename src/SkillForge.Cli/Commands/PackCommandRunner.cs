@@ -75,7 +75,8 @@ internal sealed class PackCommandRunner
                 return ExitCodes.ValidationFailed;
             }
 
-            Console.WriteLine("Packaging anyway because --skip-validation was given.");
+            await Console.Out.WriteLineAsync("Packaging anyway because --skip-validation was given.")
+                .ConfigureAwait(false);
         }
 
         var packed = await _packager
@@ -94,30 +95,16 @@ internal sealed class PackCommandRunner
         if (!request.RenderOptions.Quiet)
         {
             var package = packed.Value;
-            Console.WriteLine($"Packaged {package.SkillName} {package.Version}");
-            Console.WriteLine($"  {package.ArchivePath}");
-            Console.WriteLine($"  {package.HashPath}");
-            Console.WriteLine($"  {package.ManifestPath}");
-            Console.WriteLine();
-            Console.WriteLine($"sha256: {package.ArchiveSha256}");
-            Console.WriteLine($"files:  {package.Files.Count}");
+            await Console.Out.WriteLineAsync($"Packaged {package.SkillName} {package.Version}")
+                .ConfigureAwait(false);
+            await Console.Out.WriteLineAsync($"  {package.ArchivePath}").ConfigureAwait(false);
+            await Console.Out.WriteLineAsync($"  {package.HashPath}").ConfigureAwait(false);
+            await Console.Out.WriteLineAsync($"  {package.ManifestPath}").ConfigureAwait(false);
+            await Console.Out.WriteLineAsync().ConfigureAwait(false);
+            await Console.Out.WriteLineAsync($"sha256: {package.ArchiveSha256}").ConfigureAwait(false);
+            await Console.Out.WriteLineAsync($"files:  {package.Files.Count}").ConfigureAwait(false);
         }
 
         return ExitCodes.Success;
     }
 }
-
-/// <summary>
-/// Everything <c>pack</c> was asked to do.
-/// </summary>
-/// <param name="Path">Skill directory or <c>SKILL.md</c> path.</param>
-/// <param name="OutputDirectory">Where to write the artefacts.</param>
-/// <param name="VersionOverride">Version to package as, or <see langword="null"/> for the declared one.</param>
-/// <param name="SkipValidation">Package even when validation finds errors.</param>
-/// <param name="RenderOptions">How to present output.</param>
-internal sealed record PackRequest(
-    string Path,
-    string OutputDirectory,
-    string? VersionOverride,
-    bool SkipValidation,
-    ReportRenderOptions RenderOptions);

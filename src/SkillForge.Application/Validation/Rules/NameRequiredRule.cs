@@ -18,22 +18,17 @@ public sealed class NameRequiredRule : ISkillValidationRule
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<Diagnostic>> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
 
-        IReadOnlyList<Diagnostic> diagnostics = string.IsNullOrWhiteSpace(skill.Name)
-            ?
-            [
-                Diagnostic.Error(
-                    Code,
-                    "The skill does not declare a name.",
-                    SkillDefinition.SkillFileName,
-                    skill.Frontmatter.StartLine,
-                    "Add a 'name' field to the frontmatter, matching the skill's directory name."),
-            ]
-            : [];
-
-        return ValueTask.FromResult(diagnostics);
+        return string.IsNullOrWhiteSpace(skill.Name)
+            ? RuleResult.One(Diagnostic.Error(
+                Code,
+                "The skill does not declare a name.",
+                SkillDefinition.SkillFileName,
+                skill.Frontmatter.StartLine,
+                "Add a 'name' field to the frontmatter, matching the skill's directory name."))
+            : RuleResult.None();
     }
 }

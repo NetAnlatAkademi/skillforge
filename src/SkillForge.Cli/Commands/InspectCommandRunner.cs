@@ -4,6 +4,7 @@ using SkillForge.Application.Abstractions;
 using SkillForge.Application.Inspection;
 using SkillForge.Domain.Inspection;
 using SkillForge.Domain.Validation;
+using SkillForge.Reporting;
 
 namespace SkillForge.Cli.Commands;
 
@@ -84,7 +85,7 @@ internal sealed class InspectCommandRunner
         }
         else
         {
-            Console.Out.Write(text);
+            await Console.Out.WriteAsync(text).ConfigureAwait(false);
         }
 
         return ExitCodes.Success;
@@ -180,7 +181,7 @@ internal sealed class InspectCommandRunner
 
         var document = new JsonObject
         {
-            ["schemaVersion"] = "1.0",
+            ["schemaVersion"] = SkillForgeTool.ReportSchemaVersion,
             ["skill"] = new JsonObject
             {
                 ["name"] = inspection.SkillName,
@@ -207,22 +208,3 @@ internal sealed class InspectCommandRunner
     private static JsonArray ToArray(IReadOnlyList<string> values) =>
         new([.. values.Select(value => (JsonNode)JsonValue.Create(value))]);
 }
-
-/// <summary>
-/// Everything <c>inspect</c> was asked to do.
-/// </summary>
-/// <param name="Path">Skill directory or <c>SKILL.md</c> path.</param>
-/// <param name="Format">Console or JSON.</param>
-/// <param name="OutputPath">File to write to, or <see langword="null"/> for stdout.</param>
-/// <param name="ShowFiles">Show the file inventory.</param>
-/// <param name="ShowLinks">Show external URLs.</param>
-/// <param name="ShowPermissions">Show inferred capabilities and declared tools.</param>
-/// <param name="RenderOptions">How to present a load failure.</param>
-internal sealed record InspectRequest(
-    string Path,
-    string Format,
-    string? OutputPath,
-    bool ShowFiles,
-    bool ShowLinks,
-    bool ShowPermissions,
-    ReportRenderOptions RenderOptions);

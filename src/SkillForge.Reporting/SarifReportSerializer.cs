@@ -42,10 +42,21 @@ public sealed class SarifReportSerializer : IValidationReportSerializer
             .Select((code, index) => (code, index))
             .ToDictionary(pair => pair.code, pair => pair.index, StringComparer.Ordinal);
 
+        // One lookup built up front so each code resolves its example diagnostic in constant time,
+        // rather than rescanning the full diagnostics list once per code.
+        var firstByCode = new Dictionary<string, Diagnostic>(StringComparer.Ordinal);
+        foreach (var diagnostic in report.Diagnostics)
+        {
+            if (!firstByCode.ContainsKey(diagnostic.Code))
+            {
+                firstByCode[diagnostic.Code] = diagnostic;
+            }
+        }
+
         var rules = new JsonArray();
         foreach (var code in codes)
         {
-            var example = report.Diagnostics.First(diagnostic => diagnostic.Code == code);
+            var example = firstByCode[code];
 
             rules.Add(new JsonObject
             {

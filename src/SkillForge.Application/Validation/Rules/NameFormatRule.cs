@@ -19,26 +19,21 @@ public sealed class NameFormatRule : ISkillValidationRule
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<Diagnostic>> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
 
         // A missing name belongs to SF0004; DescribeProblem stays quiet about it for that reason.
         var reason = SkillName.DescribeProblem(skill.Name);
 
-        IReadOnlyList<Diagnostic> diagnostics = reason is null
-            ? []
-            :
-            [
-                Diagnostic.Error(
-                    Code,
-                    $"The skill name '{skill.Name}' is not valid: {reason}",
-                    SkillDefinition.SkillFileName,
-                    skill.Frontmatter.StartLine,
-                    "Use lowercase letters, digits and single hyphens, starting with a letter — "
-                        + "for example 'dotnet-api-review'."),
-            ];
-
-        return ValueTask.FromResult(diagnostics);
+        return reason is null
+            ? RuleResult.None()
+            : RuleResult.One(Diagnostic.Error(
+                Code,
+                $"The skill name '{skill.Name}' is not valid: {reason}",
+                SkillDefinition.SkillFileName,
+                skill.Frontmatter.StartLine,
+                "Use lowercase letters, digits and single hyphens, starting with a letter — "
+                    + "for example 'dotnet-api-review'."));
     }
 }

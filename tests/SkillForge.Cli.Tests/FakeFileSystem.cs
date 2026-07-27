@@ -24,9 +24,6 @@ internal sealed class FakeFileSystem : IFileSystem
     /// <summary>Reads back what was written, so tests can assert on generated content.</summary>
     internal string ReadText(string path) => _files[Normalise(path)];
 
-    /// <summary>Whether anything was written at all.</summary>
-    internal bool HasFile(string path) => _files.ContainsKey(Normalise(path));
-
     public bool FileExists(string path) => _files.ContainsKey(Normalise(path));
 
     public bool DirectoryExists(string path) => _directories.Contains(Normalise(path));

@@ -82,15 +82,7 @@ internal sealed class FakeFileSystem : IFileSystem
             .ToArray();
     }
 
-    /// <summary>Every directory that was created through this fake, in creation order.</summary>
-    internal List<string> CreatedDirectories { get; } = [];
-
-    public void CreateDirectory(string path)
-    {
-        var normalised = Normalise(path);
-        CreatedDirectories.Add(normalised);
-        _directories.Add(normalised);
-    }
+    public void CreateDirectory(string path) => _directories.Add(Normalise(path));
 
     public Task WriteAllTextAsync(string path, string content, CancellationToken cancellationToken)
     {

@@ -17,5 +17,5 @@ public interface ISkillValidator
     /// A report whose diagnostics are ordered deterministically, so that identical input produces
     /// identical output.
     /// </returns>
-    Task<ValidationReport> ValidateAsync(SkillDefinition skill, CancellationToken cancellationToken);
+    Task<ValidationReport> ValidateAsync(SkillDefinition skill, CancellationToken cancellationToken = default);
 }

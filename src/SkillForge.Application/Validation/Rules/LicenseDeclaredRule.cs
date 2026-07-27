@@ -18,22 +18,17 @@ public sealed class LicenseDeclaredRule : ISkillValidationRule
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<Diagnostic>> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
 
-        IReadOnlyList<Diagnostic> diagnostics = string.IsNullOrWhiteSpace(skill.Frontmatter.License)
-            ?
-            [
-                Diagnostic.Warning(
-                    Code,
-                    "No license is declared.",
-                    SkillDefinition.SkillFileName,
-                    skill.Frontmatter.StartLine,
-                    "Add a 'license' field, for example 'license: MIT', so others know the terms."),
-            ]
-            : [];
-
-        return ValueTask.FromResult(diagnostics);
+        return string.IsNullOrWhiteSpace(skill.Frontmatter.License)
+            ? RuleResult.One(Diagnostic.Warning(
+                Code,
+                "No license is declared.",
+                SkillDefinition.SkillFileName,
+                skill.Frontmatter.StartLine,
+                "Add a 'license' field, for example 'license: MIT', so others know the terms."))
+            : RuleResult.None();
     }
 }

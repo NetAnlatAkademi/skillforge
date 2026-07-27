@@ -29,7 +29,7 @@ public sealed class SkillInitializer : ISkillInitializer
     public async Task<OperationResult<SkillInitializationResult>> InitializeAsync(
         string targetDirectory,
         SkillInitializationOptions options,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetDirectory);
         ArgumentNullException.ThrowIfNull(options);

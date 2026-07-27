@@ -21,30 +21,25 @@ public sealed partial class DescriptionActivationRule : ISkillValidationRule
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<Diagnostic>> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
 
         // A missing description belongs to SF0005.
         if (string.IsNullOrWhiteSpace(skill.Description))
         {
-            return ValueTask.FromResult<IReadOnlyList<Diagnostic>>([]);
+            return RuleResult.None();
         }
 
-        IReadOnlyList<Diagnostic> diagnostics = ActivationCuePattern().IsMatch(skill.Description)
-            ? []
-            :
-            [
-                Diagnostic.Warning(
-                    Code,
-                    "The description does not say when this skill should be used.",
-                    SkillDefinition.SkillFileName,
-                    skill.Frontmatter.StartLine,
-                    "Name the situation that should trigger the skill — for example "
-                        + "'Use this skill when reviewing an ASP.NET Core API'."),
-            ];
-
-        return ValueTask.FromResult(diagnostics);
+        return ActivationCuePattern().IsMatch(skill.Description)
+            ? RuleResult.None()
+            : RuleResult.One(Diagnostic.Warning(
+                Code,
+                "The description does not say when this skill should be used.",
+                SkillDefinition.SkillFileName,
+                skill.Frontmatter.StartLine,
+                "Name the situation that should trigger the skill — for example "
+                    + "'Use this skill when reviewing an ASP.NET Core API'."));
     }
 
     [GeneratedRegex(

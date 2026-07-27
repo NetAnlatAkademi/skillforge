@@ -20,25 +20,19 @@ public sealed partial class PackageVersionRule : ISkillValidationRule
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<Diagnostic>> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
 
         var version = skill.Frontmatter.Version;
-        IReadOnlyList<Diagnostic> diagnostics =
-            version is null || SemanticVersionPattern().IsMatch(version)
-                ? []
-                :
-                [
-                    Diagnostic.Error(
-                        Code,
-                        $"The version '{version}' is not a valid semantic version.",
-                        SkillDefinition.SkillFileName,
-                        skill.Frontmatter.StartLine,
-                        "Use MAJOR.MINOR.PATCH, for example '1.0.0'."),
-                ];
-
-        return ValueTask.FromResult(diagnostics);
+        return version is null || SemanticVersionPattern().IsMatch(version)
+            ? RuleResult.None()
+            : RuleResult.One(Diagnostic.Error(
+                Code,
+                $"The version '{version}' is not a valid semantic version.",
+                SkillDefinition.SkillFileName,
+                skill.Frontmatter.StartLine,
+                "Use MAJOR.MINOR.PATCH, for example '1.0.0'."));
     }
 
     /// <summary>The official semantic versioning pattern, anchored.</summary>

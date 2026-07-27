@@ -29,7 +29,7 @@ public sealed class SkillValidator : ISkillValidator
     /// <inheritdoc />
     public async Task<ValidationReport> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
         cancellationToken.ThrowIfCancellationRequested();
@@ -38,6 +38,10 @@ public sealed class SkillValidator : ISkillValidator
 
         foreach (var rule in _rules)
         {
+            // Cancellation is checked here, between rules, rather than inside each rule: it keeps every
+            // rule a pure synchronous check of the skill, with no obligation to repeat this boilerplate.
+            cancellationToken.ThrowIfCancellationRequested();
+
             // No try/catch: a rule that throws is a bug in that rule, and hiding it would leave the
             // user with a quietly incomplete report. It surfaces as an unexpected application failure.
             var findings = await rule.ValidateAsync(skill, cancellationToken).ConfigureAwait(false);

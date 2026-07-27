@@ -21,7 +21,7 @@ public sealed class DeterministicZipArchiveWriter : IArchiveWriter
     /// <inheritdoc />
     public async Task<byte[]> CreateAsync(
         IReadOnlyList<ArchiveEntry> entries,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entries);
 

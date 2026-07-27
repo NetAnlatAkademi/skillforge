@@ -21,6 +21,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Docs: `docs/cli-reference.md`, `docs/ci.md`, `docs/skillforge-manifest-rfc.md`.
 - CI runs the built CLI over the sample skills, including asserting that the broken sample exits 1.
 
+### Changed
+
+- Code-standards pass over the whole codebase: one type per file, `= default` on every cancellation-token
+  parameter, cancellation checked once per rule by the validator rather than in each rule, magic values
+  turned into constants, dead code removed, and synchronous console writes inside async methods awaited.
+- `SarifReportSerializer` no longer re-scans the diagnostic list once per rule code.
+- Test suite grown from 373 to 399: `init`, `inspect` and `pack` command runners now have exit-code tests,
+  `SkillName` is tested directly, and the five placeholder bootstrap tests are gone.
+
 ### Added — foundations
 
 - Repository bootstrap: solution with five source projects and five xUnit test projects.

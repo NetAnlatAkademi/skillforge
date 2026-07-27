@@ -43,7 +43,7 @@ public sealed class SkillLoader : ISkillLoader
     /// <inheritdoc />
     public async Task<OperationResult<SkillDefinition>> LoadAsync(
         string path,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -59,34 +59,14 @@ public sealed class SkillLoader : ISkillLoader
 
         var (directoryPath, skillFilePath) = location.Value;
 
-        string content;
-        try
+        var readResult = await ReadAndSplitFrontmatterAsync(skillFilePath, cancellationToken)
+            .ConfigureAwait(false);
+        if (!readResult.IsSuccess || readResult.Value is null)
         {
-            content = await _fileSystem.ReadAllTextAsync(skillFilePath, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // The file is there but unreadable — locked by another process, or permission denied.
-            // From the user's point of view this is still "SkillForge could not read your skill".
-            return OperationResult<SkillDefinition>.Failure(Diagnostic.Error(
-                DiagnosticCodes.SkillFileNotFound,
-                $"{SkillDefinition.SkillFileName} could not be read: {exception.Message}",
-                SkillDefinition.SkillFileName,
-                suggestion: "Check the file's permissions and make sure no other program is holding it open."));
+            return OperationResult<SkillDefinition>.Failure(readResult.Diagnostics);
         }
 
-        var split = FrontmatterSplitter.TrySplit(content);
-        if (split is null)
-        {
-            return OperationResult<SkillDefinition>.Failure(Diagnostic.Error(
-                DiagnosticCodes.FrontmatterNotFound,
-                $"{SkillDefinition.SkillFileName} has no YAML frontmatter block.",
-                SkillDefinition.SkillFileName,
-                line: 1,
-                suggestion: "Start the file with a '---' line, the skill's name and description, "
-                    + "and a closing '---' line."));
-        }
+        var split = readResult.Value;
 
         var frontmatterResult = _frontmatterParser.Parse(
             split.Yaml,
@@ -119,6 +99,48 @@ public sealed class SkillLoader : ISkillLoader
             SkillFileLineCount: split.TotalLineCount);
 
         return OperationResult<SkillDefinition>.Success(definition, diagnostics);
+    }
+
+    /// <summary>
+    /// Reads <c>SKILL.md</c> and splits it into its frontmatter block and body.
+    /// </summary>
+    /// <param name="skillFilePath">Absolute path of the skill's entry point.</param>
+    /// <param name="cancellationToken">Token used to cancel the read.</param>
+    /// <returns>The split, or the failure that prevented producing one.</returns>
+    private async Task<OperationResult<FrontmatterSplit>> ReadAndSplitFrontmatterAsync(
+        string skillFilePath,
+        CancellationToken cancellationToken)
+    {
+        string content;
+        try
+        {
+            content = await _fileSystem.ReadAllTextAsync(skillFilePath, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The file is there but unreadable — locked by another process, or permission denied.
+            // From the user's point of view this is still "SkillForge could not read your skill".
+            return OperationResult<FrontmatterSplit>.Failure(Diagnostic.Error(
+                DiagnosticCodes.SkillFileNotFound,
+                $"{SkillDefinition.SkillFileName} could not be read: {exception.Message}",
+                SkillDefinition.SkillFileName,
+                suggestion: "Check the file's permissions and make sure no other program is holding it open."));
+        }
+
+        var split = FrontmatterSplitter.TrySplit(content);
+        if (split is null)
+        {
+            return OperationResult<FrontmatterSplit>.Failure(Diagnostic.Error(
+                DiagnosticCodes.FrontmatterNotFound,
+                $"{SkillDefinition.SkillFileName} has no YAML frontmatter block.",
+                SkillDefinition.SkillFileName,
+                line: 1,
+                suggestion: "Start the file with a '---' line, the skill's name and description, "
+                    + "and a closing '---' line."));
+        }
+
+        return OperationResult<FrontmatterSplit>.Success(split);
     }
 
     /// <summary>

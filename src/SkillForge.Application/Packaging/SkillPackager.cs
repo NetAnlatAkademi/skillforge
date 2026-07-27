@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using SkillForge.Application.Abstractions;
@@ -28,6 +27,18 @@ public sealed class SkillPackager : ISkillPackager
 
     /// <summary>Files never included in a package.</summary>
     private static readonly string[] ExcludedFiles = [".DS_Store", "Thumbs.db"];
+
+    /// <summary>Version used when a skill declares none and no override is supplied.</summary>
+    private const string DefaultVersion = "0.1.0";
+
+    /// <summary>File extension for the packaged archive.</summary>
+    private const string ArchiveSuffix = ".skill.zip";
+
+    /// <summary>File extension for the archive's checksum file.</summary>
+    private const string HashSuffix = ".sha256";
+
+    /// <summary>File extension for the package manifest.</summary>
+    private const string ManifestSuffix = ".manifest.json";
 
     private readonly IFileSystem _fileSystem;
     private readonly IArchiveWriter _archiveWriter;
@@ -61,12 +72,12 @@ public sealed class SkillPackager : ISkillPackager
         SkillDefinition skill,
         string outputDirectory,
         string? versionOverride,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
 
-        var version = versionOverride ?? skill.Frontmatter.Version ?? "0.1.0";
+        var version = versionOverride ?? skill.Frontmatter.Version ?? DefaultVersion;
         if (!IsUsableVersion(version))
         {
             return OperationResult<SkillPackage>.Failure(Diagnostic.Error(
@@ -115,9 +126,9 @@ public sealed class SkillPackager : ISkillPackager
         _fileSystem.CreateDirectory(output);
 
         var baseName = $"{skill.Name}.{version}";
-        var archivePath = Path.Combine(output, $"{baseName}.skill.zip");
-        var hashPath = archivePath + ".sha256";
-        var manifestPath = Path.Combine(output, $"{baseName}.manifest.json");
+        var archivePath = Path.Combine(output, $"{baseName}{ArchiveSuffix}");
+        var hashPath = archivePath + HashSuffix;
+        var manifestPath = Path.Combine(output, $"{baseName}{ManifestSuffix}");
 
         var package = new SkillPackage(
             skill.Name,
@@ -209,6 +220,4 @@ public sealed class SkillPackager : ISkillPackager
         && version.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
         && !version.Contains(' ', StringComparison.Ordinal)
         && !version.Contains("..", StringComparison.Ordinal);
-
-    private static string ToText(byte[] content) => Encoding.UTF8.GetString(content);
 }

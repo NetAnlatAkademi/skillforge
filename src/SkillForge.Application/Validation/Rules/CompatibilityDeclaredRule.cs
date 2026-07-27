@@ -18,23 +18,18 @@ public sealed class CompatibilityDeclaredRule : ISkillValidationRule
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<Diagnostic>> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
 
-        IReadOnlyList<Diagnostic> diagnostics = skill.Frontmatter.Compatibility.Count == 0
-            ?
-            [
-                Diagnostic.Warning(
-                    Code,
-                    "No agent compatibility is declared.",
-                    SkillDefinition.SkillFileName,
-                    skill.Frontmatter.StartLine,
-                    "List the agents this skill was written for under 'compatibility', "
-                        + "for example 'claude-code'."),
-            ]
-            : [];
-
-        return ValueTask.FromResult(diagnostics);
+        return skill.Frontmatter.Compatibility.Count == 0
+            ? RuleResult.One(Diagnostic.Warning(
+                Code,
+                "No agent compatibility is declared.",
+                SkillDefinition.SkillFileName,
+                skill.Frontmatter.StartLine,
+                "List the agents this skill was written for under 'compatibility', "
+                    + "for example 'claude-code'."))
+            : RuleResult.None();
     }
 }

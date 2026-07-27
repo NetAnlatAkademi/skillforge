@@ -14,6 +14,10 @@ namespace SkillForge.Cli;
 /// </remarks>
 internal static class SkillForgeCommandLine
 {
+    private const string DefaultPath = ".";
+    private const string DefaultLicense = "MIT";
+    private const string DefaultOutputDirectory = "artifacts";
+
     /// <summary>Builds the root command with every subcommand attached.</summary>
     /// <param name="services">Provider used to resolve command runners.</param>
     /// <returns>The configured root command.</returns>
@@ -85,7 +89,7 @@ internal static class SkillForgeCommandLine
 
             return await runner.RunAsync(
                 new ValidateRequest(
-                    parseResult.GetValue(path) ?? ".",
+                    parseResult.GetValue(path) ?? DefaultPath,
                     parseResult.GetValue(strict),
                     parseResult.GetValue(format) ?? OutputFormat.Console,
                     parseResult.GetValue(output),
@@ -121,7 +125,7 @@ internal static class SkillForgeCommandLine
         var license = new Option<string>("--license")
         {
             Description = "SPDX licence identifier.",
-            DefaultValueFactory = _ => "MIT",
+            DefaultValueFactory = _ => DefaultLicense,
         };
 
         var force = new Option<bool>("--force")
@@ -150,7 +154,7 @@ internal static class SkillForgeCommandLine
                         parseResult.GetValue(name) ?? string.Empty,
                         parseResult.GetValue(description),
                         parseResult.GetValue(author),
-                        parseResult.GetValue(license) ?? "MIT",
+                        parseResult.GetValue(license) ?? DefaultLicense,
                         Force: parseResult.GetValue(force)),
                     globals.Read(parseResult)),
                 cancellationToken).ConfigureAwait(false);
@@ -188,7 +192,7 @@ internal static class SkillForgeCommandLine
 
             return await runner.RunAsync(
                 new InspectRequest(
-                    parseResult.GetValue(path) ?? ".",
+                    parseResult.GetValue(path) ?? DefaultPath,
                     parseResult.GetValue(format) ?? OutputFormat.Console,
                     parseResult.GetValue(output),
                     parseResult.GetValue(showFiles),
@@ -208,7 +212,7 @@ internal static class SkillForgeCommandLine
         var output = new Option<string>("--output", "-o")
         {
             Description = "Directory to write the package to.",
-            DefaultValueFactory = _ => "artifacts",
+            DefaultValueFactory = _ => DefaultOutputDirectory,
         };
 
         var version = new Option<string?>("--version-override")
@@ -235,8 +239,8 @@ internal static class SkillForgeCommandLine
 
             return await runner.RunAsync(
                 new PackRequest(
-                    parseResult.GetValue(path) ?? ".",
-                    parseResult.GetValue(output) ?? "artifacts",
+                    parseResult.GetValue(path) ?? DefaultPath,
+                    parseResult.GetValue(output) ?? DefaultOutputDirectory,
                     parseResult.GetValue(version),
                     parseResult.GetValue(skipValidation),
                     globals.Read(parseResult)),
@@ -251,7 +255,7 @@ internal static class SkillForgeCommandLine
         var path = new Argument<string>("path")
         {
             Description = "Skill directory, or the path of a SKILL.md file.",
-            DefaultValueFactory = _ => ".",
+            DefaultValueFactory = _ => DefaultPath,
         };
 
         // An unrecognised option would otherwise be swallowed as the path argument, so a typo like
@@ -296,22 +300,4 @@ internal static class SkillForgeCommandLine
         {
             Description = "Write machine-readable output to this file instead of stdout.",
         };
-
-    /// <summary>
-    /// The options every command shares, read back out of a parse result in one place.
-    /// </summary>
-    private sealed record GlobalOptions(Option<bool> Quiet, Option<bool> Verbose, Option<bool> NoColor)
-    {
-        internal ReportRenderOptions Read(ParseResult parseResult) =>
-            new(
-                Quiet: parseResult.GetValue(Quiet),
-                Verbose: parseResult.GetValue(Verbose),
-                NoColor: parseResult.GetValue(NoColor) || IsColourDisabledByEnvironment());
-
-        /// <summary>
-        /// Honours the <c>NO_COLOR</c> convention, so CI logs are clean without anyone passing a flag.
-        /// </summary>
-        private static bool IsColourDisabledByEnvironment() =>
-            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR"));
-    }
 }

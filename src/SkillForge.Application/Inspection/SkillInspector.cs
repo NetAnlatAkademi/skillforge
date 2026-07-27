@@ -19,15 +19,15 @@ public sealed partial class SkillInspector : ISkillInspector
     /// <inheritdoc />
     public ValueTask<SkillInspection> InspectAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var scripts = skill.Resources.Where(r => r.Kind == SkillResourceKind.Script).ToArray();
-        var binaries = skill.Resources.Where(r => r.Kind == SkillResourceKind.Binary).ToArray();
-        var hasEvals = skill.Resources.Any(r =>
-            r.RelativePath.StartsWith("evals/", StringComparison.OrdinalIgnoreCase));
+        var scripts = skill.Resources.Where(resource => resource.Kind == SkillResourceKind.Script).ToArray();
+        var binaries = skill.Resources.Where(resource => resource.Kind == SkillResourceKind.Binary).ToArray();
+        var hasEvals = skill.Resources.Any(resource =>
+            resource.RelativePath.StartsWith("evals/", StringComparison.OrdinalIgnoreCase));
 
         var urls = ExternalUrlPattern()
             .Matches(skill.Body)

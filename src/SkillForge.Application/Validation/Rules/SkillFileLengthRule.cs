@@ -21,27 +21,22 @@ public sealed class SkillFileLengthRule : ISkillValidationRule
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<Diagnostic>> ValidateAsync(
         SkillDefinition skill,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(skill);
 
-        IReadOnlyList<Diagnostic> diagnostics = skill.SkillFileLineCount <= MaximumRecommendedLines
-            ? []
-            :
-            [
-                Diagnostic.Warning(
-                    Code,
-                    SkillDefinition.SkillFileName
-                        + " has "
-                        + skill.SkillFileLineCount.ToString(CultureInfo.InvariantCulture)
-                        + " lines, more than the recommended "
-                        + MaximumRecommendedLines.ToString(CultureInfo.InvariantCulture)
-                        + ".",
-                    SkillDefinition.SkillFileName,
-                    suggestion: "Move reference material into files under 'references/' and link to them, "
-                        + "so the agent reads them only when it needs them."),
-            ];
-
-        return ValueTask.FromResult(diagnostics);
+        return skill.SkillFileLineCount <= MaximumRecommendedLines
+            ? RuleResult.None()
+            : RuleResult.One(Diagnostic.Warning(
+                Code,
+                SkillDefinition.SkillFileName
+                    + " has "
+                    + skill.SkillFileLineCount.ToString(CultureInfo.InvariantCulture)
+                    + " lines, more than the recommended "
+                    + MaximumRecommendedLines.ToString(CultureInfo.InvariantCulture)
+                    + ".",
+                SkillDefinition.SkillFileName,
+                suggestion: "Move reference material into files under 'references/' and link to them, "
+                    + "so the agent reads them only when it needs them."));
     }
 }
