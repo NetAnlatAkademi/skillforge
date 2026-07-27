@@ -107,4 +107,15 @@ public static class DiagnosticCodes
     /// applies.
     /// </summary>
     public const string ActivationManipulation = "SF3002";
+
+    /// <summary>
+    /// The body's prose tells the agent to set aside or override instructions it was given — the shape prompt
+    /// injection takes when it arrives inside a skill rather than inside user input.
+    /// </summary>
+    public const string BodyInstructionOverride = "SF4001";
+
+    /// <summary>
+    /// The body's prose tells the agent to keep something from the person it is working for.
+    /// </summary>
+    public const string BodyConcealmentInstruction = "SF4002";
 }

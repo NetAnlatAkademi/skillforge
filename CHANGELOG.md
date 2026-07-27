@@ -8,6 +8,30 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
+## [Unreleased]
+
+### Added — `SF4xxx`, instruction injection in the body
+
+- `MarkdownProse` — reduces a body to the lines a human reads as prose: fenced code blocks dropped, inline code
+  spans removed, nothing else filtered. It exists because a measurement demanded it, not for tidiness.
+- SF4001: the body's prose tells the agent to set aside or override the instructions it was given.
+- SF4002: the body's prose tells the agent to keep something from the user.
+
+This is the job SF3002 was measured out of, done with two independent defences against the failure that stopped
+it. SF3002 scanned raw bodies and produced 12 findings on 229 real skills with roughly one real; the failures were
+code shown to a reader — a YAML comment `# Ignore other fields`, a security skill's own detection pattern as a
+string literal. So these rules read prose rather than text, **and** every pattern requires the noun it is about
+(`ignore … other instructions`, not `ignore … other`). Either defence alone catches one of those two; together
+they catch both.
+
+Measured on the same 229 skills: **2 findings, both SF4001, both real** — two skills that state they override the
+agent's default behaviour. SF4002 fires zero times, which proves the absence of false positives and nothing about
+its value; that rests on crafted positives, as with SF3xxx.
+
+Credential-file access and exfiltration patterns were written and then **not** shipped: no measurement supported
+either shape, and D-29 forbids publishing a rule on a guess about its firing rate. They are candidates for
+`SF5xxx`.
+
 ## [26.208.1] — 2026-07-27
 
 ### Added — milestone v0.1.0, Local Validator

@@ -386,12 +386,12 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 
 ### New diagnostic bands — and the stance this changes
 
-| Band | Scope |
-|---|---|
-| `SF3xxx` | Activation and retrieval risks |
-| `SF4xxx` | Instruction injection risks |
-| `SF5xxx` | Supply-chain and provenance risks |
-| `SF6xxx` | Version and evolution risks |
+| Band | Scope | Status |
+|---|---|---|
+| `SF3xxx` | Activation and retrieval risks | SF3001, SF3002 shipped |
+| `SF4xxx` | Instruction injection risks | SF4001, SF4002 shipped |
+| `SF5xxx` | Supply-chain and provenance risks | next |
+| `SF6xxx` | Version and evolution risks | reserved |
 
 Through v0.1.0 the code set was deliberately fixed at 24 — an unreadable `SKILL.md` widened SF0001's meaning
 rather than inventing a 25th code. These bands lift that constraint **on purpose**: the code set is open,

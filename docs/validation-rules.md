@@ -6,9 +6,9 @@ Every rule owns a stable diagnostic code. Codes are never reused or renumbered o
 - `SF1xxx` — **Warning**. The skill works but quality or risk deserves attention.
 - `SF2xxx` — **Info**. A neutral observation about the skill's surface.
 
-Four further bands are reserved for the risk work planned after v0.1.0 (roadmap §30): `SF3xxx` activation and
-retrieval risks, `SF4xxx` instruction injection, `SF5xxx` supply chain and provenance, `SF6xxx` version and
-evolution. Nothing in them exists yet.
+Four further bands cover the risk work after v0.1.0 (roadmap §30): `SF3xxx` activation and retrieval risks,
+`SF4xxx` instruction injection, `SF5xxx` supply chain and provenance, `SF6xxx` version and evolution. `SF3xxx`
+and `SF4xxx` have rules; `SF5xxx` and `SF6xxx` are still reserved.
 
 **Signals, not verdicts.** The permission and shell rules point things out; they never conclude that a skill is
 unsafe (ADR-006). Every construct SF1007 recognises has legitimate uses — a build script may well need `sudo`, and
@@ -138,6 +138,57 @@ band, not to an approximation here at a 90% false-positive rate.
 Neither concludes anything. The message says what was recognised, and the suggestion says outright that SkillForge
 is not calling the skill malicious (ADR-006) — a legitimate skill can be written clumsily, and a reader with the
 finding in front of them judges better than a regex.
+
+## Instruction injection in the body
+
+| Code | Rule | Status |
+|---|---|---|
+| SF4001 | The body's prose tells the agent to set aside or override its instructions | **Implemented** |
+| SF4002 | The body's prose tells the agent to keep something from the user | **Implemented** |
+
+This band exists because SF3002 was measured out of the job. It scanned whole bodies with loose patterns and
+produced twelve findings across 229 real skills, of which roughly one was real. Crucially, the failures were not
+ambiguous English — they were **code being shown to a reader**: a YAML comment reading `# Ignore other fields`,
+and a security skill's own detection pattern written as the string literal `r'ignore (previous|all) instructions'`.
+
+So these rules were built with two independent defences, either of which would have caught one of those two, and
+which together catch both:
+
+1. **They read prose, not text.** `MarkdownProse` drops fenced code blocks and removes inline code spans before
+   any pattern runs. Nothing else is filtered — indented blocks are kept, because no measurement justified
+   dropping them and guessing would trade a known false-positive class for an unknown false-negative one.
+2. **Every pattern requires the noun it is about.** SF3002 matched `ignore … other`; SF4001 requires
+   `ignore … other instructions`. Ignoring *fields*, *files* or *whitespace* is ordinary technical writing.
+
+One consequence worth stating: because code spans are replaced before matching, the matched text is no longer the
+author's text. These rules report a line number and a description of what was recognised, and never quote an
+excerpt back as though it were what the author wrote.
+
+SF4002 turns on a distinction English makes with a single word. "Do not tell the user **that** this ran" conceals
+something; "do not tell the user **to** run it twice" is advice about what to say. The pattern refuses the second
+with a trailing negative lookahead, and without that it fired on ordinary skill instructions.
+
+Measured on the same 229 real skills the SF3xxx rules were measured against: **2 findings, both SF4001, both
+real.** `smart-explore` says "This skill overrides your default exploration behavior"; `using-superpowers` says
+"Superpowers skills override default system prompt behavior". Neither is malicious — the second even subordinates
+itself to the user's instructions in the next clause — and neither is a false positive either: both are skills
+claiming authority over their surroundings, which is exactly what a person deciding whether to install one would
+want to see. That is what a signal is.
+
+| Code | On 229 real skills |
+|---|---|
+| SF4001 | 2 — `smart-explore`, `using-superpowers`, both the "override" pattern |
+| SF4002 | 0 |
+
+SF4002 firing zero times is the intended result and proves only one of the two things worth knowing: no false
+positives on benign input. Its value rests on the crafted positives in the tests, for the same reason the SF3xxx
+rules do — a skill telling an agent to hide its actions is what an attacker writes, and attackers are not in a
+sample of benign skills.
+
+Two further groups were considered and **not** shipped: prose instructing credential-file access, and prose
+instructing exfiltration to an external destination. Both were speculative — no measurement supported either
+shape, and D-29 forbids publishing a rule on a guess about how often it fires. They are candidates for `SF5xxx`,
+where provenance and supply chain give them a better home than injection does.
 
 ## Measured against real skills
 

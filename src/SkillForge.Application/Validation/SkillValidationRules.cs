@@ -43,6 +43,8 @@ public static class SkillValidationRules
             new ShellPrivilegeRule(fileSystem),
             new OverBroadActivationRule(),
             new ActivationManipulationRule(),
+            new InstructionOverrideRule(),
+            new ConcealmentRule(),
         ];
     }
 }
