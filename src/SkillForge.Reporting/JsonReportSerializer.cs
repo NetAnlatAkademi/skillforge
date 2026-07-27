@@ -26,6 +26,82 @@ public sealed class JsonReportSerializer : IValidationReportSerializer
     {
         ArgumentNullException.ThrowIfNull(report);
 
+        var document = new JsonObject
+        {
+            ["schemaVersion"] = SkillForgeTool.ReportSchemaVersion,
+            ["tool"] = ToolObject(),
+            ["skill"] = SkillObject(report),
+            ["summary"] = SummaryObject(report),
+            ["diagnostics"] = DiagnosticsArray(report),
+        };
+
+        return document.ToJsonString(WriterOptions) + Environment.NewLine;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A batch nests each skill under <c>skills</c>, with its own summary and diagnostics, plus a run-level
+    /// summary totalled across all of them. The single-skill document is untouched, so a consumer written
+    /// against it keeps working; a consumer that wants batches looks for <c>skills</c>.
+    /// </remarks>
+    public string SerializeRun(ValidationRun run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+
+        var skills = new JsonArray();
+        foreach (var report in run.Skills)
+        {
+            skills.Add(new JsonObject
+            {
+                ["skill"] = SkillObject(report),
+                ["summary"] = SummaryObject(report),
+                ["diagnostics"] = DiagnosticsArray(report),
+            });
+        }
+
+        var document = new JsonObject
+        {
+            ["schemaVersion"] = SkillForgeTool.ReportSchemaVersion,
+            ["tool"] = ToolObject(),
+            ["root"] = run.RootPath,
+            ["summary"] = new JsonObject
+            {
+                ["skills"] = run.SkillCount,
+                ["invalidSkills"] = run.InvalidSkillCount,
+                ["errors"] = run.Summary.Errors,
+                ["warnings"] = run.Summary.Warnings,
+                ["info"] = run.Summary.Info,
+                ["valid"] = run.IsValid,
+            },
+            ["skills"] = skills,
+        };
+
+        return document.ToJsonString(WriterOptions) + Environment.NewLine;
+    }
+
+    private static JsonObject ToolObject() => new()
+    {
+        ["name"] = SkillForgeTool.Name,
+        ["version"] = SkillForgeTool.Version,
+    };
+
+    private static JsonObject SkillObject(ValidationReport report) => new()
+    {
+        ["name"] = report.SkillName,
+        ["path"] = report.SkillPath,
+        ["version"] = report.SkillVersion,
+    };
+
+    private static JsonObject SummaryObject(ValidationReport report) => new()
+    {
+        ["errors"] = report.Summary.Errors,
+        ["warnings"] = report.Summary.Warnings,
+        ["info"] = report.Summary.Info,
+        ["valid"] = report.IsValid,
+    };
+
+    private static JsonArray DiagnosticsArray(ValidationReport report)
+    {
         var diagnostics = new JsonArray();
         foreach (var diagnostic in report.Diagnostics)
         {
@@ -40,31 +116,7 @@ public sealed class JsonReportSerializer : IValidationReportSerializer
             });
         }
 
-        var document = new JsonObject
-        {
-            ["schemaVersion"] = SkillForgeTool.ReportSchemaVersion,
-            ["tool"] = new JsonObject
-            {
-                ["name"] = SkillForgeTool.Name,
-                ["version"] = SkillForgeTool.Version,
-            },
-            ["skill"] = new JsonObject
-            {
-                ["name"] = report.SkillName,
-                ["path"] = report.SkillPath,
-                ["version"] = report.SkillVersion,
-            },
-            ["summary"] = new JsonObject
-            {
-                ["errors"] = report.Summary.Errors,
-                ["warnings"] = report.Summary.Warnings,
-                ["info"] = report.Summary.Info,
-                ["valid"] = report.IsValid,
-            },
-            ["diagnostics"] = diagnostics,
-        };
-
-        return document.ToJsonString(WriterOptions) + Environment.NewLine;
+        return diagnostics;
     }
 
     private static string ToText(DiagnosticSeverity severity) => severity switch

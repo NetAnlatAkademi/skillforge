@@ -160,11 +160,4 @@ public sealed class InspectCommandRunnerTests
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(inspection);
     }
-
-    private sealed class RecordingRenderer : IValidationReportRenderer
-    {
-        internal ValidationReport? Rendered { get; private set; }
-
-        public void Render(ValidationReport report, ReportRenderOptions options) => Rendered = report;
-    }
 }

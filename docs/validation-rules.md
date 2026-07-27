@@ -94,6 +94,17 @@ Run over 32 skills installed on a working machine (2026-07-27), the rules behave
 
 No errors, and nothing crashed — the loader and the error rules hold up on real input.
 
+A second, larger run — 229 skills in one batch, including a collection where skills deliberately link to each
+other — added one finding the smaller run could not show: **SF0008 fired 21 times on cross-skill references**
+like `../react-testing/SKILL.md`. Those are not mistakes. A collection of skills that reference their siblings
+is a real and reasonable pattern, and calling it an error fails the build over it.
+
+The rule is still telling the truth — such a reference cannot survive being packaged on its own — but "cannot
+be packaged alone" and "the author made a mistake" are different claims, and only the second deserves an
+error. A batch run knows the collection root, which makes a better model possible: escaping the *skill* is a
+warning, escaping the *collection* stays an error. That is a change to a published code's severity, so it is
+recorded here as a decision to take rather than one taken quietly.
+
 The two warnings at the top are worth reading carefully. They are not finding mistakes; they are finding that
 the `SKILL.md` convention in the wild does not carry `license` or `compatibility` at all. A warning that fires
 on virtually every input is noise, and noise teaches people to ignore warnings. The practical consequence is

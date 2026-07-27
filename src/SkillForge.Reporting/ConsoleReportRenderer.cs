@@ -56,6 +56,73 @@ public sealed class ConsoleReportRenderer : IValidationReportRenderer
         WriteSummary(report, options);
     }
 
+    /// <inheritdoc />
+    public void RenderRun(ValidationRun run, ReportRenderOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (!options.Quiet)
+        {
+            _console.MarkupLine(Style("SkillForge Validate", "bold", options));
+            _console.WriteLine();
+            _console.MarkupLine($"Root:   {Escape(run.RootPath)}");
+            _console.MarkupLine($"Skills: {run.SkillCount}");
+        }
+
+        foreach (var report in run.Skills)
+        {
+            // Each skill gets its own named block; in a batch, a finding without its skill's name beside it is
+            // just noise.
+            var name = report.SkillName.Length == 0 ? "(unnamed)" : report.SkillName;
+            var location = SkillLocation(run.RootPath, report.SkillPath);
+
+            // Usually the directory is named after the skill, and printing both reads as a stutter. Show the
+            // location only when it tells the reader something the name does not.
+            var heading = string.Equals(name, location, StringComparison.OrdinalIgnoreCase)
+                ? Style(name, "bold", options)
+                : Style(name, "bold", options) + $"  {Escape(location)}";
+
+            _console.WriteLine();
+            _console.MarkupLine(heading);
+
+            var findings = options.Quiet
+                ? report.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                : report.Diagnostics;
+
+            foreach (var diagnostic in findings)
+            {
+                WriteDiagnostic(diagnostic, options);
+            }
+
+            if (report.Diagnostics.Count == 0)
+            {
+                _console.MarkupLine(Style("  ok", "green", options));
+            }
+        }
+
+        _console.WriteLine();
+        _console.MarkupLine(run.IsValid
+            ? $"Result: {Style(run.Summary.Warnings > 0 ? "VALID WITH WARNINGS" : "VALID", run.Summary.Warnings > 0 ? "yellow" : "green", options)}"
+            : $"Result: {Style("INVALID", "red", options)} — {run.InvalidSkillCount} of {run.SkillCount} skills have errors");
+
+        _console.MarkupLine(
+            $"Errors: {run.Summary.Errors}  "
+            + $"Warnings: {run.Summary.Warnings}  "
+            + $"Info: {run.Summary.Info}");
+    }
+
+    /// <summary>
+    /// Shows each skill relative to the root that was searched, since the absolute paths in a batch share a
+    /// long prefix that tells the reader nothing.
+    /// </summary>
+    private static string SkillLocation(string rootPath, string skillPath)
+    {
+        var relative = Path.GetRelativePath(rootPath, skillPath).Replace('\\', '/');
+
+        return relative is "." or "" ? skillPath : relative;
+    }
+
     private void WriteHeader(ValidationReport report, ReportRenderOptions options)
     {
         var name = report.SkillName.Length == 0 ? "(unnamed)" : report.SkillName;

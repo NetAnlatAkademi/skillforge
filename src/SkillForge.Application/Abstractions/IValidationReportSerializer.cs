@@ -18,4 +18,14 @@ public interface IValidationReportSerializer
     /// <param name="report">Report to serialise.</param>
     /// <returns>The serialised text, ending with a newline.</returns>
     string Serialize(ValidationReport report);
+
+    /// <summary>Serialises a run over several skills.</summary>
+    /// <param name="run">Run to serialise.</param>
+    /// <returns>The serialised text, ending with a newline.</returns>
+    /// <remarks>
+    /// A single-skill document keeps the shape it has always had, so an existing consumer is unaffected by
+    /// batches existing. What a batch looks like is each format's own decision: JSON nests the skills, while
+    /// SARIF merges them into one run because that is what a code-scanning upload expects.
+    /// </remarks>
+    string SerializeRun(ValidationRun run);
 }

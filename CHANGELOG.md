@@ -26,6 +26,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The mark is an anvil, deliberately not a badge — a shield or tick would promise the safety verdict
   SkillForge refuses to give (ADR-006). Rationale and usage rules are in `assets/README.md`.
 
+- Batch validation: `skillforge validate <directory>` now validates every skill under a directory, at any
+  depth, replacing the shell loop the CI documentation used to recommend. JSON nests the skills; SARIF merges
+  them into one run so a single upload covers the whole repository. One bad skill fails the run.
+
 ### Changed
 
 - Code-standards pass over the whole codebase: one type per file, `= default` on every cancellation-token

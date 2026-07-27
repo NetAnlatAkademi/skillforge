@@ -66,6 +66,26 @@ jobs:
             exit 1
           fi
 
+          # The samples directory holds four skills, two of which are broken on purpose, so a batch run over it
+          # must exit 1 AND report four skills. Both are checked separately: piping into grep would test
+          # grep's exit code rather than the CLI's.
+          set +e
+          batch_output=$(run validate ./samples --no-color)
+          batch_exit=$?
+          set -e
+
+          printf '%s\n' "$batch_output"
+
+          if [ "$batch_exit" -ne 1 ]; then
+            echo "Expected the batch run over ./samples to exit 1, got $batch_exit"
+            exit 1
+          fi
+
+          if ! printf '%s\n' "$batch_output" | grep -q 'Skills: 4'; then
+            echo "Expected the batch run to report 4 skills"
+            exit 1
+          fi
+
           run inspect ./samples/dotnet-api-review --no-color > /dev/null
           run pack ./samples/valid-skill --output ./artifacts/packages --no-color
 

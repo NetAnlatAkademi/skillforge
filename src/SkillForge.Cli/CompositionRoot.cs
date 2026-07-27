@@ -35,6 +35,7 @@ internal static class CompositionRoot
         services.AddSingleton<IHashCalculator, Sha256HashCalculator>();
 
         services.AddSingleton<ISkillLoader, SkillLoader>();
+        services.AddSingleton<ISkillDiscovery, SkillDiscovery>();
         services.AddSingleton<ISkillInitializer, SkillInitializer>();
         services.AddSingleton<ISkillInspector, SkillInspector>();
         services.AddSingleton<ISkillPackager, SkillPackager>();

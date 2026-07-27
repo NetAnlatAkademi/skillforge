@@ -43,17 +43,17 @@ jobs:
       - run: dotnet tool install --global SkillForge.Cli
 
       - name: Validate skills
-        run: |
-          for skill in skills/*/; do
-            skillforge validate "$skill" --format sarif --output "artifacts/$(basename "$skill").sarif"
-          done
+        run: skillforge validate ./skills --format sarif --output artifacts/skillforge.sarif
 
       - name: Upload findings
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: artifacts
+          sarif_file: artifacts/skillforge.sarif
 ```
+
+One command, one SARIF file, however many skills the directory holds. Point it at a directory and every skill
+underneath is validated; the run fails if any single skill has errors.
 
 Notes worth knowing before copying this:
 

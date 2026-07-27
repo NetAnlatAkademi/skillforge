@@ -31,9 +31,34 @@ public sealed class SarifReportSerializer : IValidationReportSerializer
     {
         ArgumentNullException.ThrowIfNull(report);
 
+        return Build([.. report.Diagnostics.Select(diagnostic => new Finding(report.SkillPath, diagnostic))]);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A batch becomes one SARIF run, not one per skill. That is what a code-scanning upload wants: a single
+    /// file covers every skill in the repository, and each result carries its own skill-relative path, so the
+    /// annotations still land on the right files.
+    /// </remarks>
+    public string SerializeRun(ValidationRun run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+
+        return Build(
+        [
+            .. run.Skills.SelectMany(report =>
+                report.Diagnostics.Select(diagnostic => new Finding(report.SkillPath, diagnostic))),
+        ]);
+    }
+
+    /// <summary>A diagnostic together with the skill it came from, which is what the location needs.</summary>
+    private readonly record struct Finding(string SkillPath, Diagnostic Diagnostic);
+
+    private static string Build(IReadOnlyList<Finding> findings)
+    {
         // Each distinct code becomes one rule declaration; results point at it by index.
-        var codes = report.Diagnostics
-            .Select(diagnostic => diagnostic.Code)
+        var codes = findings
+            .Select(finding => finding.Diagnostic.Code)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -45,11 +70,11 @@ public sealed class SarifReportSerializer : IValidationReportSerializer
         // One lookup built up front so each code resolves its example diagnostic in constant time,
         // rather than rescanning the full diagnostics list once per code.
         var firstByCode = new Dictionary<string, Diagnostic>(StringComparer.Ordinal);
-        foreach (var diagnostic in report.Diagnostics)
+        foreach (var finding in findings)
         {
-            if (!firstByCode.ContainsKey(diagnostic.Code))
+            if (!firstByCode.ContainsKey(finding.Diagnostic.Code))
             {
-                firstByCode[diagnostic.Code] = diagnostic;
+                firstByCode[finding.Diagnostic.Code] = finding.Diagnostic;
             }
         }
 
@@ -75,7 +100,7 @@ public sealed class SarifReportSerializer : IValidationReportSerializer
         }
 
         var results = new JsonArray();
-        foreach (var diagnostic in report.Diagnostics)
+        foreach (var (skillPath, diagnostic) in findings)
         {
             var result = new JsonObject
             {
@@ -100,7 +125,7 @@ public sealed class SarifReportSerializer : IValidationReportSerializer
                         {
                             ["artifactLocation"] = new JsonObject
                             {
-                                ["uri"] = ToUri(report.SkillPath, filePath),
+                                ["uri"] = ToUri(skillPath, filePath),
                             },
                             ["region"] = new JsonObject
                             {

@@ -113,9 +113,17 @@ public sealed class InitCommandRunnerTests
             fileSystem,
             renderer,
             [new JsonReportSerializer(), new SarifReportSerializer()]);
-        var validate = new ValidateCommandRunner(loader, validator, output);
+        var validate = new ValidateCommandRunner(loader, validator, new NoSkillsFound(), fileSystem, output);
 
         return new InitCommandRunner(fileSystem, initializer, validate, renderer);
+    }
+
+    /// <summary>
+    /// Init always validates exactly the skill it just created, so discovery never has anything to say here.
+    /// </summary>
+    private sealed class NoSkillsFound : ISkillDiscovery
+    {
+        public IReadOnlyList<string> FindSkillDirectories(string rootDirectory) => [];
     }
 
     /// <summary>Succeeds unless the name would not validate, mirroring the real initializer's own gate.</summary>
@@ -168,12 +176,5 @@ public sealed class InitCommandRunnerTests
             SkillDefinition skill,
             CancellationToken cancellationToken) =>
             Task.FromResult(ValidationReport.For(skill, []));
-    }
-
-    private sealed class RecordingRenderer : IValidationReportRenderer
-    {
-        internal ValidationReport? Rendered { get; private set; }
-
-        public void Render(ValidationReport report, ReportRenderOptions options) => Rendered = report;
     }
 }

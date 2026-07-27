@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Validation;
 using SkillForge.Cli.Commands;
@@ -112,9 +113,117 @@ public sealed class ValidateCommandRunnerTests
     }
 
     [Fact]
+    public async Task ADirectoryOfSkillsIsValidatedAsABatch()
+    {
+        var runner = Build(
+            out var renderer,
+            discovered: ["/skills/one", "/skills/two", "/skills/three"]);
+
+        var exitCode = await runner.RunAsync(Request("/skills"), CancellationToken.None);
+
+        exitCode.Should().Be(0);
+        renderer.RenderedRun.Should().NotBeNull();
+        renderer.RenderedRun!.SkillCount.Should().Be(3);
+        renderer.Rendered.Should().BeNull("a batch is not also reported as a single skill");
+    }
+
+    [Fact]
+    public async Task OneBadSkillFailsTheWholeBatch()
+    {
+        // A batch that passed because most of its skills were fine would be useless as a build gate.
+        var runner = Build(
+            out var renderer,
+            discovered: ["/skills/one", "/skills/two"],
+            validationFindings: [Diagnostic.Error(DiagnosticCodes.NameMissing, "no name")]);
+
+        var exitCode = await runner.RunAsync(Request("/skills"), CancellationToken.None);
+
+        exitCode.Should().Be(1);
+        renderer.RenderedRun!.InvalidSkillCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task ABatchWarningOnlyFailsUnderStrict()
+    {
+        var findings = new[] { Diagnostic.Warning(DiagnosticCodes.LicenseMissing, "no license") };
+
+        var lenient = await Build(out _, discovered: ["/skills/one"], validationFindings: findings)
+            .RunAsync(Request("/skills"), CancellationToken.None);
+        var strict = await Build(out _, discovered: ["/skills/one"], validationFindings: findings)
+            .RunAsync(Request("/skills", strict: true), CancellationToken.None);
+
+        lenient.Should().Be(0);
+        strict.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ADirectoryThatIsItselfASkillIsNotTreatedAsABatch()
+    {
+        // Even when it contains other skills — a nested SKILL.md is far more likely to be a fixture the outer
+        // skill ships than a second skill to validate.
+        var fileSystem = new FakeFileSystem().WithFile("/skills/demo/SKILL.md", "---\nname: demo\n---\n");
+        var runner = Build(out var renderer, fileSystem: fileSystem, discovered: ["/skills/demo/nested"]);
+
+        await runner.RunAsync(Request("/skills/demo"), CancellationToken.None);
+
+        renderer.Rendered.Should().NotBeNull();
+        renderer.RenderedRun.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ADirectoryWithNoSkillsFallsBackToTheSingleSkillErrorInsteadOfPretendingItPassed()
+    {
+        var runner = Build(
+            out var renderer,
+            discovered: [],
+            loadFailure: Diagnostic.Error(DiagnosticCodes.SkillFileNotFound, "no SKILL.md"));
+
+        var exitCode = await runner.RunAsync(Request("/empty"), CancellationToken.None);
+
+        exitCode.Should().Be(1);
+        renderer.Rendered!.Diagnostics.Should().ContainSingle()
+            .Which.Code.Should().Be(DiagnosticCodes.SkillFileNotFound);
+    }
+
+    [Fact]
+    public async Task BatchJsonNestsEverySkillUnderOneDocument()
+    {
+        var fileSystem = new FakeFileSystem();
+        var runner = Build(out _, fileSystem: fileSystem, discovered: ["/skills/one", "/skills/two"]);
+
+        await runner.RunAsync(
+            Request("/skills", format: OutputFormat.Json, outputPath: "/out/report.json"),
+            CancellationToken.None);
+
+        var json = fileSystem.ReadText("/out/report.json");
+        json.Should().Contain("\"skills\"");
+        json.Should().Contain("\"root\"");
+    }
+
+    [Fact]
+    public async Task BatchSarifIsOneRunSoASingleUploadCoversEverySkill()
+    {
+        var fileSystem = new FakeFileSystem();
+        var runner = Build(
+            out _,
+            fileSystem: fileSystem,
+            discovered: ["/skills/one", "/skills/two"],
+            validationFindings: [Diagnostic.Error(DiagnosticCodes.NameMissing, "no name", "SKILL.md", 1)]);
+
+        await runner.RunAsync(
+            Request("/skills", format: OutputFormat.Sarif, outputPath: "/out/report.sarif"),
+            CancellationToken.None);
+
+        using var document = JsonDocument.Parse(fileSystem.ReadText("/out/report.sarif"));
+        var runs = document.RootElement.GetProperty("runs");
+        runs.GetArrayLength().Should().Be(1);
+        runs[0].GetProperty("results").GetArrayLength().Should().Be(2, "one result per skill, merged");
+    }
+
+    [Fact]
     public void RejectsMissingDependencies()
     {
-        var act = () => new ValidateCommandRunner(null!, null!, null!);
+        var act = () => new ValidateCommandRunner(null!, null!, null!, null!, null!);
 
         act.Should().Throw<ArgumentNullException>();
     }
@@ -131,19 +240,28 @@ public sealed class ValidateCommandRunnerTests
         FakeFileSystem? fileSystem = null,
         Diagnostic? loadFailure = null,
         IReadOnlyList<Diagnostic>? loadDiagnostics = null,
-        IReadOnlyList<Diagnostic>? validationFindings = null)
+        IReadOnlyList<Diagnostic>? validationFindings = null,
+        IReadOnlyList<string>? discovered = null)
     {
         renderer = new RecordingRenderer();
+        var files = fileSystem ?? new FakeFileSystem();
 
         var output = new ReportOutput(
-            fileSystem ?? new FakeFileSystem(),
+            files,
             renderer,
             [new JsonReportSerializer(), new SarifReportSerializer()]);
 
         return new ValidateCommandRunner(
             new StubLoader(loadFailure, loadDiagnostics ?? []),
             new StubValidator(validationFindings ?? []),
+            new StubDiscovery(discovered ?? []),
+            files,
             output);
+    }
+
+    private sealed class StubDiscovery(IReadOnlyList<string> directories) : ISkillDiscovery
+    {
+        public IReadOnlyList<string> FindSkillDirectories(string rootDirectory) => directories;
     }
 
     private sealed class StubLoader(Diagnostic? failure, IReadOnlyList<Diagnostic> diagnostics) : ISkillLoader
@@ -174,12 +292,5 @@ public sealed class ValidateCommandRunnerTests
             SkillDefinition skill,
             CancellationToken cancellationToken) =>
             Task.FromResult(ValidationReport.For(skill, findings));
-    }
-
-    private sealed class RecordingRenderer : IValidationReportRenderer
-    {
-        internal ValidationReport? Rendered { get; private set; }
-
-        public void Render(ValidationReport report, ReportRenderOptions options) => Rendered = report;
     }
 }

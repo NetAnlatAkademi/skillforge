@@ -15,4 +15,9 @@ public interface IValidationReportRenderer
     /// <param name="report">The report to present.</param>
     /// <param name="options">How much to say and whether colour is allowed.</param>
     void Render(ValidationReport report, ReportRenderOptions options);
+
+    /// <summary>Renders a run over several skills.</summary>
+    /// <param name="run">The run to present.</param>
+    /// <param name="options">How much to say and whether colour is allowed.</param>
+    void RenderRun(ValidationRun run, ReportRenderOptions options);
 }
