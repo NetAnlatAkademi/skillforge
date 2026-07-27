@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="SkillForge">
+  <title>SkillForge</title>
+
+  <!--
+    An anvil, not a badge. SkillForge deliberately never certifies a skill as safe (ADR-006), so the mark
+    says "this is where skills are made" rather than "this one is approved" — no shield, no seal, no tick.
+
+    Three proportions do all the work, and each was wrong before it was right:
+      - the stem is a quarter of the plate's width, because a wider one stopped reading as an anvil;
+      - the foot is narrower than the plate, because matching it turned the silhouette into a letter T;
+      - the spark sits just above the plate rather than out in the corner, so it reads as a strike on the
+        anvil instead of a separate object floating beside it.
+    Ink spans x 5-56 and y 10-53, which centres the mark optically in the square rather than numerically.
+
+    The ember gradient is the only colour, so one file works on a light or a dark background.
+  -->
+  <defs>
+    <linearGradient id="sf-ember" x1="5" y1="10" x2="56" y2="53" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB13C" />
+      <stop offset="0.5" stop-color="#F26D2B" />
+      <stop offset="1" stop-color="#D62F3F" />
+    </linearGradient>
+  </defs>
+
+  <g fill="url(#sf-ember)">
+    <!-- Plate and horn: the widest mass, and the only part that has to survive at favicon size. -->
+    <path d="M13 24H56V34H13L5 29Z" />
+
+    <!-- Stem and foot in one shape. -->
+    <path d="M28 34H38V47H45V53H21V47H28Z" />
+
+    <!-- The strike, close enough to the plate to belong to it. -->
+    <path d="M48 10.5L50 14L53.5 16L50 18L48 21.5L46 18L42.5 16L46 14Z" />
+  </g>
+</svg>

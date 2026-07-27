@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 296 72" width="296" height="72" role="img" aria-label="SkillForge">
+  <title>SkillForge</title>
+
+  <!-- Horizontal logo for a dark background. Identical to logo.svg except for the colour of "Skill". -->
+  <defs>
+    <linearGradient id="sf-ember" x1="7" y1="12" x2="58" y2="55" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB13C" />
+      <stop offset="0.5" stop-color="#F26D2B" />
+      <stop offset="1" stop-color="#D62F3F" />
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(2 2)" fill="url(#sf-ember)">
+    <path d="M13 24H56V34H13L5 29Z" />
+    <path d="M28 34H38V47H45V53H21V47H28Z" />
+    <path d="M48 10.5L50 14L53.5 16L50 18L48 21.5L46 18L42.5 16L46 14Z" />
+  </g>
+
+  <text x="80" y="47"
+        font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif"
+        font-size="33" letter-spacing="-0.5">
+    <tspan fill="#F1F5F9" font-weight="500">Skill</tspan><tspan fill="#FF7A3D" font-weight="700">Forge</tspan>
+  </text>
+</svg>

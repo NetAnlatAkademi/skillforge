@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="SkillForge">
+  <title>SkillForge</title>
+
+  <!--
+    The favicon-sized cut of the mark. At 16px the full mark's horn taper and spark turn to mush, so this
+    variant drops the spark, shortens the horn and thickens every bar, then fills more of the square. It is
+    the same silhouette carrying less detail — which is what a favicon can actually show.
+
+    Use logo-mark.svg anywhere above about 24px; use this one at or below it.
+  -->
+  <defs>
+    <linearGradient id="sf-ember" x1="2" y1="18" x2="58" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB13C" />
+      <stop offset="0.5" stop-color="#F26D2B" />
+      <stop offset="1" stop-color="#D62F3F" />
+    </linearGradient>
+  </defs>
+
+  <g fill="url(#sf-ember)">
+    <path d="M8 18H58V34H8L2 26Z" />
+    <path d="M25 34H39V46H49V56H15V46H25Z" />
+  </g>
+</svg>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 296 72" width="296" height="72" role="img" aria-label="SkillForge">
+  <title>SkillForge</title>
+
+  <!--
+    Horizontal logo for a light background. logo-dark.svg is the same file with one colour changed: "Skill"
+    has to follow the background, while the ember half never does.
+
+    "Forge" is a solid ember rather than the mark's gradient. Gradient text collapses towards its darkest
+    stop at small sizes, and two gradients competing in one lockup made the mark stop being the focal point.
+
+    The wordmark uses a system font stack on purpose. Shipping a webfont — or converting the letters to
+    outlines — adds weight and a licence to a repository whose point is a small local CLI, and the mark
+    carries the identity where typography cannot follow.
+  -->
+  <defs>
+    <linearGradient id="sf-ember" x1="7" y1="12" x2="58" y2="55" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB13C" />
+      <stop offset="0.5" stop-color="#F26D2B" />
+      <stop offset="1" stop-color="#D62F3F" />
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(2 2)" fill="url(#sf-ember)">
+    <path d="M13 24H56V34H13L5 29Z" />
+    <path d="M28 34H38V47H45V53H21V47H28Z" />
+    <path d="M48 10.5L50 14L53.5 16L50 18L48 21.5L46 18L42.5 16L46 14Z" />
+  </g>
+
+  <text x="80" y="47"
+        font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif"
+        font-size="33" letter-spacing="-0.5">
+    <tspan fill="#16202E" font-weight="500">Skill</tspan><tspan fill="#EC5B26" font-weight="700">Forge</tspan>
+  </text>
+</svg>

@@ -12,6 +12,8 @@
     <PackageId>SkillForge.Cli</PackageId>
     <IsPackable>true</IsPackable>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- NuGet rejects SVG, so this is the rasterised copy of assets/logo-mark.svg. -->
+    <PackageIcon>logo-128.png</PackageIcon>
     <PackageTags>ai-agents;skills;cli;validation;sarif</PackageTags>
   </PropertyGroup>
 
@@ -25,6 +27,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="SkillForge.Cli.Tests" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="..\..\assets\logo-128.png" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

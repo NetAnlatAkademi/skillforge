@@ -21,6 +21,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Docs: `docs/cli-reference.md`, `docs/ci.md`, `docs/skillforge-manifest-rfc.md`.
 - CI runs the built CLI over the sample skills, including asserting that the broken sample exits 1.
 
+- Logo and brand assets under `assets/`: horizontal lockup for light and dark backgrounds, the mark on its
+  own, a simplified cut for favicon sizes, and a rasterised 128×128 PNG used as the NuGet package icon.
+  The mark is an anvil, deliberately not a badge — a shield or tick would promise the safety verdict
+  SkillForge refuses to give (ADR-006). Rationale and usage rules are in `assets/README.md`.
+
 ### Changed
 
 - Code-standards pass over the whole codebase: one type per file, `= default` on every cancellation-token

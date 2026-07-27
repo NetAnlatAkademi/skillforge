@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo.svg" alt="SkillForge" width="296" height="72">
+  </picture>
+</p>
+
 # SkillForge
 
 A local, open source CLI for AI agent skills. SkillForge creates, validates, inspects and packages
