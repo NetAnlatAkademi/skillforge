@@ -337,11 +337,16 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 
 ### v0.2 — Security signals and CI
 
-- [ ] **`skillforge diff origin/main...HEAD`** — the highest-value item, and absent from the original roadmap.
+- [x] **`skillforge diff <before> <after>`** — the highest-value item, and absent from the original roadmap.
   Reports *behaviour surface* change rather than file change: permissions added, external domains added,
   scripts added, activation scope broadened, eval results. Architecture hook: it compares two
   `SkillDefinition`s over the surface `inspect` already computes, so what is missing is loading two revisions
   (git or two directories) and modelling the surface delta — not a new reading layer.
+  Built as two paths rather than a git range: taking a revision range needs SkillForge to run `git`, a capability
+  and a set of failure modes it does not have. `git worktree add` produces the two paths and is documented in
+  `docs/ci.md`; built-in support would do the same underneath.
+  It refuses to claim an activation scope "broadened" — that cannot be judged honestly from a description's text,
+  so the change is shown in full for a human to judge. Testing activation is what v0.3's evals are for.
 - [ ] Activation-risk rules (`SF3xxx` band)
 - [ ] Permission inference, cross-checked against `skillforge.yaml` declarations (SF1006, SF1007)
 - [ ] External URL and script analysis (SF1005, and the shell patterns in roadmap §11)

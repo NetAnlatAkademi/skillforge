@@ -67,6 +67,36 @@ Notes worth knowing before copying this:
 - **`--strict` decides whether warnings block a merge.** That is a policy choice, so it is a flag rather
   than a default.
 
+## Showing what a pull request changed about a skill
+
+A patch shows which bytes changed. What it does not show is that a skill quietly gained a permission, a script or
+a new host to talk to — which is exactly what a reviewer needs to know and the thing most likely to be waved
+through.
+
+```yaml
+      - name: Check out the base for comparison
+        run: git worktree add ../base origin/${{ github.base_ref }}
+
+      - name: Diff the skill's behaviour surface
+        run: |
+          skillforge diff ../base/skills/my-skill ./skills/my-skill \
+            --format json --output artifacts/diff.json
+          skillforge diff ../base/skills/my-skill ./skills/my-skill > artifacts/diff.txt || true
+
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request'
+        run: gh pr comment "${{ github.event.number }}" --body-file artifacts/diff.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+`diff` exits 1 when the later version has a new **error**, so the step above uses `|| true` for the human-readable
+copy and lets the JSON run decide the build. Add `--fail-on-change` if any surface change should block the merge —
+that is a policy choice, which is why it is not the default.
+
+Taking a git range directly (`diff origin/main...HEAD`) is not implemented; the worktree above is the supported
+way, and is what built-in support would do underneath.
+
 ## Consuming the JSON report
 
 `--format json` writes the schema documented in `docs/validation-rules.md`. It is a published contract:

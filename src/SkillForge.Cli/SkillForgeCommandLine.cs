@@ -59,6 +59,7 @@ internal static partial class SkillForgeCommandLine
         root.Subcommands.Add(BuildInitCommand(services, globals));
         root.Subcommands.Add(BuildValidateCommand(services, globals));
         root.Subcommands.Add(BuildInspectCommand(services, globals));
+        root.Subcommands.Add(BuildDiffCommand(services, globals));
         root.Subcommands.Add(BuildPackCommand(services, globals));
 
         return root;
@@ -224,6 +225,55 @@ internal static partial class SkillForgeCommandLine
                     parseResult.GetValue(showFiles),
                     parseResult.GetValue(showLinks),
                     parseResult.GetValue(showPermissions),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return command;
+    }
+
+    private static Command BuildDiffCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var before = new Argument<string>("before")
+        {
+            Description = "The earlier version: a skill directory, or the path of a SKILL.md file.",
+        };
+
+        var after = new Argument<string>("after")
+        {
+            Description = "The later version.",
+        };
+
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var output = CreateOutputOption();
+
+        var failOnChange = new Option<bool>("--fail-on-change")
+        {
+            Description = "Fail on any surface change, not only on a new error.",
+        };
+
+        var command = new Command(
+            "diff",
+            "Compare two versions of a skill by what they can do, not by which bytes changed.")
+        {
+            before,
+            after,
+            format,
+            output,
+            failOnChange,
+        };
+
+        command.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<DiffCommandRunner>();
+
+            return await runner.RunAsync(
+                new DiffRequest(
+                    parseResult.GetValue(before) ?? DefaultPath,
+                    parseResult.GetValue(after) ?? DefaultPath,
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    parseResult.GetValue(failOnChange),
                     globals.Read(parseResult)),
                 cancellationToken).ConfigureAwait(false);
         });

@@ -57,6 +57,7 @@ internal static class CompositionRoot
         services.AddSingleton<ValidateCommandRunner>();
         services.AddSingleton<InitCommandRunner>();
         services.AddSingleton<InspectCommandRunner>();
+        services.AddSingleton<DiffCommandRunner>();
         services.AddSingleton<PackCommandRunner>();
 
         // ValidateOnBuild turns a missing or unresolvable registration into a failure here rather than when

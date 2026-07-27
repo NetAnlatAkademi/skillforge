@@ -38,6 +38,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - SF1011: a reference pointing at a sibling skill is now a warning rather than an SF0008 error. Measured on 229
   real skills, 21 of 21 such "errors" were legitimate cross-references inside one collection.
 
+- `skillforge diff <before> <after>` — the behaviour-surface diff. Reports permissions, hosts, scripts, files,
+  compatibility, name, version and description changes, plus which findings are new versus resolved, and leads with
+  the three changes that widen a skill's reach. Exits 1 on a new error; `--fail-on-change` makes any change fail.
+  It deliberately does not claim an activation scope became "broader" — that cannot be judged honestly from text.
+
 ### Changed
 
 - Code-standards pass over the whole codebase: one type per file, `= default` on every cancellation-token

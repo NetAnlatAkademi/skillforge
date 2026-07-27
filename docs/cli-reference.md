@@ -166,6 +166,78 @@ security-signals milestone; until then the limitation is stated rather than impl
 
 ---
 
+## `skillforge diff`
+
+Compares two versions of a skill by **what they can do**, not by which bytes changed.
+
+```bash
+skillforge diff ./before ./after
+skillforge diff ./before ./after --format json --output artifacts/diff.json
+skillforge diff ./before ./after --fail-on-change
+```
+
+```text
+SkillForge Diff
+
+Before: ./before
+After:  ./after
+
+The skill can now do more than before:
+  Permissions added:
+    shell.execute
+
+  Scripts added:
+    scripts/analyze.ps1
+
+  Domains added:
+    api.example.com
+
+Version: 1.0.0 -> 1.1.0
+
+Description changed:
+  before: Use this skill when reviewing an API before it ships.
+  after:  Use this skill when reviewing an API, a database or any deployment.
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `before` | — | The earlier version: a skill directory or a `SKILL.md` path |
+| `after` | — | The later version |
+| `--format`, `-f` | `console` | `console` or `json` |
+| `--output`, `-o` | stdout | Write to a file |
+| `--fail-on-change` | off | Fail on any surface change, not only on a new error |
+
+Exit codes: `1` when either side cannot be loaded, or when the later version has a **new error** — that is a
+regression by any definition. Otherwise `0`, because whether a new permission is acceptable is a policy SkillForge
+does not own; `--fail-on-change` is how a caller says a change alone should stop a build.
+
+### What it compares, and what it refuses to guess
+
+Reported: declared permissions, agent compatibility, **hosts** the entry point points at, scripts, every file,
+name, version, description, and which findings are new versus resolved. Findings are matched by code and location
+rather than by message, so rewording a diagnostic does not read as one finding resolved and another appearing.
+
+Hosts rather than URLs: a link moving from `/docs/a` to `/docs/b` on the same host is not a change in *who* the
+skill talks to, which is the question a reviewer is actually asking.
+
+**It does not claim the activation scope became "broader".** Judging that from a description's text is not
+something that can be done honestly — a shorter description can match more, a longer one can match more, and which
+words matter depends on the agent. The description change is shown in full so a human can judge it. Actually
+testing activation is what evals are for (v0.3).
+
+### Comparing two git revisions
+
+Not built in yet: `diff` takes two paths. Until it does, git can produce the two paths:
+
+```bash
+git worktree add ../skillforge-base origin/main
+skillforge diff ../skillforge-base/skills/my-skill ./skills/my-skill
+git worktree remove ../skillforge-base
+```
+
+Taking a revision range directly needs SkillForge to run `git`, which is a capability — and a set of failure modes
+— it does not have today. The workaround above is what the eventual built-in support will do underneath.
+
 ## `skillforge pack`
 
 Packages a skill into a deterministic archive with a hash and a manifest.
