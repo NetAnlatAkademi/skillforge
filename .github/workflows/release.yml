@@ -97,21 +97,26 @@ jobs:
       # Checked here rather than left to fail inside the action, whose error does not say what to set.
       - name: Check the NuGet account is configured
         env:
-          NUGET_USER: ${{ vars.NUGET_USER }}
+          NUGET_USER: ${{ secrets.NUGET_USER }}
         run: |
           set -euo pipefail
           if [ -z "${NUGET_USER:-}" ]; then
-            echo "::error::Repository variable NUGET_USER is not set. It is the nuget.org account that owns"
-            echo "::error::the trusted publishing policy. Set it with:"
-            echo "::error::  gh variable set NUGET_USER --repo ${{ github.repository }} --body '<account>'"
+            echo "::error::Secret NUGET_USER is not set. It is the nuget.org account *username* that owns the"
+            echo "::error::trusted publishing policy -- the last part of your nuget.org/profiles/<username> URL,"
+            echo "::error::not an email address. Set it with:"
+            echo "::error::  gh secret set NUGET_USER --repo ${{ github.repository }}"
             exit 1
           fi
 
+      # A secret rather than a variable, and not because the account name is confidential. Values passed to an
+      # action's `with:` are echoed verbatim into the run log, and this repository is public — so a variable
+      # here publishes whatever it holds. Secrets are masked. The account name is low-stakes; an email address
+      # put here by mistake would not be.
       - name: Authenticate to NuGet.org
         id: nuget-login
         uses: NuGet/login@v1
         with:
-          user: ${{ vars.NUGET_USER }}
+          user: ${{ secrets.NUGET_USER }}
 
       # --skip-duplicate so re-running a tag is harmless: NuGet.org refuses to replace a published version,
       # and that refusal should not read as a broken release.
