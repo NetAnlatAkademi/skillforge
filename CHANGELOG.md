@@ -8,7 +8,7 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
-## [Unreleased]
+## [26.208.2] — 2026-07-27
 
 ### Added — `SF4xxx`, instruction injection in the body
 
@@ -73,6 +73,19 @@ A length filter alone was tried for the overlap check and failed: "Use this skil
 "translate this paragraph into Turkish" share **"this"**, enough to make two unrelated sentences look related. A
 stop-word list was therefore necessary, and it is **English only** — a limitation stated rather than hidden.
 
+### Added — `SF6xxx`, version and evolution
+
+- SF6001: the skill's reach grew while its declared version stayed the same, so anyone pinned to that version
+  received the change without being told. Reported by `diff`, because it needs two revisions — it is not a
+  validation rule and could not be one.
+
+It requires a version on both sides. An unversioned skill promises nothing, so it breaks nothing, and a version
+appearing for the first time said nothing about the revision before it.
+
+"No version is declared" is deliberately **not** a rule: measured at 210 of 229 real skills, 91%. Same shape as
+SF1009 and SF1010, and the same reason provenance was rejected from SF5xxx — the both-sides requirement is what
+keeps it from arriving through the back door.
+
 ### Changed — reports say how to fix things, not just what is wrong
 
 - A finding whose resolution is one known edit now carries a `Fix`: the literal text to paste. It prints **without**
@@ -101,19 +114,6 @@ stop-word list was therefore necessary, and it is **English only** — a limitat
   location to an empty path, and a SARIF consumer annotated a file outside the repository, so GitHub dropped or
   misplaced the annotation. It now points at the configuration file when one exists and at `SKILL.md` otherwise,
   matching SF1009 and SF1010. The suggestion still names the file to create. Found in real output.
-
-### Added — `SF6xxx`, version and evolution
-
-- SF6001: the skill's reach grew while its declared version stayed the same, so anyone pinned to that version
-  received the change without being told. Reported by `diff`, because it needs two revisions — it is not a
-  validation rule and could not be one.
-
-It requires a version on both sides. An unversioned skill promises nothing, so it breaks nothing, and a version
-appearing for the first time said nothing about the revision before it.
-
-"No version is declared" is deliberately **not** a rule: measured at 210 of 229 real skills, 91%. Same shape as
-SF1009 and SF1010, and the same reason provenance was rejected from SF5xxx — the both-sides requirement is what
-keeps it from arriving through the back door.
 
 ## [26.208.1] — 2026-07-27
 
