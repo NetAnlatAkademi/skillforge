@@ -73,6 +73,12 @@ public static class DiagnosticCodes
     /// <summary>No agent compatibility information is declared.</summary>
     public const string CompatibilityMissing = "SF1010";
 
+    /// <summary>
+    /// A reference leaves the skill directory but points at a sibling — normal inside a collection of skills,
+    /// but it cannot be satisfied by the skill on its own.
+    /// </summary>
+    public const string ReferenceLeavesSkill = "SF1011";
+
     /// <summary>The skill contains a script.</summary>
     public const string ContainsScript = "SF2001";
 

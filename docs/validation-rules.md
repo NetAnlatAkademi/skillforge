@@ -25,17 +25,20 @@ missing `name` or `description` — is a rule that runs on the loaded model.
 When one mistake would trigger two codes, the more precise one wins. A duplicated frontmatter field
 also makes the YAML parser fail, so SF0009 is reported and SF0003 is suppressed.
 
-SF0001 covers both "not found" and "found but unreadable" — a locked file or a permission error reads
-the same way to the person running the CLI, and inventing a code outside the roadmap's table would
-break the fixed set of 24.
+SF0001 covers both "not found" and "found but unreadable" — a locked file or a permission error reads the same
+way to the person running the CLI. That widening was made when the code set was still deliberately closed; the
+set is open now, but SF0001 keeps its meaning, because changing a published code is the thing that stays
+forbidden.
 
 Two codes have a defined precedence so one mistake produces one finding:
 
 - SF0004 suppresses SF0006 and SF0007 has nothing to say about it — a skill with no name is not also
   reported as having an invalid one.
 - SF0005 suppresses SF1001 and SF1002 for the same reason.
-- SF0008 suppresses SF0007 for a given reference: a link pointing outside the skill is an escape, not a
-  missing file.
+- SF0008 and SF1011 both suppress SF0007 for a given reference: a link that leaves the skill is an escape, not a
+  missing file, and this rule cannot look outside the skill's own inventory anyway.
+- SF0008 and SF1011 are mutually exclusive by construction — a reference either reaches a sibling or reaches
+  further, never both.
 
 ## Thresholds and heuristics
 
@@ -62,7 +65,7 @@ number in front of it.
 | SF0005 | `description` field is missing | **Implemented** |
 | SF0006 | Skill name is invalid | **Implemented** |
 | SF0007 | A referenced file was not found | **Implemented** |
-| SF0008 | A path escapes the skill directory | **Implemented** (loader + rule) |
+| SF0008 | A path reaches outside the skill and its neighbours | **Implemented** (loader + rule) |
 | SF0009 | The same metadata field is declared more than once | **Implemented** (loader) |
 | SF0010 | Package version is invalid | **Implemented** |
 
@@ -80,6 +83,7 @@ number in front of it.
 | SF1008 | Package dependencies are not pinned | Planned |
 | SF1009 | No license is declared | **Implemented** |
 | SF1010 | No agent compatibility information is declared | **Implemented** |
+| SF1011 | A reference points at a sibling skill, outside this skill's own directory | **Implemented** |
 
 ## Info
 
@@ -108,11 +112,19 @@ other — added one finding the smaller run could not show: **SF0008 fired 21 ti
 like `../react-testing/SKILL.md`. Those are not mistakes. A collection of skills that reference their siblings
 is a real and reasonable pattern, and calling it an error fails the build over it.
 
-The rule is still telling the truth — such a reference cannot survive being packaged on its own — but "cannot
-be packaged alone" and "the author made a mistake" are different claims, and only the second deserves an
-error. A batch run knows the collection root, which makes a better model possible: escaping the *skill* is a
-warning, escaping the *collection* stays an error. That is a change to a published code's severity, so it is
-recorded here as a decision to take rather than one taken quietly.
+The rule was still telling the truth — such a reference cannot survive being packaged on its own — but "cannot
+be packaged alone" and "the author made a mistake" are different claims, and only the second deserves an error.
+
+**This has since been fixed, and not the way it was first sketched.** The plan was to pass a collection root
+into the rules so they could tell "outside the skill" from "outside the collection". That turned out to be
+unnecessary: the distinction is provable from the reference text alone. One level up and back down into a named
+directory *is* a sibling, by construction; two or more levels up, an absolute path, or the parent directory
+itself cannot be. So no collection root, no context object threaded through every rule, and the answer is the
+same whether one skill or a whole directory is being validated.
+
+The single rule became two, keeping one code per rule: **SF1011** (warning) for a sibling reference and
+**SF0008** (error) for anything reaching further. On the 229-skill run this turns 21 errors into 21 warnings and
+leaves the genuinely out-of-tree references — `../../rules/...`, `../../ECC-Tools` — as errors.
 
 The two warnings at the top are worth reading carefully. They are not finding mistakes; they are finding that
 the `SKILL.md` convention in the wild does not carry `license` or `compatibility` at all. A warning that fires
@@ -120,9 +132,14 @@ on virtually every input is noise, and noise teaches people to ignore warnings. 
 that **`--strict` fails all 32**, so it cannot be recommended as a default gate for existing skills — only for
 a repository that has decided to adopt these two fields.
 
-Nothing was changed in response to this measurement, deliberately: rule severity is part of the published
-contract, and per-rule configuration is the v0.2.0 item that solves it properly (rule suppression and
-configurable validation). Until then this table is the honest disclosure.
+SF1009 and SF1010 are **not** changed in response to this measurement. Their severity is part of the published
+contract, and the answer for a repository that does not want them is per-rule configuration — suppression, and
+reading `validation` out of `skillforge.yaml` — not a quiet downgrade. Until that lands, this table is the
+honest disclosure and `--strict` carries the warning in the CLI reference.
+
+The difference between the two responses is worth stating: SF0008 was **wrong** about a legitimate pattern, so
+it was fixed. SF1009 and SF1010 are **right** but unwanted by most existing skills, which is a configuration
+problem, not a correctness one.
 
 ## What is still planned, and why it is not here yet
 
