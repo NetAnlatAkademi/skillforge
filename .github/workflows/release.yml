@@ -129,9 +129,19 @@ jobs:
           --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           --skip-duplicate
 
+      # Delete-then-upload rather than `--clobber`. Clobber updates the existing asset in place and NuGet's
+      # already-published name makes that a 422 ("Validation Failed") when an asset of the same name is already
+      # there — which it was, having been attached by hand when the first release was cut. Deleting first is
+      # idempotent whether or not the asset exists.
       - name: Attach the package to the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release upload "${{ inputs.tag || github.ref_name }}"
-          ./artifacts/release/*.nupkg --clobber --repo "${{ github.repository }}"
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          package="./artifacts/release/SkillForge.Cli.${{ steps.version.outputs.version }}.nupkg"
+
+          gh release delete-asset "$TAG" "$(basename "$package")" \
+            --yes --repo "${{ github.repository }}" || true
+
+          gh release upload "$TAG" "$package" --repo "${{ github.repository }}"
