@@ -111,8 +111,15 @@ runs:
 
         # The exit code is the result, so it is captured rather than allowed to end the step: the SARIF
         # still has to be uploaded when there are findings, which is exactly when the CLI exits 1.
+        #
+        # `set +e` is required, not decoration. GitHub invokes composite bash steps as `bash -e -o pipefail`,
+        # so errexit is already on before the script's first line and `set -uo pipefail` does not turn it off.
+        # Without this the step dies on the CLI's exit 1 before it can record any output, and the caller sees
+        # "could not run" for a run that worked perfectly.
+        set +e
         skillforge validate "${args[@]}"
         exit_code=$?
+        set -e
 
         echo "exit-code=$exit_code" >> "$GITHUB_OUTPUT"
         echo "sarif-file=$SKILLFORGE_SARIF" >> "$GITHUB_OUTPUT"
