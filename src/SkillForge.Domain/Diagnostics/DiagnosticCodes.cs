@@ -79,6 +79,11 @@ public static class DiagnosticCodes
     /// </summary>
     public const string ReferenceLeavesSkill = "SF1011";
 
+    /// <summary>
+    /// <c>skillforge.yaml</c> exists but could not be parsed, so its settings were ignored.
+    /// </summary>
+    public const string ConfigurationNotParsable = "SF1012";
+
     /// <summary>The skill contains a script.</summary>
     public const string ContainsScript = "SF2001";
 

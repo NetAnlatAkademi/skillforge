@@ -18,12 +18,17 @@ namespace SkillForge.Domain.Validation;
 /// Version the skill declared, or <see langword="null"/> when it declared none. Machine-readable reports
 /// include it so a consumer can tell two runs of the same skill apart.
 /// </param>
+/// <param name="SuppressedCount">
+/// How many diagnostics were dropped by configuration. Always reported, even when zero: a report that quietly
+/// omitted findings would be lying about what was checked.
+/// </param>
 public sealed record ValidationReport(
     string SkillName,
     string SkillPath,
     IReadOnlyList<Diagnostic> Diagnostics,
     ValidationSummary Summary,
-    string? SkillVersion = null)
+    string? SkillVersion = null,
+    int SuppressedCount = 0)
 {
     /// <summary>
     /// Gets a value indicating whether the skill is usable, ignoring warnings.

@@ -221,9 +221,119 @@ public sealed class ValidateCommandRunnerTests
     }
 
     [Fact]
+    public async Task SuppressedCodesAreDroppedButCounted()
+    {
+        var runner = Build(
+            out var renderer,
+            validationFindings:
+            [
+                Diagnostic.Error(DiagnosticCodes.NameMissing, "no name"),
+                Diagnostic.Warning(DiagnosticCodes.LicenseMissing, "no license"),
+            ]);
+
+        var exitCode = await runner.RunAsync(
+            Request(suppressed: [DiagnosticCodes.LicenseMissing]),
+            CancellationToken.None);
+
+        exitCode.Should().Be(1, "the error was not suppressed");
+        renderer.Rendered!.Diagnostics.Should().ContainSingle()
+            .Which.Code.Should().Be(DiagnosticCodes.NameMissing);
+        renderer.Rendered.SuppressedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SuppressingTheOnlyErrorChangesTheExitCode()
+    {
+        // The point of the feature: a repository that has decided a rule does not apply to it stops failing.
+        var runner = Build(out var renderer, validationFindings:
+            [Diagnostic.Error(DiagnosticCodes.NameMissing, "no name")]);
+
+        var exitCode = await runner.RunAsync(
+            Request(suppressed: [DiagnosticCodes.NameMissing]),
+            CancellationToken.None);
+
+        exitCode.Should().Be(0);
+        renderer.Rendered!.Summary.Errors.Should().Be(0, "the summary must match what is reported");
+        renderer.Rendered.SuppressedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SuppressionFromTheSkillsOwnConfigurationApplies()
+    {
+        var runner = Build(
+            out var renderer,
+            validationFindings: [Diagnostic.Warning(DiagnosticCodes.LicenseMissing, "no license")],
+            configuration: new SkillConfiguration(Strict: false, SuppressedCodes: [DiagnosticCodes.LicenseMissing]));
+
+        await runner.RunAsync(Request(), CancellationToken.None);
+
+        renderer.Rendered!.Diagnostics.Should().BeEmpty();
+        renderer.Rendered.SuppressedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task TheFlagAndTheFileAddUpRatherThanOverridingEachOther()
+    {
+        var runner = Build(
+            out var renderer,
+            validationFindings:
+            [
+                Diagnostic.Warning(DiagnosticCodes.LicenseMissing, "no license"),
+                Diagnostic.Warning(DiagnosticCodes.CompatibilityMissing, "no compatibility"),
+            ],
+            configuration: new SkillConfiguration(false, [DiagnosticCodes.LicenseMissing]));
+
+        await runner.RunAsync(
+            Request(suppressed: [DiagnosticCodes.CompatibilityMissing]),
+            CancellationToken.None);
+
+        renderer.Rendered!.Diagnostics.Should().BeEmpty();
+        renderer.Rendered.SuppressedCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task ADiagnosticFromReadingTheConfigurationAppearsInTheReport()
+    {
+        // Otherwise a skillforge.yaml that had to be ignored would be invisible, and the user would think their
+        // suppressions were applied.
+        var runner = Build(
+            out var renderer,
+            configurationDiagnostics:
+            [Diagnostic.Warning(DiagnosticCodes.ConfigurationNotParsable, "ignored")]);
+
+        await runner.RunAsync(Request(), CancellationToken.None);
+
+        renderer.Rendered!.Diagnostics.Should().ContainSingle()
+            .Which.Code.Should().Be(DiagnosticCodes.ConfigurationNotParsable);
+    }
+
+    [Fact]
+    public async Task ASkillCanAskForStrictnessInItsOwnConfiguration()
+    {
+        var runner = Build(
+            out _,
+            validationFindings: [Diagnostic.Warning(DiagnosticCodes.LicenseMissing, "no license")],
+            configuration: new SkillConfiguration(Strict: true, SuppressedCodes: []));
+
+        // No --strict on the command line; the skill asked for it.
+        (await runner.RunAsync(Request(), CancellationToken.None)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task TheStrictFlagStillWinsForASkillThatDidNotAskForIt()
+    {
+        var runner = Build(
+            out _,
+            validationFindings: [Diagnostic.Warning(DiagnosticCodes.LicenseMissing, "no license")],
+            configuration: new SkillConfiguration(Strict: false, SuppressedCodes: []));
+
+        (await runner.RunAsync(Request(strict: true), CancellationToken.None)).Should().Be(1);
+    }
+
+    [Fact]
     public void RejectsMissingDependencies()
     {
-        var act = () => new ValidateCommandRunner(null!, null!, null!, null!, null!);
+        var act = () => new ValidateCommandRunner(null!, null!, null!, null!, null!, null!);
 
         act.Should().Throw<ArgumentNullException>();
     }
@@ -232,8 +342,9 @@ public sealed class ValidateCommandRunnerTests
         string path = "/skills/demo",
         bool strict = false,
         string format = OutputFormat.Console,
-        string? outputPath = null) =>
-        new(path, strict, format, outputPath, new ReportRenderOptions());
+        string? outputPath = null,
+        IReadOnlyList<string>? suppressed = null) =>
+        new(path, strict, format, outputPath, new ReportRenderOptions(), suppressed ?? []);
 
     private static ValidateCommandRunner Build(
         out RecordingRenderer renderer,
@@ -241,7 +352,9 @@ public sealed class ValidateCommandRunnerTests
         Diagnostic? loadFailure = null,
         IReadOnlyList<Diagnostic>? loadDiagnostics = null,
         IReadOnlyList<Diagnostic>? validationFindings = null,
-        IReadOnlyList<string>? discovered = null)
+        IReadOnlyList<string>? discovered = null,
+        SkillConfiguration? configuration = null,
+        IReadOnlyList<Diagnostic>? configurationDiagnostics = null)
     {
         renderer = new RecordingRenderer();
         var files = fileSystem ?? new FakeFileSystem();
@@ -255,6 +368,7 @@ public sealed class ValidateCommandRunnerTests
             new StubLoader(loadFailure, loadDiagnostics ?? []),
             new StubValidator(validationFindings ?? []),
             new StubDiscovery(discovered ?? []),
+            new StubConfigurationReader(configuration ?? SkillConfiguration.Default, configurationDiagnostics ?? []),
             files,
             output);
     }
@@ -262,6 +376,16 @@ public sealed class ValidateCommandRunnerTests
     private sealed class StubDiscovery(IReadOnlyList<string> directories) : ISkillDiscovery
     {
         public IReadOnlyList<string> FindSkillDirectories(string rootDirectory) => directories;
+    }
+
+    private sealed class StubConfigurationReader(
+        SkillConfiguration configuration,
+        IReadOnlyList<Diagnostic> diagnostics) : ISkillConfigurationReader
+    {
+        public Task<OperationResult<SkillConfiguration>> ReadAsync(
+            string skillDirectory,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(OperationResult<SkillConfiguration>.Success(configuration, diagnostics));
     }
 
     private sealed class StubLoader(Diagnostic? failure, IReadOnlyList<Diagnostic> diagnostics) : ISkillLoader

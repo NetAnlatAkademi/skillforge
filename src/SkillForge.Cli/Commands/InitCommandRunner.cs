@@ -103,7 +103,8 @@ internal sealed class InitCommandRunner
                 Strict: false,
                 OutputFormat.Console,
                 OutputPath: null,
-                request.RenderOptions),
+                request.RenderOptions,
+                SuppressedCodes: []),
             cancellationToken).ConfigureAwait(false);
     }
 }

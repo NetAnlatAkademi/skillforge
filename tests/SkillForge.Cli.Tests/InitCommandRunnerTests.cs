@@ -113,7 +113,13 @@ public sealed class InitCommandRunnerTests
             fileSystem,
             renderer,
             [new JsonReportSerializer(), new SarifReportSerializer()]);
-        var validate = new ValidateCommandRunner(loader, validator, new NoSkillsFound(), fileSystem, output);
+        var validate = new ValidateCommandRunner(
+            loader,
+            validator,
+            new NoSkillsFound(),
+            new NoConfiguration(),
+            fileSystem,
+            output);
 
         return new InitCommandRunner(fileSystem, initializer, validate, renderer);
     }

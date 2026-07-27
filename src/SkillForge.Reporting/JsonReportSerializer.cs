@@ -72,6 +72,7 @@ public sealed class JsonReportSerializer : IValidationReportSerializer
                 ["warnings"] = run.Summary.Warnings,
                 ["info"] = run.Summary.Info,
                 ["valid"] = run.IsValid,
+                ["suppressed"] = run.SuppressedCount,
             },
             ["skills"] = skills,
         };
@@ -98,6 +99,7 @@ public sealed class JsonReportSerializer : IValidationReportSerializer
         ["warnings"] = report.Summary.Warnings,
         ["info"] = report.Summary.Info,
         ["valid"] = report.IsValid,
+        ["suppressed"] = report.SuppressedCount,
     };
 
     private static JsonArray DiagnosticsArray(ValidationReport report)

@@ -31,6 +31,7 @@ internal static class CompositionRoot
 
         services.AddSingleton<IFileSystem, FileSystem>();
         services.AddSingleton<IFrontmatterParser, YamlFrontmatterParser>();
+        services.AddSingleton<ISkillConfigurationReader, YamlSkillConfigurationReader>();
         services.AddSingleton<IArchiveWriter, DeterministicZipArchiveWriter>();
         services.AddSingleton<IHashCalculator, Sha256HashCalculator>();
 

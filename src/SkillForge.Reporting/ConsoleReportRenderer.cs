@@ -109,7 +109,8 @@ public sealed class ConsoleReportRenderer : IValidationReportRenderer
         _console.MarkupLine(
             $"Errors: {run.Summary.Errors}  "
             + $"Warnings: {run.Summary.Warnings}  "
-            + $"Info: {run.Summary.Info}");
+            + $"Info: {run.Summary.Info}"
+            + Suppressed(run.SuppressedCount));
     }
 
     /// <summary>
@@ -180,8 +181,15 @@ public sealed class ConsoleReportRenderer : IValidationReportRenderer
         _console.MarkupLine(
             $"Errors: {report.Summary.Errors}  "
             + $"Warnings: {report.Summary.Warnings}  "
-            + $"Info: {report.Summary.Info}");
+            + $"Info: {report.Summary.Info}"
+            + Suppressed(report.SuppressedCount));
     }
+
+    /// <summary>
+    /// Suppression is never invisible. A report that quietly omitted findings would be lying about what was
+    /// checked, and this number is what tells a reader to go and look at the configuration.
+    /// </summary>
+    private static string Suppressed(int count) => count == 0 ? string.Empty : $"  Suppressed: {count}";
 
     private static string FormatLocation(Diagnostic diagnostic)
     {

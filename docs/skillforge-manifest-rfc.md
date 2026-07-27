@@ -61,14 +61,21 @@ packageOptions:
 | `package.version` | `metadata.version` from `SKILL.md`, then `0.1.0` |
 | `compatibility.agents` | whatever `SKILL.md` declares |
 | `permissions` | nothing declared; `inspect` reports inferred capabilities instead |
-| `validation.strict` | `false`; `--strict` on the command line decides |
+| `validation.strict` | `false`. `--strict` on the command line forces it on regardless |
+| `validation.suppress` | nothing suppressed. Adds to whatever `--suppress` names, rather than replacing it |
 | `packageOptions` | everything in the directory except tooling directories |
 
 ## What is implemented today
 
-`init` generates the file, and `pack` applies the equivalent exclusions. The remaining fields are **declared,
-not enforced** — a skill can claim `network.allowed: false` and still contain a URL, and SkillForge will
-report the URL through `inspect` rather than treating the declaration as a policy it enforces.
+`init` generates the file, `pack` applies the equivalent exclusions, and **the `validation` section is read and
+honoured**: `validation.strict` and `validation.suppress` affect a real run. That makes this the first part of the
+file that does something rather than merely being declared.
+
+A file that cannot be parsed is ignored with SF1012 rather than failing the run — see `docs/validation-rules.md`.
+
+The remaining fields are **declared, not enforced** — a skill can claim `network.allowed: false` and still contain
+a URL, and SkillForge will report the URL through `inspect` rather than treating the declaration as a policy it
+enforces.
 
 That gap is deliberate rather than unfinished: enforcing a permission model means deciding what a violation
 is, and this release does not make that decision. Reading and cross-checking these fields — flagging a script

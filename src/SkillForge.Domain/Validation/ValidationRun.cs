@@ -22,6 +22,9 @@ public sealed record ValidationRun(
     /// <summary>Gets the number of skills with at least one error.</summary>
     public int InvalidSkillCount => Skills.Count(skill => !skill.IsValid);
 
+    /// <summary>Gets how many diagnostics were dropped by configuration across the whole run.</summary>
+    public int SuppressedCount => Skills.Sum(skill => skill.SuppressedCount);
+
     /// <summary>
     /// Determines whether the run should be treated as a failure.
     /// </summary>

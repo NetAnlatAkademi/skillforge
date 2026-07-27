@@ -30,6 +30,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   depth, replacing the shell loop the CI documentation used to recommend. JSON nests the skills; SARIF merges
   them into one run so a single upload covers the whole repository. One bad skill fails the run.
 
+- Rule configuration: `--suppress SF1009,SF1010` on the command line, and a `validation` section in a skill's own
+  `skillforge.yaml` (`strict`, `suppress`). The two add up rather than overriding each other. Suppressed findings
+  are always counted and the count is always shown, so a shrunken report never looks like a clean one. A
+  `skillforge.yaml` that cannot be parsed is ignored with SF1012 rather than failing the run — this is the first
+  part of that file SkillForge actually honours.
+- SF1011: a reference pointing at a sibling skill is now a warning rather than an SF0008 error. Measured on 229
+  real skills, 21 of 21 such "errors" were legitimate cross-references inside one collection.
+
 ### Changed
 
 - Code-standards pass over the whole codebase: one type per file, `= default` on every cancellation-token

@@ -84,6 +84,7 @@ number in front of it.
 | SF1009 | No license is declared | **Implemented** |
 | SF1010 | No agent compatibility information is declared | **Implemented** |
 | SF1011 | A reference points at a sibling skill, outside this skill's own directory | **Implemented** |
+| SF1012 | `skillforge.yaml` exists but could not be parsed, so its settings were ignored | **Implemented** |
 
 ## Info
 
@@ -123,8 +124,9 @@ itself cannot be. So no collection root, no context object threaded through ever
 same whether one skill or a whole directory is being validated.
 
 The single rule became two, keeping one code per rule: **SF1011** (warning) for a sibling reference and
-**SF0008** (error) for anything reaching further. On the 229-skill run this turns 21 errors into 21 warnings and
-leaves the genuinely out-of-tree references — `../../rules/...`, `../../ECC-Tools` — as errors.
+**SF0008** (error) for anything reaching further. Measured again on the same 229 skills: **21 errors became 6
+errors and 15 warnings**, and skills with errors went from 6 to 5. The six that remain all reach out of the
+skills tree entirely — `../../ECC-Tools`, `../../rules/react/`, `../../docs/...` — which is what SF0008 is for.
 
 The two warnings at the top are worth reading carefully. They are not finding mistakes; they are finding that
 the `SKILL.md` convention in the wild does not carry `license` or `compatibility` at all. A warning that fires
@@ -133,9 +135,27 @@ that **`--strict` fails all 32**, so it cannot be recommended as a default gate 
 a repository that has decided to adopt these two fields.
 
 SF1009 and SF1010 are **not** changed in response to this measurement. Their severity is part of the published
-contract, and the answer for a repository that does not want them is per-rule configuration — suppression, and
-reading `validation` out of `skillforge.yaml` — not a quiet downgrade. Until that lands, this table is the
-honest disclosure and `--strict` carries the warning in the CLI reference.
+contract, and the answer for a repository that does not want them is configuration, not a quiet downgrade.
+
+That configuration now exists:
+
+```bash
+skillforge validate ./skills --suppress SF1009,SF1010 --strict
+```
+
+```yaml
+# skillforge.yaml, per skill
+validation:
+  strict: false
+  suppress:
+    - SF1009
+    - SF1010
+```
+
+Suppression is deliberately unrestricted — errors can be suppressed too, because a repository that has decided a
+rule does not apply to it has a reason SkillForge cannot see. What keeps that honest is that **the count is
+always reported**: `Suppressed: 2` in the console, `summary.suppressed` in JSON. A report that quietly omitted
+findings would be lying about what was checked.
 
 The difference between the two responses is worth stating: SF0008 was **wrong** about a legitimate pattern, so
 it was fixed. SF1009 and SF1010 are **right** but unwanted by most existing skills, which is a configuration

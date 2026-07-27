@@ -1,5 +1,6 @@
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Validation;
+using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Skills;
 using SkillForge.Domain.Validation;
 
@@ -17,6 +18,7 @@ internal sealed class ValidateCommandRunner
     private readonly ISkillLoader _loader;
     private readonly ISkillValidator _validator;
     private readonly ISkillDiscovery _discovery;
+    private readonly ISkillConfigurationReader _configuration;
     private readonly IFileSystem _fileSystem;
     private readonly ReportOutput _output;
 
@@ -24,6 +26,7 @@ internal sealed class ValidateCommandRunner
     /// <param name="loader">Loads a skill.</param>
     /// <param name="validator">Runs the rules.</param>
     /// <param name="discovery">Finds the skills when the path holds several of them.</param>
+    /// <param name="configuration">Reads each skill's own skillforge.yaml.</param>
     /// <param name="fileSystem">Used to tell one skill from a directory of skills.</param>
     /// <param name="output">Writes the report where the user asked for it.</param>
     /// <remarks>
@@ -34,18 +37,21 @@ internal sealed class ValidateCommandRunner
         ISkillLoader loader,
         ISkillValidator validator,
         ISkillDiscovery discovery,
+        ISkillConfigurationReader configuration,
         IFileSystem fileSystem,
         ReportOutput output)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(validator);
         ArgumentNullException.ThrowIfNull(discovery);
+        ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(fileSystem);
         ArgumentNullException.ThrowIfNull(output);
 
         _loader = loader;
         _validator = validator;
         _discovery = discovery;
+        _configuration = configuration;
         _fileSystem = fileSystem;
         _output = output;
     }
@@ -86,16 +92,16 @@ internal sealed class ValidateCommandRunner
 
     private async Task<int> RunSingleAsync(ValidateRequest request, CancellationToken cancellationToken)
     {
-        var report = await BuildReportAsync(request.Path, cancellationToken).ConfigureAwait(false);
+        var result = await BuildReportAsync(request.Path, request, cancellationToken).ConfigureAwait(false);
 
         await _output.WriteAsync(
-            report,
+            result.Report,
             request.Format,
             request.OutputPath,
             request.RenderOptions,
             cancellationToken).ConfigureAwait(false);
 
-        return report.HasFailed(request.Strict) ? ExitCodes.ValidationFailed : ExitCodes.Success;
+        return result.HasFailed ? ExitCodes.ValidationFailed : ExitCodes.Success;
     }
 
     private async Task<int> RunBatchAsync(
@@ -103,7 +109,7 @@ internal sealed class ValidateCommandRunner
         IReadOnlyList<string> skillDirectories,
         CancellationToken cancellationToken)
     {
-        var reports = new List<ValidationReport>(skillDirectories.Count);
+        var results = new List<SkillResult>(skillDirectories.Count);
 
         // Sequential on purpose: the output has to come out in discovery order for a run to be reproducible,
         // and validation is light enough that parallelism would buy noise rather than speed.
@@ -111,10 +117,12 @@ internal sealed class ValidateCommandRunner
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            reports.Add(await BuildReportAsync(directory, cancellationToken).ConfigureAwait(false));
+            results.Add(await BuildReportAsync(directory, request, cancellationToken).ConfigureAwait(false));
         }
 
-        var run = ValidationRun.From(_fileSystem.GetFullPath(request.Path), reports);
+        var run = ValidationRun.From(
+            _fileSystem.GetFullPath(request.Path),
+            [.. results.Select(result => result.Report)]);
 
         await _output.WriteRunAsync(
             run,
@@ -123,37 +131,94 @@ internal sealed class ValidateCommandRunner
             request.RenderOptions,
             cancellationToken).ConfigureAwait(false);
 
-        return run.HasFailed(request.Strict) ? ExitCodes.ValidationFailed : ExitCodes.Success;
+        // Each skill is judged against its own effective strictness, because strict can come from that skill's
+        // own skillforge.yaml. One failing skill fails the run.
+        return results.Exists(result => result.HasFailed)
+            ? ExitCodes.ValidationFailed
+            : ExitCodes.Success;
     }
 
-    private async Task<ValidationReport> BuildReportAsync(
+    /// <summary>
+    /// A skill's report together with the strictness it was judged against — which may be its own, from
+    /// <c>skillforge.yaml</c>, rather than the run's.
+    /// </summary>
+    private sealed record SkillResult(ValidationReport Report, bool Strict)
+    {
+        internal bool HasFailed => Report.HasFailed(Strict);
+    }
+
+    private async Task<SkillResult> BuildReportAsync(
         string skillPath,
+        ValidateRequest request,
         CancellationToken cancellationToken)
     {
+        var configuration = await ReadConfigurationAsync(skillPath, cancellationToken).ConfigureAwait(false);
+
+        // The flag and the file add up: a repository-wide decision and a per-skill one are different decisions,
+        // so neither silently cancels the other. --strict forces strictness on; a skill can also ask for it.
+        var suppressed = request.SuppressedCodes.Concat(configuration.Value.SuppressedCodes).ToArray();
+        var strict = request.Strict || configuration.Value.Strict;
+
         var load = await _loader.LoadAsync(skillPath, cancellationToken).ConfigureAwait(false);
 
         // A skill that cannot be loaded still gets a report: the user needs to see why, in the same shape
         // as any other failure, rather than a bare error line.
         if (!load.IsSuccess || load.Value is null)
         {
-            return ValidationReport.ForUnloadableSkill(skillPath, load.Diagnostics);
+            return new SkillResult(
+                Finish(
+                    ValidationReport.ForUnloadableSkill(skillPath, load.Diagnostics),
+                    [.. load.Diagnostics, .. configuration.Diagnostics],
+                    suppressed),
+                strict);
         }
 
         var report = await _validator.ValidateAsync(load.Value, cancellationToken).ConfigureAwait(false);
 
-        if (load.Diagnostics.Count == 0)
-        {
-            return report;
-        }
+        // Diagnostics from the loader and from reading the configuration belong in the report too — a
+        // duplicated frontmatter field, or a skillforge.yaml that had to be ignored, is not something the
+        // rules can see.
+        return new SkillResult(
+            Finish(
+                report,
+                [.. load.Diagnostics, .. configuration.Diagnostics, .. report.Diagnostics],
+                suppressed),
+            strict);
+    }
 
-        // Diagnostics the loader produced belong in the report too — a duplicated frontmatter field is
-        // not something the rules can see.
-        var combined = DiagnosticOrdering.Sort([.. load.Diagnostics, .. report.Diagnostics]);
+    /// <summary>
+    /// Applies suppression, re-orders and re-counts, so the summary reflects exactly what is reported.
+    /// </summary>
+    private static ValidationReport Finish(
+        ValidationReport report,
+        IReadOnlyList<Diagnostic> allDiagnostics,
+        IReadOnlyCollection<string> suppressedCodes)
+    {
+        var suppression = DiagnosticSuppression.Apply(allDiagnostics, suppressedCodes);
+        var ordered = DiagnosticOrdering.Sort(suppression.Kept);
 
         return report with
         {
-            Diagnostics = combined,
-            Summary = ValidationSummary.FromDiagnostics(combined),
+            Diagnostics = ordered,
+            Summary = ValidationSummary.FromDiagnostics(ordered),
+            SuppressedCount = suppression.SuppressedCount,
         };
+    }
+
+    /// <summary>
+    /// Reads the skill's own configuration. A skill that cannot be loaded may still have a readable
+    /// <c>skillforge.yaml</c>, and its suppressions should apply to the load failure too.
+    /// </summary>
+    private async Task<(SkillConfiguration Value, IReadOnlyList<Diagnostic> Diagnostics)> ReadConfigurationAsync(
+        string skillPath,
+        CancellationToken cancellationToken)
+    {
+        var directory = _fileSystem.FileExists(_fileSystem.GetFullPath(skillPath))
+            ? Path.GetDirectoryName(_fileSystem.GetFullPath(skillPath)) ?? skillPath
+            : skillPath;
+
+        var result = await _configuration.ReadAsync(directory, cancellationToken).ConfigureAwait(false);
+
+        return (result.Value ?? SkillConfiguration.Default, result.Diagnostics);
     }
 }

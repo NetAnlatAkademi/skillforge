@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Application.Abstractions;
 using SkillForge.Cli.Commands;
@@ -12,7 +13,7 @@ namespace SkillForge.Cli;
 /// Command classes hold no business logic. They translate arguments into a call on a runner and return its
 /// exit code, which is why this file has no idea what a diagnostic is.
 /// </remarks>
-internal static class SkillForgeCommandLine
+internal static partial class SkillForgeCommandLine
 {
     private const string DefaultPath = ".";
     private const string DefaultLicense = "MIT";
@@ -75,12 +76,36 @@ internal static class SkillForgeCommandLine
         var format = CreateFormatOption();
         var output = CreateOutputOption();
 
+        var suppress = new Option<string[]>("--suppress")
+        {
+            Description = "Diagnostic codes not to report, comma-separated or repeated (e.g. SF1009,SF1010). "
+                + "Suppressed findings are counted and the count is always shown.",
+            AllowMultipleArgumentsPerToken = true,
+        };
+
+        // A typo here would otherwise suppress nothing and say nothing, which is the worst outcome for a flag
+        // whose whole job is to remove output.
+        suppress.Validators.Add(result =>
+        {
+            foreach (var token in result.Tokens)
+            {
+                foreach (var code in SplitCodes(token.Value))
+                {
+                    if (!DiagnosticCodePattern().IsMatch(code))
+                    {
+                        result.AddError($"'{code}' is not a diagnostic code. Codes look like SF1009.");
+                    }
+                }
+            }
+        });
+
         var command = new Command("validate", "Validate a skill against the SkillForge rules.")
         {
             path,
             strict,
             format,
             output,
+            suppress,
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -93,7 +118,8 @@ internal static class SkillForgeCommandLine
                     parseResult.GetValue(strict),
                     parseResult.GetValue(format) ?? OutputFormat.Console,
                     parseResult.GetValue(output),
-                    globals.Read(parseResult)),
+                    globals.Read(parseResult),
+                    ReadSuppressedCodes(parseResult.GetValue(suppress))),
                 cancellationToken).ConfigureAwait(false);
         });
 
@@ -294,6 +320,19 @@ internal static class SkillForgeCommandLine
 
         return format;
     }
+
+    /// <summary>
+    /// Accepts both <c>--suppress SF1009,SF1010</c> and a repeated <c>--suppress</c>, because people reasonably
+    /// expect either to work.
+    /// </summary>
+    private static string[] ReadSuppressedCodes(string[]? tokens) =>
+        tokens is null ? [] : [.. tokens.SelectMany(SplitCodes)];
+
+    private static IEnumerable<string> SplitCodes(string token) =>
+        token.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    [GeneratedRegex("^SF[0-6][0-9]{3}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex DiagnosticCodePattern();
 
     private static Option<string?> CreateOutputOption() =>
         new("--output", "-o")

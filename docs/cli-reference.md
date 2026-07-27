@@ -103,6 +103,33 @@ Machine-readable output changes shape for a batch, and each format does what its
 | `--strict` | off | Treat warnings as failures. Measured on 32 real skills, this fails all of them — see [validation-rules.md](validation-rules.md#measured-against-real-skills) before adopting it as a CI gate |
 | `--format`, `-f` | `console` | `console`, `json` or `sarif` |
 | `--output`, `-o` | stdout | Write machine-readable output to a file |
+| `--suppress` | nothing | Codes not to report, comma-separated or repeated. A value that is not a code is a usage error, because a typo would otherwise silently suppress nothing |
+
+### Suppressing rules
+
+Two places, and they add up rather than overriding each other — a repository-wide flag and a per-skill decision
+are different decisions:
+
+```bash
+skillforge validate ./skills --suppress SF1009,SF1010
+skillforge validate ./skills --suppress SF1009 --suppress SF1010   # same thing
+```
+
+```yaml
+# skillforge.yaml, in the skill's own directory
+validation:
+  strict: false
+  suppress:
+    - SF1009
+```
+
+Anything can be suppressed, errors included: a repository that has decided a rule does not apply to it has a
+reason SkillForge cannot see. What keeps it honest is that the count is **always** reported —
+`Suppressed: 2` on the console, `summary.suppressed` in JSON — so a shrunken report never looks like a clean one.
+
+`skillforge.yaml` is optional and its absence is never a finding. A file that exists but cannot be parsed is
+ignored with **SF1012** rather than failing the run: punishing a typo in an optional file would be worse, and
+ignoring it silently would let a suppression the author wrote quietly not apply.
 
 When `--output` is used, the human-readable report still goes to the console: a CI log that says nothing
 about why a build failed is not much use.

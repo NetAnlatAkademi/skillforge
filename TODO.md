@@ -347,7 +347,11 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 - [ ] External URL and script analysis (SF1005, and the shell patterns in roadmap §11)
 - [ ] GitHub Action, published
 - [ ] PR annotations carrying the diff summary
-- [ ] Rule suppression / configurable validation — the thing that resolves the measured SF1009/SF1010 noise
+- [x] Rule suppression / configurable validation — `--suppress` plus a real `validation` section in
+  `skillforge.yaml`. Measured on 229 skills: 610 warnings become 147 with `Suppressed: 463` shown, so `--strict`
+  is finally usable on an existing collection. Suppression is unrestricted (errors included) because a repository
+  that has decided a rule does not apply has a reason we cannot see — the always-reported count is what keeps it
+  honest.
 
 ### v0.3 — Evals and provider compatibility
 
