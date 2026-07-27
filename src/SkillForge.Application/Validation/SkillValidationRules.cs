@@ -41,6 +41,8 @@ public static class SkillValidationRules
             new NetworkDeclarationRule(),
             new ScriptPermissionRule(),
             new ShellPrivilegeRule(fileSystem),
+            new OverBroadActivationRule(),
+            new ActivationManipulationRule(),
         ];
     }
 }

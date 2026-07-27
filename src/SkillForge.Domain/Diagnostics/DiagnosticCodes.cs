@@ -95,4 +95,16 @@ public static class DiagnosticCodes
 
     /// <summary>The skill contains an <c>evals</c> folder.</summary>
     public const string ContainsEvals = "SF2004";
+
+    /// <summary>
+    /// The description claims the skill applies always, or to everything — an activation scope so broad that an
+    /// agent has nothing to match it against.
+    /// </summary>
+    public const string ActivationTooBroad = "SF3001";
+
+    /// <summary>
+    /// The skill's text pushes an agent to prefer it over its other instructions rather than describing when it
+    /// applies.
+    /// </summary>
+    public const string ActivationManipulation = "SF3002";
 }

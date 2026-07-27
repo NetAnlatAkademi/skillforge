@@ -103,6 +103,42 @@ number in front of it.
 | SF2003 | The skill contains a binary file | **Implemented** (inspect) |
 | SF2004 | The skill contains an `evals` folder | **Implemented** (inspect) |
 
+## Activation and retrieval risks
+
+| Code | Rule | Status |
+|---|---|---|
+| SF3001 | The description claims the skill applies always, or to everything | **Implemented** |
+| SF3002 | The skill's text pushes an agent to prefer it over its other instructions | **Implemented** |
+
+**These two were validated differently from every other rule, and the difference matters.** Measured across 203
+real skill descriptions, each pattern fires on at most one skill. For a quality rule that would be grounds not to
+ship it. For these it is the goal: a skill telling an agent to ignore its other instructions is what an attacker
+writes, and attackers are not in a sample of benign skills. Measuring benign input proves the **absence of false
+positives**; it cannot prove the presence of value. That is demonstrated with deliberately crafted positives in the
+tests instead.
+
+SF3001 is the mirror of SF1002. That rule asks whether a description says *when* the skill applies; this one asks
+whether it says "whenever", which is the same failure wearing confidence.
+
+**Both read the description only, and SF3002 had to be cut back to get there.** It first read the body as well, on the
+reasoning that an instruction to disregard other instructions does its work wherever the agent reads it. Measured on
+229 real skills that produced 16 SF3xxx findings across 14 skills, and inspecting the matched lines showed roughly one
+genuine hit. The rest were ordinary English in ordinary prose — "say so instead of hiding behind tooling",
+"# Ignore other fields", and a security skill's own detection pattern written as a string literal. Two changes
+followed: the body is no longer read, and the weakest pattern (`instead of` / `rather than`, 8 findings, every one
+benign) was deleted. Re-measured on the same 229 skills: **5 findings, 4 of them SF3001 and 1 SF3002**, all
+defensible. Finding injected instructions inside a *body* is a different problem and belongs to the reserved `SF4xxx`
+band, not to an approximation here at a 90% false-positive rate.
+
+| Code | After the cut, on 229 real skills |
+|---|---|
+| SF3001 | 4 — `using-superpowers`, `verification-before-completion`, `vgen-pr`, `vgen-refactor` |
+| SF3002 | 1 — `using-superpowers` ("invoke skills BEFORE any response") |
+
+Neither concludes anything. The message says what was recognised, and the suggestion says outright that SkillForge
+is not calling the skill malicious (ADR-006) — a legitimate skill can be written clumsily, and a reader with the
+finding in front of them judges better than a regex.
+
 ## Measured against real skills
 
 Run over 32 skills installed on a working machine (2026-07-27), the rules behaved like this:
