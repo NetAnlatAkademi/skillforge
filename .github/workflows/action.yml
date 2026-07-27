@@ -1,0 +1,58 @@
+# Dogfooding the composite action itself. A published action that nothing runs is a published guess: this
+# exercises both of its outcomes on the sample skills, which is the only way the inputs and the exit-code
+# contract stay honest.
+name: Action
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  clean:
+    name: a skill with nothing to report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: skillforge
+        uses: ./
+        with:
+          path: ./samples/valid-skill
+          # SF1010 fires on almost every real skill, and this job is about the action, not the rule.
+          suppress: SF1009,SF1010
+          # One SARIF per repository is what code scanning expects, and the batch job below is the one
+          # that should own it.
+          upload-sarif: "false"
+
+      - name: The action should have reported success
+        run: |
+          test "${{ steps.skillforge.outputs.exit-code }}" = "0"
+
+  findings:
+    name: a directory of skills, two of them broken on purpose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The samples include deliberately broken skills, so the action is expected to fail here. What is
+      # being checked is that it fails for the right reason and still produces its SARIF.
+      - id: skillforge
+        continue-on-error: true
+        uses: ./
+        with:
+          path: ./samples
+          sarif-file: skillforge.sarif
+
+      - name: The action should have reported findings, and written one merged run
+        run: |
+          set -euo pipefail
+          test "${{ steps.skillforge.outputs.exit-code }}" = "1"
+          test -s skillforge.sarif
+          runs=$(python3 -c "import json;print(len(json.load(open('skillforge.sarif'))['runs']))")
+          test "$runs" = "1"

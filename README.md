@@ -112,6 +112,38 @@ to combine `--add-source` with source mapping — run the install from inside th
 
 Uninstall with `dotnet tool uninstall --global SkillForge.Cli`.
 
+## Use it in GitHub Actions
+
+```yaml
+permissions:
+  contents: read
+  security-events: write # what turns findings into inline pull-request annotations
+
+jobs:
+  skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: NetAnlatAkademi/skillforge@v26.208.1
+        with:
+          path: ./skills
+          suppress: SF1009,SF1010
+```
+
+Point `path` at one skill or at a directory of them — a directory without its own `SKILL.md` is validated as a
+batch, and the whole batch becomes **one** SARIF run, which is what code scanning expects. The action uploads
+that SARIF itself, so findings appear as annotations on the pull request rather than only in the log.
+
+`strict` is off by default and that is deliberate: SF1009 and SF1010 fire on almost every real skill, so a
+strict run out of the box fails on skills that are fine. See [docs/validation-rules.md](docs/validation-rules.md).
+
+Leave `version` unset and the action builds the CLI from its own checkout — slower, but it pins the CLI to the
+ref you referenced the action by and works before the tool is on NuGet. Set it to a published
+`SkillForge.Cli` version to install that instead.
+
+`exit-code` is exposed as an output (0 clean, 1 findings, 2 could not run) for callers that want to decide for
+themselves; the step itself still fails on anything but 0.
+
 ## Repository layout
 
 ```text

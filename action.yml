@@ -1,0 +1,146 @@
+name: SkillForge
+description: Validate agent skills (SKILL.md) and report findings as SARIF so they annotate the pull request.
+author: NetAnlatAkademi
+
+branding:
+  icon: check-circle
+  color: purple
+
+inputs:
+  path:
+    description: >
+      A skill directory, or a directory containing several skills. A directory without its own SKILL.md is
+      validated as a batch and every skill under it is reported in one run.
+    required: false
+    default: "."
+  strict:
+    description: >
+      Treat warnings as failures. Off by default, and deliberately so: SF1009 and SF1010 fire on almost every
+      real skill, so a strict run out of the box fails on skills that are fine. See docs/validation-rules.md.
+    required: false
+    default: "false"
+  suppress:
+    description: Diagnostic codes to suppress, comma-separated (for example "SF1009,SF1010").
+    required: false
+    default: ""
+  sarif-file:
+    description: Where to write the SARIF report. A batch run writes one merged run, not one file per skill.
+    required: false
+    default: skillforge.sarif
+  upload-sarif:
+    description: >
+      Upload the SARIF to GitHub code scanning, which is what turns findings into inline pull-request
+      annotations. Needs `permissions: security-events: write` in the calling workflow.
+    required: false
+    default: "true"
+  version:
+    description: >
+      A published SkillForge.Cli version to install from NuGet. Left empty, the action builds the CLI from its
+      own checkout instead — slower, but it works before the tool is published and pins the CLI to the same
+      ref you referenced this action by.
+    required: false
+    default: ""
+  dotnet-version:
+    description: The .NET SDK version to set up.
+    required: false
+    default: "10.0.x"
+
+outputs:
+  exit-code:
+    description: The CLI's exit code — 0 clean, 1 findings, 2 usage error. Always set, even when the step fails.
+    value: ${{ steps.validate.outputs.exit-code }}
+  sarif-file:
+    description: The path to the SARIF report that was written.
+    value: ${{ steps.validate.outputs.sarif-file }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    # Two ways in, and the choice is the caller's. Installing a published version is fast; building from
+    # $GITHUB_ACTION_PATH needs no NuGet release and guarantees the CLI matches the ref of this action.
+    - name: Install SkillForge
+      shell: bash
+      env:
+        SKILLFORGE_VERSION: ${{ inputs.version }}
+        DOTNET_NOLOGO: "true"
+        DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+      run: |
+        set -euo pipefail
+
+        if [ -n "$SKILLFORGE_VERSION" ]; then
+          dotnet tool install --global SkillForge.Cli --version "$SKILLFORGE_VERSION"
+        else
+          # Built into a temp directory so the caller's repository is never written to, and packed rather
+          # than run directly so `skillforge` on PATH behaves identically in both branches.
+          package_dir="$(mktemp -d)"
+          dotnet pack "$GITHUB_ACTION_PATH/src/SkillForge.Cli" \
+            --configuration Release --output "$package_dir"
+          # cd out of the caller's repository first: SkillForge's own NuGet.config maps sources explicitly,
+          # and --add-source from inside it fails with NU1110.
+          cd "$package_dir"
+          dotnet tool install --global SkillForge.Cli --add-source "$package_dir" --prerelease
+        fi
+
+        echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+    - name: Validate
+      id: validate
+      shell: bash
+      env:
+        SKILLFORGE_PATH: ${{ inputs.path }}
+        SKILLFORGE_STRICT: ${{ inputs.strict }}
+        SKILLFORGE_SUPPRESS: ${{ inputs.suppress }}
+        SKILLFORGE_SARIF: ${{ inputs.sarif-file }}
+      run: |
+        set -uo pipefail
+
+        args=("$SKILLFORGE_PATH" "--format" "sarif" "--output" "$SKILLFORGE_SARIF" "--no-color")
+
+        if [ "$SKILLFORGE_STRICT" = "true" ]; then
+          args+=("--strict")
+        fi
+
+        if [ -n "$SKILLFORGE_SUPPRESS" ]; then
+          # The CLI takes the comma-separated list as-is, so it is passed through unsplit.
+          args+=("--suppress" "$SKILLFORGE_SUPPRESS")
+        fi
+
+        # The exit code is the result, so it is captured rather than allowed to end the step: the SARIF
+        # still has to be uploaded when there are findings, which is exactly when the CLI exits 1.
+        skillforge validate "${args[@]}"
+        exit_code=$?
+
+        echo "exit-code=$exit_code" >> "$GITHUB_OUTPUT"
+        echo "sarif-file=$SKILLFORGE_SARIF" >> "$GITHUB_OUTPUT"
+
+        # A flag rather than hashFiles() in the upload step's condition: hashFiles only understands paths
+        # relative to the workspace, and sarif-file is whatever the caller passed.
+        if [ -s "$SKILLFORGE_SARIF" ]; then
+          echo "sarif-written=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    # Findings become inline pull-request annotations through code scanning, so this runs even when the
+    # validate step reported problems.
+    - name: Upload SARIF
+      if: ${{ always() && inputs.upload-sarif == 'true' && steps.validate.outputs.sarif-written == 'true' }}
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ inputs.sarif-file }}
+        category: skillforge
+
+    - name: Report the result
+      if: ${{ always() }}
+      shell: bash
+      env:
+        EXIT_CODE: ${{ steps.validate.outputs.exit-code }}
+      run: |
+        set -euo pipefail
+        case "${EXIT_CODE:-2}" in
+          0) echo "SkillForge found nothing to report." ;;
+          1) echo "::error::SkillForge reported findings. See the annotations, or the SARIF artifact."; exit 1 ;;
+          *) echo "::error::SkillForge could not run (exit ${EXIT_CODE:-unknown})."; exit 1 ;;
+        esac

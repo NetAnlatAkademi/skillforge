@@ -5,7 +5,7 @@ mirrored into the Obsidian vault under `SkillForge/` for cross-session context.
 
 Legend: `[ ]` open · `[x]` done · `[~]` in progress · `[-]` deliberately deferred
 
-Last updated: 2026-07-26
+Last updated: 2026-07-27
 
 ---
 
@@ -30,7 +30,7 @@ Last updated: 2026-07-26
 - [x] Create the GitHub remote (`NetAnlatAkademi/skillforge`, private) and push `main`
 - [x] Verify the CI workflow green on `ubuntu-latest` and `windows-latest`
 - [x] Pin GitHub Actions to `@v5` (the `@v4` versions emit a Node 20 deprecation warning)
-- [-] Make the repository public — deferred until v0.1.0 is usable
+- [x] Make the repository public — done once v0.1.0 was usable and the release was tagged
 
 ### Deviations from the roadmap
 
@@ -347,11 +347,17 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
   `docs/ci.md`; built-in support would do the same underneath.
   It refuses to claim an activation scope "broadened" — that cannot be judged honestly from a description's text,
   so the change is shown in full for a human to judge. Testing activation is what v0.3's evals are for.
-- [ ] Activation-risk rules (`SF3xxx` band)
-- [ ] Permission inference, cross-checked against `skillforge.yaml` declarations (SF1006, SF1007)
-- [ ] External URL and script analysis (SF1005, and the shell patterns in roadmap §11)
-- [ ] GitHub Action, published
-- [ ] PR annotations carrying the diff summary
+- [x] Activation-risk rules (`SF3xxx` band) — SF3001 and SF3002. SF3002 read the body too until it was measured:
+  16 findings on 229 real skills, roughly one genuine. Body scanning dropped (it belongs to `SF4xxx`) and the
+  weakest pattern deleted; the same 229 skills now give 5 findings, all defensible.
+- [x] Permission inference, cross-checked against `skillforge.yaml` declarations (SF1006, SF1007)
+- [x] External URL and script analysis (SF1005, and the shell patterns in roadmap §11) — seven literal shell
+  patterns, each carrying its own reason, and 42 known-positive/negative tests
+- [x] GitHub Action, published — composite `action.yml` at the repository root, dogfooded by
+  `.github/workflows/action.yml` on both of its outcomes
+- [x] PR annotations — via SARIF upload to code scanning, which is what puts findings inline on the pull request
+- [-] PR annotations carrying the *diff* summary — deferred: `diff` has no SARIF output yet, and inventing one
+  to carry a summary that is not a finding would misuse the format
 - [x] Rule suppression / configurable validation — `--suppress` plus a real `validation` section in
   `skillforge.yaml`. Measured on 229 skills: 610 warnings become 147 with `Suppressed: 463` shown, so `--strict`
   is finally usable on an existing collection. Suppression is unrestricted (errors included) because a repository

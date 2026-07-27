@@ -46,8 +46,26 @@ Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases
   the three changes that widen a skill's reach. Exits 1 on a new error; `--fail-on-change` makes any change fail.
   It deliberately does not claim an activation scope became "broader" — that cannot be judged honestly from text.
 
+### Added — milestone v0.2.0, activation and supply-chain risk
+
+- SF3001 and SF3002, the first two rules in the activation-risk band: a description claiming universal
+  applicability, and activation text aimed at the agent's decision rather than the reader's understanding.
+  Both read the description only, and both are warnings that say outright they are not calling the skill
+  malicious (ADR-006). SF3002 read the body as well until it was measured: 16 findings on 229 real skills,
+  roughly one genuine — the rest ordinary English, including one security skill's own detection pattern in a
+  string literal. Body scanning and the weakest pattern were dropped; the same 229 skills now produce 5
+  findings. Detecting injected instructions inside a body belongs to the reserved `SF4xxx` band.
+- A composite GitHub Action at the repository root: `uses: NetAnlatAkademi/skillforge@<ref>`. Runs `validate`,
+  writes SARIF and uploads it to code scanning, so findings arrive as inline pull-request annotations. Inputs
+  for `path`, `strict`, `suppress`, `sarif-file`, `upload-sarif` and `version`; `exit-code` as an output.
+  Leaving `version` empty builds the CLI from the action's own checkout, so the action works before the tool
+  is published on NuGet. A second workflow exercises both of its outcomes on the sample skills.
+
 ### Changed
 
+- Versions are now `YY.DayOfYear.Build`, computed in `Directory.Build.props` from UTC with `SKILLFORGE_BUILD`
+  overriding the build number. `26.208.1` rather than an invented `0.1.0`: the shape says when it was built
+  and promises nothing about compatibility, which is honest for a tool with no released contract yet.
 - Code-standards pass over the whole codebase: one type per file, `= default` on every cancellation-token
   parameter, cancellation checked once per rule by the validator rather than in each rule, magic values
   turned into constants, dead code removed, and synchronous console writes inside async methods awaited.
