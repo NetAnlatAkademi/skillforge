@@ -81,6 +81,29 @@ number in front of it.
 | SF2003 | The skill contains a binary file | **Implemented** (inspect) |
 | SF2004 | The skill contains an `evals` folder | **Implemented** (inspect) |
 
+## Measured against real skills
+
+Run over 32 skills installed on a working machine (2026-07-27), the rules behaved like this:
+
+| Code | Skills affected |
+|---|---|
+| SF1010 — no compatibility declared | 32 of 32 |
+| SF1009 — no license declared | 30 of 32 |
+| SF1002 — description states no activation context | 3 |
+| SF1003 — `SKILL.md` over 500 lines | 1 |
+
+No errors, and nothing crashed — the loader and the error rules hold up on real input.
+
+The two warnings at the top are worth reading carefully. They are not finding mistakes; they are finding that
+the `SKILL.md` convention in the wild does not carry `license` or `compatibility` at all. A warning that fires
+on virtually every input is noise, and noise teaches people to ignore warnings. The practical consequence is
+that **`--strict` fails all 32**, so it cannot be recommended as a default gate for existing skills — only for
+a repository that has decided to adopt these two fields.
+
+Nothing was changed in response to this measurement, deliberately: rule severity is part of the published
+contract, and per-rule configuration is the v0.2.0 item that solves it properly (rule suppression and
+configurable validation). Until then this table is the honest disclosure.
+
 ## What is still planned, and why it is not here yet
 
 SF1004 to SF1008 are reserved but unimplemented, and that is a scope decision rather than an oversight.

@@ -95,12 +95,21 @@ dotnet tool install --global SkillForge.Cli
 skillforge --help
 ```
 
-Or build the package locally:
+Or build and install the package locally:
 
 ```bash
-dotnet pack src/SkillForge.Cli -c Release
-dotnet tool install --global --add-source src/SkillForge.Cli/bin/Release SkillForge.Cli
+dotnet pack src/SkillForge.Cli -c Release -o artifacts/local-tool
+
+# Run this from OUTSIDE the repository — see the note below.
+cd ~
+dotnet tool install --global --add-source /path/to/skillforge/artifacts/local-tool SkillForge.Cli
 ```
+
+The `cd` is not optional. This repository's `NuGet.config` maps every package to nuget.org, and NuGet refuses
+to combine `--add-source` with source mapping — run the install from inside the repo and it fails with
+`NU1110`. Running it from anywhere else, the repo's config no longer applies and the local folder is accepted.
+
+Uninstall with `dotnet tool uninstall --global SkillForge.Cli`.
 
 ## Repository layout
 

@@ -59,7 +59,7 @@ skillforge validate ./my-skill --format sarif --output artifacts/skillforge.sari
 | Option | Default | Effect |
 |---|---|---|
 | `path` | `.` | Skill directory, or a `SKILL.md` path |
-| `--strict` | off | Treat warnings as failures |
+| `--strict` | off | Treat warnings as failures. Measured on 32 real skills, this fails all of them — see [validation-rules.md](validation-rules.md#measured-against-real-skills) before adopting it as a CI gate |
 | `--format`, `-f` | `console` | `console`, `json` or `sarif` |
 | `--output`, `-o` | stdout | Write machine-readable output to a file |
 
