@@ -29,9 +29,11 @@ jobs:
   publish:
     name: publish to NuGet.org
     runs-on: ubuntu-latest
-    # Deliberately not pinned to a GitHub environment. An environment would be a useful gate — publishing is
-    # not undoable — but it also lands in the OIDC claims, so adding one here without adding it to the
-    # nuget.org policy would be rejected. Add both together or neither.
+    # Required, not optional. The environment name lands in the OIDC claims and the nuget.org policy pins it,
+    # so this must match the policy exactly — running without it fails the token exchange with
+    # "Environment mismatch for policy 'SkillForge.Cli': expected 'production', actual ''". It doubles as a
+    # gate you can attach required reviewers to, which is worth having: publishing is not undoable.
+    environment: production
 
     steps:
       - uses: actions/checkout@v5
