@@ -45,7 +45,8 @@ internal static class CompositionRoot
         services.AddSingleton<IValidationReportSerializer, JsonReportSerializer>();
         services.AddSingleton<IValidationReportSerializer, SarifReportSerializer>();
 
-        foreach (var rule in SkillValidationRules.CreateDefault())
+        var fileSystem = new FileSystem();
+        foreach (var rule in SkillValidationRules.CreateDefault(fileSystem))
         {
             services.AddSingleton(rule);
         }

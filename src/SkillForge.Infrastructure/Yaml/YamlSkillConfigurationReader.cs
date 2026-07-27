@@ -12,9 +12,8 @@ namespace SkillForge.Infrastructure.Yaml;
 /// Reads <c>skillforge.yaml</c> with YamlDotNet.
 /// </summary>
 /// <remarks>
-/// Only the <c>validation</c> section is read today. The rest of the file — permissions, package options — is
-/// declared but not yet enforced, and <c>docs/skillforge-manifest-rfc.md</c> says so rather than implying the
-/// declarations do something.
+/// The <c>validation</c> and <c>permissions</c> sections are read. Package options are still declared but not
+/// enforced, and <c>docs/skillforge-manifest-rfc.md</c> says so rather than implying otherwise.
 ///
 /// An unreadable or malformed file yields the defaults plus SF1012. Failing the whole run would punish the user
 /// for a typo in an optional file; ignoring it silently would let a suppression they wrote quietly not apply.
@@ -24,6 +23,10 @@ public sealed class YamlSkillConfigurationReader : ISkillConfigurationReader
     private const string ValidationSection = "validation";
     private const string StrictField = "strict";
     private const string SuppressField = "suppress";
+    private const string PermissionsSection = "permissions";
+    private const string NetworkSection = "network";
+    private const string ShellSection = "shell";
+    private const string AllowedField = "allowed";
 
     private readonly IFileSystem _fileSystem;
 
@@ -74,20 +77,51 @@ public sealed class YamlSkillConfigurationReader : ISkillConfigurationReader
 
         if (root is null)
         {
-            // An empty file is a file with nothing to say, not a broken one.
-            return OperationResult<SkillConfiguration>.Success(SkillConfiguration.Default);
+            // An empty file is a file with nothing to say, not a broken one — but it does exist, and a rule may
+            // care about the difference between "declared nothing" and "shipped no file".
+            return OperationResult<SkillConfiguration>.Success(
+                SkillConfiguration.Default with { Exists = true });
         }
 
-        if (!root.Children.TryGetValue(new YamlScalarNode(ValidationSection), out var section)
-            || section is not YamlMappingNode validation)
+        var validation = Section(root, ValidationSection);
+        var permissions = Section(root, PermissionsSection);
+
+        var configuration = new SkillConfiguration(
+            validation is null ? false : ReadBoolean(validation, StrictField),
+            validation is null ? [] : ReadCodes(validation, SuppressField))
         {
-            return OperationResult<SkillConfiguration>.Success(SkillConfiguration.Default);
+            Exists = true,
+            NetworkAllowed = ReadNullableBoolean(Section(permissions, NetworkSection), AllowedField),
+            ShellAllowed = ReadStrings(Section(permissions, ShellSection), AllowedField),
+        };
+
+        return OperationResult<SkillConfiguration>.Success(configuration);
+    }
+
+    private static YamlMappingNode? Section(YamlMappingNode? parent, string name) =>
+        parent is not null
+        && parent.Children.TryGetValue(new YamlScalarNode(name), out var node)
+        && node is YamlMappingNode section
+            ? section
+            : null;
+
+    /// <summary>
+    /// Reads a boolean that may be absent, because "declared false" and "said nothing" are different claims.
+    /// </summary>
+    private static bool? ReadNullableBoolean(YamlMappingNode? section, string field)
+    {
+        if (section is null
+            || !section.Children.TryGetValue(new YamlScalarNode(field), out var node)
+            || node is not YamlScalarNode { Value: { Length: > 0 } value })
+        {
+            return null;
         }
 
-        return OperationResult<SkillConfiguration>.Success(new SkillConfiguration(
-            ReadBoolean(validation, StrictField),
-            ReadCodes(validation, SuppressField)));
+        return bool.TryParse(value, out var parsed) ? parsed : null;
     }
+
+    private static string[] ReadStrings(YamlMappingNode? section, string field) =>
+        section is null ? [] : ReadCodes(section, field);
 
     private static OperationResult<SkillConfiguration> Ignored(string reason) =>
         OperationResult<SkillConfiguration>.Success(

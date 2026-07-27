@@ -13,4 +13,27 @@ public sealed record SkillConfiguration(bool Strict, IReadOnlyList<string> Suppr
 {
     /// <summary>What applies when a skill ships no configuration file.</summary>
     public static SkillConfiguration Default { get; } = new(Strict: false, SuppressedCodes: []);
+
+    /// <summary>
+    /// Whether the skill actually ships a configuration file.
+    /// </summary>
+    /// <remarks>
+    /// The difference between "declared nothing" and "declared it needs nothing" matters: a rule can only accuse a
+    /// skill of contradicting its own declaration when there is a declaration to contradict.
+    /// </remarks>
+    public bool Exists { get; init; }
+
+    /// <summary>
+    /// What the skill declares under <c>permissions.network.allowed</c>, or <see langword="null"/> when it says
+    /// nothing about the network.
+    /// </summary>
+    public bool? NetworkAllowed { get; init; }
+
+    /// <summary>Commands the skill declares under <c>permissions.shell.allowed</c>.</summary>
+    public IReadOnlyList<string> ShellAllowed { get; init; } = [];
+
+    /// <summary>
+    /// Whether the skill declares any shell permission at all — an empty list is a declaration that it needs none.
+    /// </summary>
+    public bool DeclaresShellPermission => ShellAllowed.Count > 0;
 }

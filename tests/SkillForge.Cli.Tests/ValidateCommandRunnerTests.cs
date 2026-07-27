@@ -333,7 +333,7 @@ public sealed class ValidateCommandRunnerTests
     [Fact]
     public void RejectsMissingDependencies()
     {
-        var act = () => new ValidateCommandRunner(null!, null!, null!, null!, null!, null!);
+        var act = () => new ValidateCommandRunner(null!, null!, null!, null!, null!);
 
         act.Should().Throw<ArgumentNullException>();
     }
@@ -365,10 +365,12 @@ public sealed class ValidateCommandRunnerTests
             [new JsonReportSerializer(), new SarifReportSerializer()]);
 
         return new ValidateCommandRunner(
-            new StubLoader(loadFailure, loadDiagnostics ?? []),
+            new StubLoader(
+                loadFailure,
+                [.. loadDiagnostics ?? [], .. configurationDiagnostics ?? []],
+                configuration ?? SkillConfiguration.Default),
             new StubValidator(validationFindings ?? []),
             new StubDiscovery(discovered ?? []),
-            new StubConfigurationReader(configuration ?? SkillConfiguration.Default, configurationDiagnostics ?? []),
             files,
             output);
     }
@@ -378,23 +380,19 @@ public sealed class ValidateCommandRunnerTests
         public IReadOnlyList<string> FindSkillDirectories(string rootDirectory) => directories;
     }
 
-    private sealed class StubConfigurationReader(
-        SkillConfiguration configuration,
-        IReadOnlyList<Diagnostic> diagnostics) : ISkillConfigurationReader
-    {
-        public Task<OperationResult<SkillConfiguration>> ReadAsync(
-            string skillDirectory,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(OperationResult<SkillConfiguration>.Success(configuration, diagnostics));
-    }
 
-    private sealed class StubLoader(Diagnostic? failure, IReadOnlyList<Diagnostic> diagnostics) : ISkillLoader
+    private sealed class StubLoader(
+        Diagnostic? failure,
+        IReadOnlyList<Diagnostic> diagnostics,
+        SkillConfiguration configuration) : ISkillLoader
     {
         public Task<OperationResult<SkillDefinition>> LoadAsync(
             string path,
             CancellationToken cancellationToken) =>
             Task.FromResult(failure is null
-                ? OperationResult<SkillDefinition>.Success(CreateSkill(), diagnostics)
+                ? OperationResult<SkillDefinition>.Success(
+                    CreateSkill() with { Configuration = configuration },
+                    diagnostics)
                 : OperationResult<SkillDefinition>.Failure(failure));
 
         private static SkillDefinition CreateSkill() =>

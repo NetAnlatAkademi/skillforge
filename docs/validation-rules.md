@@ -10,6 +10,11 @@ Four further bands are reserved for the risk work planned after v0.1.0 (roadmap 
 retrieval risks, `SF4xxx` instruction injection, `SF5xxx` supply chain and provenance, `SF6xxx` version and
 evolution. Nothing in them exists yet.
 
+**Signals, not verdicts.** The permission and shell rules point things out; they never conclude that a skill is
+unsafe (ADR-006). Every construct SF1007 recognises has legitimate uses — a build script may well need `sudo`, and
+`rm -rf` on a temporary directory is housekeeping. What they have in common is that somebody deciding whether to
+trust a skill would want to know they are there, and nobody reads every script by hand.
+
 Through v0.1.0 the set was deliberately closed at 24 codes, which is why an unreadable `SKILL.md` widened
 SF0001 rather than getting a new code. Those bands lift that constraint on purpose. The rule that does **not**
 change: a published code's meaning and severity are fixed. Adding a code is cheap; redefining one breaks every
@@ -53,6 +58,9 @@ number in front of it.
 | SF1001 | 40 characters | An agent choosing between skills has only the description. "Reviews APIs." does not distinguish this one from ten others. |
 | SF1002 | Mentions *when, whenever, while, during, before, after, if* | A deliberate heuristic. A description can state its trigger without those words, which is why this is a warning the author may ignore. |
 | SF1003 | 500 lines | A long entry point means reference material should live in its own file that the agent reads only when needed. |
+| SF1005 | Only when a declaration contradicts the content | "A URL is present" fires on 60 of 203 real skills and says nothing; `inspect` reports URLs as an observation instead. A skill that declares `network.allowed: false` and then names a host has one of the two wrong. |
+| SF1006 | Any script, unless shell permission is declared | Measured: 7 of 203 real skills ship a script, so this speaks up about a few percent rather than everything. |
+| SF1007 | Seven literal shell patterns, one finding per pattern per file | Deliberately literal. A pattern that guesses at intent misses the obfuscated case and cries wolf about the ordinary one. |
 
 ## Errors
 
@@ -77,9 +85,9 @@ number in front of it.
 | SF1002 | Description does not state an activation context | **Implemented** |
 | SF1003 | `SKILL.md` is longer than 500 lines | **Implemented** |
 | SF1004 | An unused file is present | Planned |
-| SF1005 | An external URL is present | Planned |
-| SF1006 | A script file exists but no permission is declared | Planned |
-| SF1007 | A shell command requests broad privileges | Planned |
+| SF1005 | The skill points at a host but declares `network.allowed: false` | **Implemented** |
+| SF1006 | A script ships but no shell permission is declared | **Implemented** |
+| SF1007 | A script uses a construct that reaches further than usual | **Implemented** |
 | SF1008 | Package dependencies are not pinned | Planned |
 | SF1009 | No license is declared | **Implemented** |
 | SF1010 | No agent compatibility information is declared | **Implemented** |
@@ -161,6 +169,18 @@ The difference between the two responses is worth stating: SF0008 was **wrong** 
 it was fixed. SF1009 and SF1010 are **right** but unwanted by most existing skills, which is a configuration
 problem, not a correctness one.
 
+### The three permission rules, measured on 229 skills
+
+| Code | Findings | Reading |
+|---|---|---|
+| SF1006 | 11 skills | About five percent ship a script without saying so. Proportionate. |
+| SF1007 | 5 findings | All of them `rm -rf`. |
+| SF1005 | 0 | The right kind of zero: no skill in the sample ships a `skillforge.yaml`, so none has made a claim to contradict. |
+
+SF1007 firing on only one of its seven patterns proves nothing by itself — a regex that matches nothing and a regex
+that is broken look identical from the outside. Each pattern therefore has a known-positive and known-negative test,
+which is how the scarcity is known to be real rather than a bug.
+
 ## What is still planned, and why it is not here yet
 
 SF1004 to SF1008 are reserved but unimplemented, and that is a scope decision rather than an oversight.
@@ -169,8 +189,6 @@ Each needs something this release deliberately does not do:
 | Code | What it would need |
 |---|---|
 | SF1004 (unused file) | A definition of "used" beyond a Markdown link. A script invoked by another script, or a file an agent is expected to discover by convention, would be reported as unused today — a false positive that trains people to ignore warnings. |
-| SF1005 (external URL) | This is reported as an observation by `inspect` (SF2002). Promoting it to a warning means deciding that referencing a URL is a problem, which depends on policy SkillForge does not have. |
-| SF1006, SF1007 (permissions, privileges) | Reading `skillforge.yaml` and cross-checking declarations against contents, plus the shell pattern matching described below. This is Milestone v0.2.0. |
 | SF1008 (unpinned dependencies) | A definition of what a skill's dependencies are. Nothing in the format declares them yet. |
 
 ## Security signals

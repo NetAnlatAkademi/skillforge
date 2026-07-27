@@ -12,7 +12,7 @@ namespace SkillForge.Infrastructure.Tests;
 /// </summary>
 public sealed class SkillLoaderIntegrationTests
 {
-    private readonly SkillLoader _loader = new(new FileSystem(), new YamlFrontmatterParser());
+    private readonly SkillLoader _loader = new(new FileSystem(), new YamlFrontmatterParser(), new YamlSkillConfigurationReader(new FileSystem()));
 
     [Fact]
     public async Task LoadsTheValidSample()

@@ -16,8 +16,8 @@ namespace SkillForge.Infrastructure.Tests;
 /// </remarks>
 public sealed class ValidationIntegrationTests
 {
-    private readonly SkillLoader _loader = new(new FileSystem(), new YamlFrontmatterParser());
-    private readonly SkillValidator _validator = new(SkillValidationRules.CreateDefault());
+    private readonly SkillLoader _loader = new(new FileSystem(), new YamlFrontmatterParser(), new YamlSkillConfigurationReader(new FileSystem()));
+    private readonly SkillValidator _validator = new(SkillValidationRules.CreateDefault(new FileSystem()));
 
     [Theory]
     [InlineData("valid-skill")]

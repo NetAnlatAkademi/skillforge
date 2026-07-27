@@ -2,6 +2,7 @@ using SkillForge.Application.Abstractions;
 using SkillForge.Domain;
 using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Skills;
+using SkillForge.Domain.Validation;
 
 namespace SkillForge.Application.Skills;
 
@@ -25,18 +26,28 @@ public sealed class SkillLoader : ISkillLoader
 
     private readonly IFileSystem _fileSystem;
     private readonly IFrontmatterParser _frontmatterParser;
+    private readonly ISkillConfigurationReader _configurationReader;
     private readonly SkillPathGuard _pathGuard;
 
     /// <summary>Initialises the loader.</summary>
     /// <param name="fileSystem">File system used for all reads.</param>
     /// <param name="frontmatterParser">Parser used for the YAML block.</param>
-    public SkillLoader(IFileSystem fileSystem, IFrontmatterParser frontmatterParser)
+    /// <param name="configurationReader">
+    /// Reads the skill's optional <c>skillforge.yaml</c>. It belongs to loading because that file is one of the
+    /// skill''s files, and because rules that compare declarations against contents need it on the model.
+    /// </param>
+    public SkillLoader(
+        IFileSystem fileSystem,
+        IFrontmatterParser frontmatterParser,
+        ISkillConfigurationReader configurationReader)
     {
         ArgumentNullException.ThrowIfNull(fileSystem);
         ArgumentNullException.ThrowIfNull(frontmatterParser);
+        ArgumentNullException.ThrowIfNull(configurationReader);
 
         _fileSystem = fileSystem;
         _frontmatterParser = frontmatterParser;
+        _configurationReader = configurationReader;
         _pathGuard = new SkillPathGuard(fileSystem);
     }
 
@@ -87,6 +98,14 @@ public sealed class SkillLoader : ISkillLoader
 
         var resources = CollectResources(directoryPath, diagnostics, cancellationToken);
 
+        // A skillforge.yaml that could not be parsed is reported here and its settings dropped, rather than
+        // failing the load: the skill itself is fine, and an optional file's typo should not hide it.
+        var configuration = await _configurationReader
+            .ReadAsync(directoryPath, cancellationToken)
+            .ConfigureAwait(false);
+
+        diagnostics.AddRange(configuration.Diagnostics);
+
         var definition = new SkillDefinition(
             Name: frontmatter.Name ?? string.Empty,
             Description: frontmatter.Description ?? string.Empty,
@@ -96,7 +115,10 @@ public sealed class SkillLoader : ISkillLoader
             Resources: resources,
             Body: split.Body,
             BodyStartLine: split.BodyStartLine,
-            SkillFileLineCount: split.TotalLineCount);
+            SkillFileLineCount: split.TotalLineCount)
+        {
+            Configuration = configuration.Value ?? SkillConfiguration.Default,
+        };
 
         return OperationResult<SkillDefinition>.Success(definition, diagnostics);
     }

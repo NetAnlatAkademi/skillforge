@@ -117,7 +117,6 @@ public sealed class InitCommandRunnerTests
             loader,
             validator,
             new NoSkillsFound(),
-            new NoConfiguration(),
             fileSystem,
             output);
 

@@ -186,7 +186,7 @@ public sealed class SkillValidatorTests
     [Fact]
     public void TheDefaultRuleSetCoversTheImplementedRulesExactlyOnce()
     {
-        var codes = SkillValidationRules.CreateDefault().Select(rule => rule.Code).ToArray();
+        var codes = SkillValidationRules.CreateDefault(new Fakes.FakeFileSystem()).Select(rule => rule.Code).ToArray();
 
         codes.Should().OnlyHaveUniqueItems();
         codes.Should().Contain(
@@ -202,6 +202,10 @@ public sealed class SkillValidatorTests
             DiagnosticCodes.SkillFileTooLong,
             DiagnosticCodes.LicenseMissing,
             DiagnosticCodes.CompatibilityMissing,
+            DiagnosticCodes.ExternalUrlPresent,
+            DiagnosticCodes.ScriptWithoutDeclaredPermission,
+            DiagnosticCodes.BroadShellPrivileges,
+            DiagnosticCodes.ReferenceLeavesSkill,
         ]);
     }
 

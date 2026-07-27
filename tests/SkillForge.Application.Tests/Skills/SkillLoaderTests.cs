@@ -1,3 +1,4 @@
+using SkillForge.Application.Abstractions;
 using SkillForge.Application.Skills;
 using SkillForge.Application.Tests.Fakes;
 using SkillForge.Domain;
@@ -26,7 +27,7 @@ public sealed class SkillLoaderTests
     public async Task LoadsASkillFromItsDirectory()
     {
         var fileSystem = new FakeFileSystem().AddFile(SkillFile, ValidSkillFile);
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning(name: "demo"));
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning(name: "demo"));
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -41,7 +42,7 @@ public sealed class SkillLoaderTests
     public async Task LoadsASkillFromTheSkillFilePath()
     {
         var fileSystem = new FakeFileSystem().AddFile(SkillFile, ValidSkillFile);
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillFile, CancellationToken.None);
 
@@ -53,7 +54,7 @@ public sealed class SkillLoaderTests
     public async Task ReportsSF0001WhenTheDirectoryHasNoSkillFile()
     {
         var fileSystem = new FakeFileSystem().AddDirectory(SkillDirectory);
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -65,7 +66,7 @@ public sealed class SkillLoaderTests
     [Fact]
     public async Task ReportsSF0001WhenThePathDoesNotExistAtAll()
     {
-        var loader = new SkillLoader(new FakeFileSystem(), StubFrontmatterParser.Returning());
+        var loader = CreateLoader(new FakeFileSystem(), StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync("/nowhere", CancellationToken.None);
 
@@ -82,7 +83,7 @@ public sealed class SkillLoaderTests
         // A locked or permission-denied SKILL.md must read as a diagnostic, not a stack trace.
         var failure = (Exception)Activator.CreateInstance(failureType, "denied")!;
         var fileSystem = new FakeFileSystem().FailReadWith(SkillFile, failure);
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -97,7 +98,7 @@ public sealed class SkillLoaderTests
     public async Task AnEmptySkillFileReportsSF0002()
     {
         var fileSystem = new FakeFileSystem().AddFile(SkillFile, string.Empty);
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -110,7 +111,7 @@ public sealed class SkillLoaderTests
     public async Task ReportsSF0002WhenThereIsNoFrontmatter()
     {
         var fileSystem = new FakeFileSystem().AddFile(SkillFile, "# Demo\n\nNo frontmatter here.\n");
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -125,7 +126,7 @@ public sealed class SkillLoaderTests
     public async Task PropagatesParserFailureWithoutBuildingASkill()
     {
         var fileSystem = new FakeFileSystem().AddFile(SkillFile, ValidSkillFile);
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Failing());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Failing());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -140,7 +141,7 @@ public sealed class SkillLoaderTests
     {
         var duplicate = Diagnostic.Error(DiagnosticCodes.DuplicateMetadataField, "declared twice");
         var fileSystem = new FakeFileSystem().AddFile(SkillFile, ValidSkillFile);
-        var loader = new SkillLoader(
+        var loader = CreateLoader(
             fileSystem,
             StubFrontmatterParser.Returning(diagnostics: [duplicate]));
 
@@ -156,7 +157,7 @@ public sealed class SkillLoaderTests
     {
         var parser = StubFrontmatterParser.Returning();
         var fileSystem = new FakeFileSystem().AddFile(SkillFile, ValidSkillFile);
-        var loader = new SkillLoader(fileSystem, parser);
+        var loader = CreateLoader(fileSystem, parser);
 
         await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -170,7 +171,7 @@ public sealed class SkillLoaderTests
     {
         // Required-field rules own SF0004 and SF0005; the loader only models what is there.
         var fileSystem = new FakeFileSystem().AddFile(SkillFile, ValidSkillFile);
-        var loader = new SkillLoader(
+        var loader = CreateLoader(
             fileSystem,
             StubFrontmatterParser.Returning(name: null, description: null));
 
@@ -190,7 +191,7 @@ public sealed class SkillLoaderTests
             .AddFile("/skills/demo/references/notes.md", "notes")
             .AddFile("/skills/demo/scripts/analyze.ps1", "Write-Host 'hi'");
 
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -209,7 +210,7 @@ public sealed class SkillLoaderTests
             .AddFile(SkillFile, ValidSkillFile)
             .AddFile("/skills/demo/m.md", "m");
 
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -224,7 +225,7 @@ public sealed class SkillLoaderTests
             .AddFile(SkillFile, ValidSkillFile)
             .AddFile("/skills/demo/scripts/analyze.ps1", "12345");
 
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -244,7 +245,7 @@ public sealed class SkillLoaderTests
             .AddFile(SkillFile, ValidSkillFile)
             .AddFile(ignoredFile, "content");
 
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -260,7 +261,7 @@ public sealed class SkillLoaderTests
             .AddFile("/elsewhere/secrets.env", "TOKEN=abc")
             .AddLink("/skills/demo/leak.env", "/elsewhere/secrets.env");
 
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -279,7 +280,7 @@ public sealed class SkillLoaderTests
             .AddFile("/skills/demo/references/notes.md", "notes")
             .AddLink("/skills/demo/alias.md", "/skills/demo/references/notes.md");
 
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -291,7 +292,7 @@ public sealed class SkillLoaderTests
     public async Task RecordsTheBodyAndLineCount()
     {
         var fileSystem = new FakeFileSystem().AddFile(SkillFile, ValidSkillFile);
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -303,7 +304,7 @@ public sealed class SkillLoaderTests
     public async Task FrontmatterLineNumbersComeFromTheFileNotTheParser()
     {
         var fileSystem = new FakeFileSystem().AddFile(SkillFile, "\n---\nname: demo\n---\n# Demo\n");
-        var loader = new SkillLoader(fileSystem, StubFrontmatterParser.Returning());
+        var loader = CreateLoader(fileSystem, StubFrontmatterParser.Returning());
 
         var result = await loader.LoadAsync(SkillDirectory, CancellationToken.None);
 
@@ -314,18 +315,28 @@ public sealed class SkillLoaderTests
     [Fact]
     public async Task RejectsABlankPath()
     {
-        var loader = new SkillLoader(new FakeFileSystem(), StubFrontmatterParser.Returning());
+        var loader = CreateLoader(new FakeFileSystem(), StubFrontmatterParser.Returning());
 
         var act = async () => await loader.LoadAsync("   ", CancellationToken.None);
 
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
+    /// <summary>
+    /// The loader also reads the skill's skillforge.yaml. These tests are about loading, so the stub says the
+    /// ordinary thing: the skill ships no configuration file.
+    /// </summary>
+    private static SkillLoader CreateLoader(
+        IFileSystem fileSystem,
+        IFrontmatterParser parser,
+        ISkillConfigurationReader? configuration = null) =>
+        new(fileSystem, parser, configuration ?? new StubConfigurationReader());
+
     [Fact]
     public void RejectsMissingDependencies()
     {
-        var withoutFileSystem = () => new SkillLoader(null!, StubFrontmatterParser.Returning());
-        var withoutParser = () => new SkillLoader(new FakeFileSystem(), null!);
+        var withoutFileSystem = () => CreateLoader(null!, StubFrontmatterParser.Returning());
+        var withoutParser = () => CreateLoader(new FakeFileSystem(), null!);
 
         withoutFileSystem.Should().Throw<ArgumentNullException>();
         withoutParser.Should().Throw<ArgumentNullException>();

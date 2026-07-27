@@ -33,6 +33,16 @@ public sealed record SkillDefinition(
     int BodyStartLine,
     int SkillFileLineCount)
 {
+    /// <summary>
+    /// What the skill's own <c>skillforge.yaml</c> declares, or the defaults when it ships none.
+    /// </summary>
+    /// <remarks>
+    /// Part of the loaded skill because the file is one of the skill's files. Rules that compare what a skill
+    /// declares against what it contains — a script with no shell permission, a URL with the network declared off —
+    /// need it, and having the loader read it keeps that comparison inside the rules rather than in a command class.
+    /// </remarks>
+    public Validation.SkillConfiguration Configuration { get; init; } = Validation.SkillConfiguration.Default;
+
     /// <summary>The conventional file name of a skill's entry point.</summary>
     public const string SkillFileName = "SKILL.md";
 
