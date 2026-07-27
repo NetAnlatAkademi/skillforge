@@ -111,6 +111,13 @@ public sealed class ConsoleReportRenderer : IValidationReportRenderer
             + $"Warnings: {run.Summary.Warnings}  "
             + $"Info: {run.Summary.Info}"
             + Suppressed(run.SuppressedCount));
+
+        if (!options.Quiet)
+        {
+            // Across the whole batch, not per skill. A run over 229 skills that repeated the suppress hint 229 times
+            // would be demonstrating the problem it is trying to solve.
+            WriteNextSteps([.. run.Skills.SelectMany(report => report.Diagnostics)], options);
+        }
     }
 
     /// <summary>
@@ -157,9 +164,32 @@ public sealed class ConsoleReportRenderer : IValidationReportRenderer
         _console.MarkupLine(
             $"{Style($"{marker} {diagnostic.Code}", colour, options)} {Escape(diagnostic.Message)}{suffix}");
 
+        // A fix is shown without asking for --verbose, and the suggestion still is not. The difference is what the
+        // reader has to do with each: a fix is text to paste, and making somebody pass a flag to learn how to solve
+        // a one-line problem is telling them what is wrong and leaving them to work out the schema. A suggestion is
+        // prose about the reasoning, which is what --verbose is for.
+        if (diagnostic.Fix is { Length: > 0 } fix)
+        {
+            WriteFix(fix, options);
+        }
+
         if (options.Verbose && diagnostic.Suggestion is { Length: > 0 } suggestion)
         {
             _console.MarkupLine($"    -> {Escape(suggestion)}");
+        }
+    }
+
+    /// <summary>
+    /// Writes a fix under its finding, indented so a multi-line snippet keeps the shape it needs to be pasted in.
+    /// </summary>
+    private void WriteFix(string fix, ReportRenderOptions options)
+    {
+        var lines = fix.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var label = index == 0 ? Style("fix", "cyan", options) : "   ";
+            _console.MarkupLine($"    {label}  {Escape(lines[index])}");
         }
     }
 
@@ -183,7 +213,74 @@ public sealed class ConsoleReportRenderer : IValidationReportRenderer
             + $"Warnings: {report.Summary.Warnings}  "
             + $"Info: {report.Summary.Info}"
             + Suppressed(report.SuppressedCount));
+
+        if (!options.Quiet)
+        {
+            WriteNextSteps(report.Diagnostics, options);
+        }
     }
+
+    /// <summary>
+    /// Closes the report by telling the reader what to do with it.
+    /// </summary>
+    /// <remarks>
+    /// Two things only, both of which a reader would otherwise have to work out. How much of this list is trivially
+    /// fixable, so a report of four warnings is not read as four problems. And the exact flag for the rules that
+    /// fire on almost every skill: SF1009 and SF1010 are correct and were kept for that reason, but a reader meeting
+    /// them for the first time deserves the escape hatch rather than a lecture about it in the documentation.
+    ///
+    /// Only codes actually present are named, because a suggestion to suppress something that did not fire is noise
+    /// of exactly the kind this is meant to reduce.
+    /// </remarks>
+    private void WriteNextSteps(IReadOnlyList<Diagnostic> diagnostics, ReportRenderOptions options)
+    {
+        if (diagnostics.Count == 0)
+        {
+            return;
+        }
+
+        var fixable = diagnostics.Count(diagnostic => diagnostic.Fix is { Length: > 0 });
+
+        var noisy = AlwaysFiringCodes
+            .Where(code => diagnostics.Any(d => string.Equals(d.Code, code, StringComparison.Ordinal)))
+            .ToArray();
+
+        if (fixable == 0 && noisy.Length == 0)
+        {
+            return;
+        }
+
+        _console.WriteLine();
+
+        var first = true;
+        void Line(string text)
+        {
+            _console.MarkupLine(first ? $"{Style("Next:", "bold", options)} {text}" : $"      {text}");
+            first = false;
+        }
+
+        if (fixable > 0)
+        {
+            Line($"{fixable} of these {(fixable == 1 ? "has" : "have")} a fix printed above.");
+        }
+
+        if (noisy.Length > 0)
+        {
+            var one = noisy.Length == 1;
+            Line($"{string.Join(" and ", noisy)} {(one ? "fires" : "fire")} on almost every skill. "
+                + $"If {(one ? "it does" : "they do")} not");
+            Line($"apply here, run with:  --suppress {string.Join(",", noisy)}");
+        }
+    }
+
+    /// <summary>
+    /// The rules measured to fire on approximately every real skill: SF1009 on 30 of 32 and SF1010 on 32 of 32 in
+    /// the first sample, both on essentially all of a later 229. They were kept because they are right — see
+    /// <c>docs/validation-rules.md</c> — which is exactly why the report should hand over the flag rather than
+    /// pretend the reader will find it.
+    /// </summary>
+    private static readonly string[] AlwaysFiringCodes =
+        [DiagnosticCodes.LicenseMissing, DiagnosticCodes.CompatibilityMissing];
 
     /// <summary>
     /// Suppression is never invisible. A report that quietly omitted findings would be lying about what was

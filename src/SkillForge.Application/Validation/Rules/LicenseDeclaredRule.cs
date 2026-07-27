@@ -28,7 +28,8 @@ public sealed class LicenseDeclaredRule : ISkillValidationRule
                 "No license is declared.",
                 SkillDefinition.SkillFileName,
                 skill.Frontmatter.StartLine,
-                "Add a 'license' field, for example 'license: MIT', so others know the terms."))
+                "Add a 'license' field, for example 'license: MIT', so others know the terms.",
+                "add to the frontmatter:  license: MIT"))
             : RuleResult.None();
     }
 }

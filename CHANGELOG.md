@@ -49,6 +49,28 @@ test.
 Provenance ("no source declared, so the origin cannot be checked") was considered and **not** shipped: it would
 fire on approximately every skill, and SF1009 and SF1010 already occupy that shape.
 
+### Changed — reports say how to fix things, not just what is wrong
+
+- A finding whose resolution is one known edit now carries a `Fix`: the literal text to paste. It prints **without**
+  `--verbose`, because making somebody pass a flag to learn how to solve a one-line problem tells them what is wrong
+  and leaves them to work out the schema. `--verbose` still prints the reasoning, which is what it was for.
+- SF1006's fix names the interpreters inferred from the skill's own scripts (`allowed: [bash, node]` from the `.sh`
+  and `.js` files it ships). A guess from extensions, presented as one — a reader confirms or corrects it in a
+  second, where an empty list makes them open four files first.
+- SF1009 and SF1010 carry one-line frontmatter fixes.
+- A `Next:` footer closes a report: how many findings have a fix, and the exact `--suppress` flag for the rules that
+  fire on almost every skill. Only codes that actually fired are named; `--quiet` drops it. Batch runs print it once
+  for the whole run, not once per skill.
+- JSON output gained a `fix` field per diagnostic. Additive, so the schema version is unchanged. **SARIF does not
+  carry it** — SARIF's `fixes` describes precise artifact edits, and a paste-this-in snippet is not one.
+
+### Fixed
+
+- SF1006 pointed at `skillforge.yaml` even for the majority of skills that have no such file. A reader followed the
+  location to an empty path, and a SARIF consumer annotated a file outside the repository, so GitHub dropped or
+  misplaced the annotation. It now points at the configuration file when one exists and at `SKILL.md` otherwise,
+  matching SF1009 and SF1010. The suggestion still names the file to create. Found in real output.
+
 ### Added — `SF6xxx`, version and evolution
 
 - SF6001: the skill's reach grew while its declared version stayed the same, so anyone pinned to that version

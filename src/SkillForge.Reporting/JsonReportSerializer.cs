@@ -115,6 +115,10 @@ public sealed class JsonReportSerializer : IValidationReportSerializer
                 ["filePath"] = diagnostic.FilePath,
                 ["line"] = diagnostic.Line,
                 ["suggestion"] = diagnostic.Suggestion,
+                // Additive: a consumer that does not know the field ignores it, which is why the schema version is
+                // unchanged. SARIF deliberately does not carry this -- its `fixes` property describes precise
+                // artifact edits, and a paste-this-in snippet is not one.
+                ["fix"] = diagnostic.Fix,
             });
         }
 

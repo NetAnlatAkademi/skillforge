@@ -9,7 +9,7 @@ Global options work before or after the command:
 | Option | Effect |
 |---|---|
 | `--quiet`, `-q` | Print only errors and the final verdict |
-| `--verbose` | Print the suggestion attached to each finding |
+| `--verbose` | Print the reasoning behind each finding. The *fix* is printed without it — see below |
 | `--no-color` | Disable colour. The `NO_COLOR` environment variable does the same |
 | `--help`, `-h` | Show help |
 | `--version` | Show the tool version |
@@ -270,3 +270,48 @@ contents produce the same hash on any machine. The `.sha256` file uses the forma
 Validation is a gate. A skill with errors is not packaged unless `--skip-validation` is passed, and when it
 is, the CLI says so rather than doing it silently. Tooling directories (`bin`, `obj`, `.git`, `node_modules`,
 `artifacts`, …) are never included.
+
+## What a report tells you
+
+A finding whose resolution is a single known edit prints that edit, and prints it **without** `--verbose`:
+
+```text
+! SF1006 The skill ships 4 scripts (scripts/helper.js, scripts/server.cjs,
+scripts/start-server.sh, scripts/stop-server.sh) but declares no shell permission. (SKILL.md:1)
+    fix  create skillforge.yaml:
+           permissions:
+             shell:
+               allowed: [bash, node]
+! SF1009 No license is declared. (SKILL.md:1)
+    fix  add to the frontmatter:  license: MIT
+
+Result: VALID WITH WARNINGS
+Errors: 0  Warnings: 4  Info: 0
+
+Next: 3 of these have a fix printed above.
+      SF1009 and SF1010 fire on almost every skill. If they do not
+      apply here, run with:  --suppress SF1009,SF1010
+```
+
+Three things are deliberate here.
+
+**A fix is not behind a flag.** Making somebody pass `--verbose` to learn how to resolve a one-line problem tells
+them what is wrong and leaves them to work out the schema. `--verbose` still exists, and still prints the prose
+about *why* a rule fired — that is reasoning, not a paste-able edit.
+
+**Most findings have no fix, and that is not an omission.** SF1007 points at a script that reaches further than
+usual; only a human can decide what should replace it. Inventing a fix there would be worse than silence.
+
+**SF1006's fix names interpreters inferred from the skill's own scripts** — `[bash, node]` above came from the
+`.sh` and `.js` files. It is a guess from file extensions, and it is presented as one: a reader can confirm or
+correct it in a second, whereas an empty list makes them open four files first.
+
+The `Next:` footer says how much of the list is trivially fixable, so four warnings are not read as four problems,
+and hands over the exact `--suppress` flag for SF1009 and SF1010. Those two fire on approximately every real skill.
+They were kept because they are correct — see [validation-rules.md](validation-rules.md) — which is precisely why
+the report should give a first-time reader the escape hatch instead of burying it in documentation. Only codes that
+actually fired are named. `--quiet` drops the footer.
+
+In JSON output the same text is available as a `fix` field on each diagnostic. It is additive, so the schema version
+is unchanged and a consumer that does not know the field ignores it. **SARIF deliberately does not carry it**: SARIF's
+`fixes` property describes precise artifact edits, and a paste-this-in snippet is not one.

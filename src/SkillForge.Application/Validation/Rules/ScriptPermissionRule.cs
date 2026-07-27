@@ -50,6 +50,9 @@ public sealed class ScriptPermissionRule : ISkillValidationRule
             ? (SkillDefinition.ConfigurationFileName, (int?)null)
             : (SkillDefinition.SkillFileName, 1);
 
+        var interpreters = ScriptInterpreters.For(scripts.Select(script => script.RelativePath));
+        var allowed = interpreters.Count > 0 ? string.Join(", ", interpreters) : "bash";
+
         return RuleResult.One(Diagnostic.Warning(
             Code,
             $"The skill ships {(scripts.Length == 1 ? "a script" : $"{scripts.Length} scripts")} "
@@ -57,6 +60,14 @@ public sealed class ScriptPermissionRule : ISkillValidationRule
             file,
             line,
             "List what the skill needs to run under 'permissions.shell.allowed' in "
-                + "skillforge.yaml, so somebody deciding whether to install it can see it beforehand."));
+                + "skillforge.yaml, so somebody deciding whether to install it can see it beforehand.",
+            // The interpreters are inferred from the scripts' extensions, so the reader is checking a guess rather
+            // than working the answer out from four files. A wrong guess they can see beats a blank they cannot.
+            $"""
+             create skillforge.yaml:
+               permissions:
+                 shell:
+                   allowed: [{allowed}]
+             """));
     }
 }

@@ -29,7 +29,8 @@ public sealed class CompatibilityDeclaredRule : ISkillValidationRule
                 SkillDefinition.SkillFileName,
                 skill.Frontmatter.StartLine,
                 "List the agents this skill was written for under 'compatibility', "
-                    + "for example 'claude-code'."))
+                    + "for example 'claude-code'.",
+                "add to the frontmatter:  compatibility: [claude-code]"))
             : RuleResult.None();
     }
 }
