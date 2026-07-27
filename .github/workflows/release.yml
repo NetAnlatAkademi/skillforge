@@ -129,19 +129,32 @@ jobs:
           --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           --skip-duplicate
 
-      # Delete-then-upload rather than `--clobber`. Clobber updates the existing asset in place and NuGet's
-      # already-published name makes that a 422 ("Validation Failed") when an asset of the same name is already
-      # there — which it was, having been attached by hand when the first release was cut. Deleting first is
-      # idempotent whether or not the asset exists.
+      # Releases in this repository are immutable, so a published release's assets cannot be added to,
+      # replaced or deleted — `--clobber` and delete-then-upload both fail with "Cannot delete asset from an
+      # immutable release". The asset therefore has to arrive with the release or not at all, which is why this
+      # creates the release when it is missing and reports rather than fails when it is already there.
+      #
+      # NuGet is the actual publish target and it has already succeeded by this point. Nothing here is allowed
+      # to turn a successful publish into a red run.
       - name: Attach the package to the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           package="./artifacts/release/SkillForge.Cli.${{ steps.version.outputs.version }}.nupkg"
 
-          gh release delete-asset "$TAG" "$(basename "$package")" \
-            --yes --repo "${{ github.repository }}" || true
-
-          gh release upload "$TAG" "$package" --repo "${{ github.repository }}"
+          if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
+            if gh release view "$TAG" --repo "$REPO" --json assets \
+                 --jq '.assets[].name' | grep -qx "$(basename "$package")"; then
+              echo "The release already carries $(basename "$package"). Nothing to do."
+            else
+              echo "::notice::Release $TAG exists and is immutable, so the package could not be attached."
+              echo "::notice::It is published on NuGet.org, which is what matters. Attach the .nupkg when"
+              echo "::notice::creating the release if you want it on the release page too."
+            fi
+          else
+            gh release create "$TAG" "$package" --repo "$REPO" \
+              --title "SkillForge ${{ steps.version.outputs.version }}" --generate-notes
+          fi
