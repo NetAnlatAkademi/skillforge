@@ -89,12 +89,12 @@ dotnet run --project src/SkillForge.Cli -- --help
 
 ## Install as a global tool
 
-Once published:
-
 ```bash
 dotnet tool install --global SkillForge.Cli
 skillforge --help
 ```
+
+Published on [NuGet.org](https://www.nuget.org/packages/SkillForge.Cli).
 
 Or build and install the package locally:
 

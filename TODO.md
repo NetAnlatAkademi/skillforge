@@ -356,6 +356,10 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 - [x] GitHub Action, published — composite `action.yml` at the repository root, dogfooded by
   `.github/workflows/action.yml` on both of its outcomes
 - [x] PR annotations — via SARIF upload to code scanning, which is what puts findings inline on the pull request
+- [x] Publish `SkillForge.Cli` to NuGet.org — `.github/workflows/release.yml`, triggered by a `v*` tag, using
+  trusted publishing so no API key exists anywhere. Three things are pinned by the nuget.org policy and break
+  publishing if changed without updating it: the workflow file name, the `production` environment, and the
+  account username in the `NUGET_USER` secret.
 - [-] PR annotations carrying the *diff* summary — deferred: `diff` has no SARIF output yet, and inventing one
   to carry a summary that is not a finding would misuse the format
 - [x] Rule suppression / configurable validation — `--suppress` plus a real `validation` section in
