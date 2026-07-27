@@ -1,0 +1,171 @@
+Agent Skills / MCP Ekosistemi — Önemli Gelişmeler
+
+1. MCP’nin en büyük protokol değişikliği yayına hazırlanıyor
+
+MCP’nin 2026-07-28 sürümü için release candidate kilitlendi; nihai spesifikasyonun 28 Temmuz 2026 tarihinde yayımlanması planlanıyor.
+
+Bu sürüm:
+- Protokol seviyesinde oturum ve initialize el sıkışmasını kaldırıyor.
+- Stateless HTTP çağrılarına geçiyor.
+- Mcp-Method ve Mcp-Name başlıklarıyla gateway ve yönlendirme desteğini güçlendiriyor.
+- MCP Apps ve uzun süreli işler için Tasks extension getiriyor.
+- OAuth/OIDC uyumunu sıkılaştırıyor.
+- Roots, Sampling ve Logging özelliklerini deprecation sürecine alıyor.
+- Tool şemalarında JSON Schema 2020-12 desteği getiriyor.
+
+SkillForge çıkarımı:
+MCP sunucusu analizi roadmap’e erkenden alınmalı ancak CLI çekirdeğine gömülmemeli. Ayrı adapter’lar kullanılmalı:
+
+Skill Analyzer
+MCP 2025-11-25 Adapter
+MCP 2026-07-28 Adapter
+
+skillforge inspect gelecekte şu kontrolleri yapmalı:
+- Kullanılan MCP protokol sürümü
+- Deprecated capability kullanımı
+- Stateful transport bağımlılığı
+- Authorization yöntemi
+- Tool schema uyumluluğu
+
+
+2. Skills artık ürünlerin yerleşik dağıtım birimine dönüşüyor
+
+OpenAI tarafında plugins; skill, connector ve MCP server içeren kurulabilir paketler olarak konumlandırılmış durumda. Codex ayrıca proje içindeki AGENTS.md, skills ve config.toml dosyalarını otomatik keşfediyor. 23 Temmuz güncellemesi, bir yerel projede birden fazla klasör kullanılmasını ve skill keşfinin birincil klasör üzerinden yapılmasını ekledi.
+
+Codex CLI 0.145.0, Cursor ve Claude Code’dan ayarları, MCP sunucularını, plugin’leri, komutları ve proje hafızalarını içe aktarabiliyor. Bu, sağlayıcılar arasında skill ve agent yapılandırması taşınabilirliğinin gerçek bir kullanıcı ihtiyacına dönüştüğünü gösteriyor.
+
+SkillForge çıkarımı:
+“Kurulum yapan bir başka CLI” ile rekabet etmek riskli. Daha güçlü konum:
+
+Sağlayıcılar skill’i kurar; SkillForge kurulmadan önce doğrular, risklerini gösterir ve uyumluluğunu test eder.
+
+Roadmap’e şu komut eklenebilir:
+
+skillforge migrate inspect
+
+Bu komut Cursor, Claude Code, Codex ve Copilot yapılandırmalarını okuyarak:
+- Skill envanteri
+- MCP envanteri
+- Çakışan talimatlar
+- Kayıp bağımlılıklar
+- Sağlayıcı uyumsuzlukları
+
+raporlayabilir.
+
+
+3. GitHub, agent skill’leri CI ve PR sürecinin parçası haline getiriyor
+
+GitHub Copilot code review artık feature branch üzerindeki AGENTS.md, agent skills ve instruction dosyalarını okuyabiliyor. Böylece skill değişiklikleri merge edilmeden PR içinde test edilebiliyor. GitHub ayrıca Claude agent provider için özel agent, skill ve instruction tanımlamalarını public preview’a açtı.
+
+SkillForge çıkarımı:
+GitHub Action, web kataloğundan daha öncelikli hale geldi.
+
+Önerilen ilk entegrasyon:
+
+- run: skillforge validate ./skills --format sarif
+- run: skillforge diff origin/main...HEAD
+
+PR yorumunda şu bilgiler görünmeli:
+
+Skill behavior changed
+Permissions: filesystem.read added
+External domain: api.example.com added
+Activation scope became broader
+3/4 evals passed
+
+skillforge diff, mevcut roadmap’te olmayan ancak yüksek değerli bir komut olarak v0.2’ye eklenmeli.
+
+
+4. Skill güvenliği artık ayrı bir araştırma alanı haline geliyor
+
+15 Temmuz 2026 tarihli SkillSec-Eval çalışması, güvenlik analizini yalnızca script çalıştırma aşamasıyla sınırlamıyor.
+
+Riskleri şu yaşam döngüsü boyunca ele alıyor:
+- Repository admission
+- Semantic retrieval
+- Planner selection
+- Execution
+- Skill evolution
+
+Çalışma 327 gerçek skill üzerinde, açıkların execution öncesinde ve sonrasında da ortaya çıktığını gösteriyor.
+
+Daha geniş başka bir araştırma, 31.132 skill’in %26,1’inde en az bir güvenlik problemi; %5,2’sinde ise yüksek riskli kötü niyet göstergeleri tespit etti. Script içeren skill’lerin riskli olma olasılığı, yalnızca talimat içeren skill’lere göre yaklaşık 2,12 kat daha yüksek bulundu.
+
+SkillForge çıkarımı:
+Scanner yalnızca regex tabanlı shell taraması olmamalı.
+
+Risk modeli şu katmanlara ayrılmalı:
+1. Package provenance
+2. Activation manipulation
+3. Instruction security
+4. Permission surface
+5. Executable content
+6. External communication
+7. Version-to-version behavior change
+
+Roadmap’teki mevcut diagnostic gruplarına yeni kategoriler eklenmeli:
+
+SF3xxx — Activation and retrieval risks
+SF4xxx — Instruction injection risks
+SF5xxx — Supply-chain and provenance risks
+SF6xxx — Version and evolution risks
+
+
+5. Sandbox tek başına yeterli güvenlik sınırı değil
+
+Son güvenlik araştırmalarında coding agent’ların, repository içindeki kötü amaçlı README, bağımlılık veya yapılandırma içerikleri üzerinden host tarafındaki IDE, Git ve extension bileşenlerini etkileyerek sandbox dışına çıkabildiği gösterildi. Cursor, Codex ve Gemini CLI tarafında düzeltmeler yayımlandı veya uygulanmaya başlandı.
+
+SkillForge çıkarımı:
+İleride eklenecek sandbox scanner şu varsayımla tasarlanmamalı:
+
+“Container içinde çalıştıysa güvenlidir.”
+
+Bunun yerine:
+- Çalışma öncesi ve sonrası repository diff
+- Git config değişiklikleri
+- IDE/agent config değişiklikleri
+- Hook oluşturma
+- Symlink oluşturma
+- Workspace dışına yazma
+- Sonraki çalıştırmayı etkileyen kalıcı dosyalar
+
+ayrıca izlenmeli.
+
+
+SkillForge İçin Güncellenmiş Öncelik Sırası
+
+v0.1
+- init
+- validate
+- inspect
+- pack
+- SARIF
+
+v0.2
+- skillforge diff
+- activation-risk rules
+- permission inference
+- external URL / script analysis
+- GitHub Action
+- PR annotations
+
+v0.3
+- local evals
+- positive / negative activation tests
+- provider compatibility
+- Codex / Claude / Copilot adapters
+
+v0.4
+- migration inventory
+- MCP protocol inspection
+- MCP 2025 and 2026 adapters
+- deprecated capability detection
+
+
+Bu Haftanın Net Ürün Kararı
+
+En güçlü fırsat hâlâ marketplace değil:
+
+SkillForge’u “Agent Skill Security, Compatibility and CI” ürünü olarak geliştirmek.
+
+Özellikle skillforge diff + SARIF + GitHub Action üçlüsü, public katalogdan daha erken gerçek ekip değeri ve potansiyel gelir üretir.

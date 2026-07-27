@@ -324,6 +324,72 @@ Reported, deliberately not changed:
   the CLI one only needs file existence and content. Sharing them would import unused surface into the CLI
   tests; the dead members were removed so "the smaller fake does less" is now actually true.
 
+---
+
+## Backlog after v0.1.0 — from the ecosystem input of 2026-07-27
+
+Source: `agent-skills-mcp-ekosistem-ozeti.txt`, recorded in roadmap §30. **The external claims in it are
+secondhand and unverified here** — useful for direction, not as justification for an investment or a rule
+severity until checked against primary sources.
+
+Product position sharpened: providers install skills, SkillForge validates before installation, shows the
+behaviour surface, reports what changed and tests compatibility. Not another installer. Not a catalogue yet.
+
+### v0.2 — Security signals and CI
+
+- [ ] **`skillforge diff origin/main...HEAD`** — the highest-value item, and absent from the original roadmap.
+  Reports *behaviour surface* change rather than file change: permissions added, external domains added,
+  scripts added, activation scope broadened, eval results. Architecture hook: it compares two
+  `SkillDefinition`s over the surface `inspect` already computes, so what is missing is loading two revisions
+  (git or two directories) and modelling the surface delta — not a new reading layer.
+- [ ] Activation-risk rules (`SF3xxx` band)
+- [ ] Permission inference, cross-checked against `skillforge.yaml` declarations (SF1006, SF1007)
+- [ ] External URL and script analysis (SF1005, and the shell patterns in roadmap §11)
+- [ ] GitHub Action, published
+- [ ] PR annotations carrying the diff summary
+- [ ] Rule suppression / configurable validation — the thing that resolves the measured SF1009/SF1010 noise
+
+### v0.3 — Evals and provider compatibility
+
+- [ ] `skillforge eval` with deterministic assertions
+- [ ] Positive and negative activation tests: does the skill fire when it should, and stay quiet when it should not
+- [ ] Provider compatibility checks
+- [ ] Codex / Claude Code / Copilot adapters
+
+### v0.4 — Migration and MCP
+
+- [ ] `skillforge migrate inspect` — read Cursor / Claude Code / Codex / Copilot configuration and report the
+  skill inventory, MCP inventory, conflicting instructions, missing dependencies and provider incompatibilities
+- [ ] MCP protocol inspection, behind version adapters rather than in the CLI core: protocol version in use,
+  deprecated capability use, stateful transport dependency, authorization method, tool schema conformance
+- [ ] MCP 2025-11-25 and 2026-07-28 adapters
+- [ ] Deprecated capability detection
+
+### New diagnostic bands — and the stance this changes
+
+| Band | Scope |
+|---|---|
+| `SF3xxx` | Activation and retrieval risks |
+| `SF4xxx` | Instruction injection risks |
+| `SF5xxx` | Supply-chain and provenance risks |
+| `SF6xxx` | Version and evolution risks |
+
+Through v0.1.0 the code set was deliberately fixed at 24 — an unreadable `SKILL.md` widened SF0001's meaning
+rather than inventing a 25th code. These bands lift that constraint **on purpose**: the code set is open,
+while the *meaning and severity of a published code* stays fixed. Adding a code is fine; redefining one is not.
+
+**A rule is measured before it is published.** SF1009 fires on 30 of 32 real skills and SF1010 on 32 of 32;
+SF0008 calls a sibling-skill reference an error. Those were found by running the tool on real input, not by
+reading the rule. Every new rule in these bands gets the same treatment first — a rule that fires on almost
+every input is noise, and noise teaches people to ignore warnings.
+
+### Sandbox scanning, when it arrives
+
+Not built on "it ran in a container, so it is safe". Agents have been shown to reach the host's IDE, Git and
+extension components through repository content. So a sandbox run also watches: repository diff before and
+after, Git config changes, IDE/agent config changes, hook creation, symlink creation, writes outside the
+workspace, and files that persist to affect the next run.
+
 ## Out of scope for v0.1.0
 
 Web panel · public marketplace · private registry · user and organisation management · Auth0 ·

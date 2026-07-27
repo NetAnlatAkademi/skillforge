@@ -6,6 +6,15 @@ Every rule owns a stable diagnostic code. Codes are never reused or renumbered o
 - `SF1xxx` — **Warning**. The skill works but quality or risk deserves attention.
 - `SF2xxx` — **Info**. A neutral observation about the skill's surface.
 
+Four further bands are reserved for the risk work planned after v0.1.0 (roadmap §30): `SF3xxx` activation and
+retrieval risks, `SF4xxx` instruction injection, `SF5xxx` supply chain and provenance, `SF6xxx` version and
+evolution. Nothing in them exists yet.
+
+Through v0.1.0 the set was deliberately closed at 24 codes, which is why an unreadable `SKILL.md` widened
+SF0001 rather than getting a new code. Those bands lift that constraint on purpose. The rule that does **not**
+change: a published code's meaning and severity are fixed. Adding a code is cheap; redefining one breaks every
+CI configuration that suppresses it.
+
 The `Status` column tracks implementation, so the table doubles as a checklist. `Planned` means the
 code is reserved but no rule exists yet.
 

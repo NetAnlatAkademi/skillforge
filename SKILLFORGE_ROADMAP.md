@@ -1378,7 +1378,157 @@ Yerel AI agent, repository durumunu incelemeden körlemesine çalıştırmamalı
 
 ---
 
-## 30. Son Not
+## 30. Ekosistem Girdileri ve Revize Öncelik (2026-07-27)
+
+Kaynak: `agent-skills-mcp-ekosistem-ozeti.txt` (harici bir sohbet özeti).
+
+> **Doğrulama notu.** Bu bölümdeki dış dünya iddiaları — MCP 2026-07-28 sürümünün RC'sinin kilitlenmesi,
+> SkillSec-Eval çalışması, 31.132 skill üzerinde %26,1 güvenlik problemi / %5,2 kötü niyet göstergesi,
+> script içeren skill'lerin 2,12 kat riskli olması, sağlayıcıların ürün duyuruları — **ikinci eldendir ve
+> bu repoda doğrulanmamıştır.** Yön tayini için kullanılabilirler; bir yatırımı, bir pazarlama iddiasını
+> veya bir kural şiddetini gerekçelendirmek için kullanılacaklarsa önce birincil kaynaklarına bakılmalıdır.
+> Oranları belgeye taşımak onları doğrulamak değildir.
+
+### 30.1 Ürün konumu
+
+Ekosistem, skill'i kurulabilir bir dağıtım birimine dönüştürüyor: sağlayıcılar (Codex, Claude Code, Cursor,
+Copilot) kurulumu, keşfi ve içe aktarmayı kendileri yapıyor. Dolayısıyla **"bir başka kurulum yapan CLI"
+olmak zayıf bir konum.** Güçlü konum:
+
+> Sağlayıcılar skill'i kurar. SkillForge kurulmadan önce doğrular, davranış yüzeyini gösterir, değişimini
+> raporlar ve uyumluluğunu test eder.
+
+Bu, §2'deki ürün teziyle çelişmiyor; onu daraltıp keskinleştiriyor. Ürünün adı artık şu üçlü:
+**Agent Skill Security, Compatibility ve CI.** Public katalog hâlâ ilk hedef değil.
+
+### 30.2 `skillforge diff` — mevcut roadmap'te olmayan, en yüksek değerli komut
+
+```bash
+skillforge diff origin/main...HEAD
+skillforge diff ./before ./after
+```
+
+Amaç, "dosya değişti mi" değil **"davranış yüzeyi değişti mi"**:
+
+```text
+Skill behavior changed: dotnet-api-review
+  Permissions:      + filesystem.read
+  External domains: + api.example.com
+  Scripts:          + scripts/analyze.ps1
+  Activation scope: broadened
+  Evals:            3/4 passed
+```
+
+Neden yüksek değerli: bir skill'in izin yüzeyinin sessizce genişlemesi, bir PR'da gözden kaçan ve
+gözden kaçtığında en pahalı olan şeydir. GitHub, agent skill'lerini PR sürecine soktuğu için bu bilgi tam
+olarak PR yorumunda durması gereken bilgi.
+
+Mimari kanca: `diff` iki `SkillDefinition` ile çalışır ve `inspect`'in zaten ürettiği yüzeyi (dosyalar,
+URL'ler, script'ler, bildirilen araçlar, açıklama/aktivasyon metni) karşılaştırır. Yeni bir okuma katmanı
+gerekmez; gereken, iki sürümü yükleyebilmek (git revizyonundan veya iki dizinden) ve yüzey farkını
+modellemektir.
+
+### 30.3 Güvenlik: tek katman değil, yaşam döngüsü
+
+Risk yalnızca "script çalıştırma" anında değil; şu aşamaların hepsinde doğuyor: repository admission,
+semantic retrieval, planner selection, execution, skill evolution. Bu yüzden scanner regex tabanlı shell
+taramasından fazlası olmalı. Risk modeli yedi katman:
+
+1. Package provenance
+2. Activation manipulation
+3. Instruction security
+4. Permission surface
+5. Executable content
+6. External communication
+7. Version-to-version behavior change
+
+### 30.4 Yeni diagnostic bantları
+
+| Bant | Kapsam |
+|---|---|
+| `SF3xxx` | Activation ve retrieval riskleri |
+| `SF4xxx` | Instruction injection riskleri |
+| `SF5xxx` | Supply-chain ve provenance riskleri |
+| `SF6xxx` | Sürüm ve evrim (davranış değişimi) riskleri |
+
+**Kayda geçen karar (bu bir duruş değişikliğidir).** v0.1.0 boyunca kod kümesi bilinçli olarak 24'te
+sabit tutuldu; okunamayan bir `SKILL.md` için 25. bir kod uydurmak yerine SF0001'in anlamı genişletildi
+(`docs/validation-rules.md`). Bu bantlar o kısıtı **açıkça** kaldırıyor: kod kümesi kapalı değil,
+*yayınlanmış kodların anlamı ve şiddeti* sabittir. Yeni kod eklemek serbest; var olanı yeniden
+anlamlandırmak değil.
+
+### 30.5 Sandbox yeterli sınır değil
+
+İleride eklenecek sandbox scanner şu varsayımla tasarlanmamalıdır: *"container içinde çalıştıysa
+güvenlidir."* Coding agent'ların, repo içindeki kötü amaçlı README/bağımlılık/yapılandırma içerikleri
+üzerinden host tarafındaki IDE, Git ve extension bileşenlerini etkileyip sandbox dışına çıkabildiği
+bildirildi. Bu yüzden çalıştırma sırasında ayrıca izlenmesi gerekenler:
+
+- Çalışma öncesi/sonrası repository diff
+- Git config değişiklikleri
+- IDE / agent config değişiklikleri
+- Hook oluşturma
+- Symlink oluşturma
+- Workspace dışına yazma
+- Sonraki çalıştırmayı etkileyen kalıcı dosyalar
+
+### 30.6 MCP: adapter'lar, çekirdeğe gömme yok
+
+MCP'nin 2026-07-28 sürümü oturum/initialize el sıkışmasını kaldırıp stateless HTTP'ye geçiyor, `Mcp-Method`
+ve `Mcp-Name` başlıklarıyla gateway desteği ekliyor, Tasks extension ve MCP Apps getiriyor, OAuth/OIDC'yi
+sıkılaştırıyor, Roots / Sampling / Logging'i deprecation'a alıyor, tool şemalarında JSON Schema 2020-12
+istiyor.
+
+Protokol bu hızda değişiyorsa **CLI çekirdeği bir protokol sürümüne bağlanmamalıdır.** Yapı:
+
+```text
+Skill Analyzer  (çekirdek, protokolden bağımsız)
+  ├── MCP 2025-11-25 Adapter
+  └── MCP 2026-07-28 Adapter
+```
+
+`inspect`'in ileride MCP için raporlaması gerekenler: kullanılan protokol sürümü, deprecated capability
+kullanımı, stateful transport bağımlılığı, authorization yöntemi, tool schema uyumluluğu.
+
+### 30.7 `skillforge migrate inspect`
+
+Sağlayıcılar arası taşınabilirlik gerçek bir kullanıcı ihtiyacına dönüştüğü için (Codex CLI'ın Cursor ve
+Claude Code'dan ayar, MCP sunucusu, plugin, komut ve proje hafızası içe aktarabilmesi), Cursor / Claude Code
+/ Codex / Copilot yapılandırmalarını okuyup şunları raporlayan bir komut:
+
+- Skill envanteri
+- MCP envanteri
+- Çakışan talimatlar
+- Kayıp bağımlılıklar
+- Sağlayıcı uyumsuzlukları
+
+### 30.8 Revize milestone sırası
+
+| Sürüm | İçerik |
+|---|---|
+| **v0.1** | `init`, `validate`, `inspect`, `pack`, SARIF — **tamamlandı** |
+| **v0.2** | `skillforge diff`, activation-risk kuralları, permission inference, harici URL / script analizi, GitHub Action, PR annotation'ları |
+| **v0.3** | Local evals, pozitif/negatif aktivasyon testleri, sağlayıcı uyumluluğu, Codex / Claude / Copilot adapter'ları |
+| **v0.4** | Migration envanteri, MCP protokol incelemesi, MCP 2025 ve 2026 adapter'ları, deprecated capability tespiti |
+
+§21'deki v0.2.0 tanımı bu tabloyla değiştirilmiştir: `diff` ve activation-risk kuralları eklendi, sıralama
+"security signals"tan "security + CI" ekseninine kaydı. §27'deki uzun vadeli sıra da buna göre okunmalıdır:
+GitHub Action ve Security Scanner, Private Registry'den önce gelir.
+
+### 30.9 Bu girdinin değiştirmediği şeyler
+
+- **ADR-006 aynen geçerli.** Yedi katmanlı risk modeli, "safe/unsafe" kararı vermek anlamına gelmez.
+  Katmanlar daha fazla ve daha iyi *sinyal* demektir; hüküm hâlâ okuyucunun.
+- **ADR-001 aynen geçerli.** Bu girdi web panelini değil, CLI + Action eksenini güçlendiriyor.
+- **Ölçülmüş gerçeklik hâlâ üstün.** 229 gerçek skill üzerinde SF1009/SF1010'un neredeyse her skill'de
+  ateşlendiği ve SF0008'in kardeş skill referanslarını hata sayması ölçülmüş bulgulardır
+  (`docs/validation-rules.md`). Yeni kural bantları eklenirken aynı hata tekrarlanmamalı: **bir kuralı
+  yayınlamadan önce gerçek skill'ler üzerinde ateşlenme oranı ölçülmelidir.** Neredeyse her girdide
+  ateşlenen bir kural sinyal değil gürültüdür.
+
+---
+
+## 31. Son Not
 
 Bu projenin ilk hedefi büyük bir platform kurmak değildir.
 
