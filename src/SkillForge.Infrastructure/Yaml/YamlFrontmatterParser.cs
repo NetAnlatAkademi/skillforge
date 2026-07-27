@@ -25,6 +25,7 @@ public sealed class YamlFrontmatterParser : IFrontmatterParser
     private const string CompatibilityField = "compatibility";
     private const string AllowedToolsField = "allowed-tools";
     private const string MetadataField = "metadata";
+    private const string VersionField = "version";
 
     /// <inheritdoc />
     public OperationResult<SkillFrontmatter> Parse(string yaml, int startLine, string filePath)
@@ -81,7 +82,7 @@ public sealed class YamlFrontmatterParser : IFrontmatterParser
             License: ReadScalar(root, LicenseField),
             Compatibility: ReadSequence(root, CompatibilityField),
             AllowedTools: ReadSequence(root, AllowedToolsField),
-            Metadata: ReadMetadata(root),
+            Metadata: ReadMetadata(root, startLine, filePath, diagnostics),
             StartLine: startLine,
             EndLine: startLine + FrontmatterLineCount(yaml) + 1);
 
@@ -187,25 +188,79 @@ public sealed class YamlFrontmatterParser : IFrontmatterParser
         };
     }
 
-    private static Dictionary<string, string> ReadMetadata(YamlMappingNode root)
+    private static Dictionary<string, string> ReadMetadata(
+        YamlMappingNode root,
+        int startLine,
+        string filePath,
+        List<Diagnostic> diagnostics)
     {
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (!root.Children.TryGetValue(new YamlScalarNode(MetadataField), out var node)
-            || node is not YamlMappingNode mapping)
+        if (root.Children.TryGetValue(new YamlScalarNode(MetadataField), out var node)
+            && node is YamlMappingNode mapping)
         {
-            return metadata;
-        }
-
-        foreach (var (key, value) in mapping.Children)
-        {
-            if (key is YamlScalarNode { Value: { Length: > 0 } name } && value is YamlScalarNode scalar)
+            foreach (var (key, value) in mapping.Children)
             {
-                metadata[name] = scalar.Value ?? string.Empty;
+                if (key is YamlScalarNode { Value: { Length: > 0 } name } && value is YamlScalarNode scalar)
+                {
+                    metadata[name] = scalar.Value ?? string.Empty;
+                }
             }
         }
 
+        AdoptTopLevelVersion(root, metadata, startLine, filePath, diagnostics);
+
         return metadata;
+    }
+
+    /// <summary>
+    /// Reads a top-level <c>version</c> into the metadata, and reports that it was in the wrong place.
+    /// </summary>
+    /// <remarks>
+    /// The schema keeps the version under <c>metadata</c>, and a <c>version</c> written at the top level used to be
+    /// discarded without a word — so SF0010 never checked it, <c>inspect</c>, <c>pack</c> and <c>diff</c> showed no
+    /// version, and SF6001 could not fire. It is an easy mistake: every other field a skill declares is top-level.
+    ///
+    /// Two choices were available and neither alone was right. Accepting it silently would leave the schema
+    /// permanently ambiguous; reporting it without reading it would leave the author's value unusable while telling
+    /// them off. So SkillForge does both — reads it, and says where it belongs.
+    ///
+    /// An explicit <c>metadata.version</c> wins. If both are present the author has said the same thing twice, and
+    /// the one the schema defines is the one to believe.
+    /// </remarks>
+    private static void AdoptTopLevelVersion(
+        YamlMappingNode root,
+        Dictionary<string, string> metadata,
+        int startLine,
+        string filePath,
+        List<Diagnostic> diagnostics)
+    {
+        if (!root.Children.TryGetValue(new YamlScalarNode(VersionField), out var node)
+            || node is not YamlScalarNode { Value: { Length: > 0 } version })
+        {
+            return;
+        }
+
+        var alreadyDeclared = metadata.ContainsKey(VersionField);
+        if (!alreadyDeclared)
+        {
+            metadata[VersionField] = version;
+        }
+
+        diagnostics.Add(Diagnostic.Warning(
+            DiagnosticCodes.VersionOutsideMetadata,
+            alreadyDeclared
+                ? "A 'version' field is declared at the top level as well as under 'metadata'. "
+                    + "The one under 'metadata' is the one being used."
+                : "The 'version' field belongs under 'metadata'. It was read from the top level anyway.",
+            filePath,
+            startLine + (int)node.Start.Line,
+            "Move it under 'metadata', which is where the schema looks for it and where every other tool "
+                + "reading this skill will look.",
+            $"""
+             metadata:
+               version: {version}
+             """));
     }
 
     private static int FrontmatterLineCount(string yaml) =>

@@ -66,6 +66,13 @@ fire on approximately every skill, and SF1009 and SF1010 already occupy that sha
 
 ### Fixed
 
+- SF1013: a `version` written at the top level of the frontmatter was **discarded in silence**. The schema keeps it
+  under `metadata`, and every other field a skill declares is top-level, so it is an easy mistake — one that meant
+  SF0010 never checked the version, `inspect`, `pack` and `diff` reported none, and SF6001 could not fire at all.
+  SkillForge now reads it *and* says where it belongs; an explicit `metadata.version` wins if both are present.
+  Found by writing a fixture that way and believing the tool.
+
+
 - SF1006 pointed at `skillforge.yaml` even for the majority of skills that have no such file. A reader followed the
   location to an empty path, and a SARIF consumer annotated a file outside the repository, so GitHub dropped or
   misplaced the annotation. It now points at the configuration file when one exists and at `SKILL.md` otherwise,

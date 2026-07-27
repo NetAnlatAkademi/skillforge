@@ -84,6 +84,12 @@ public static class DiagnosticCodes
     /// </summary>
     public const string ConfigurationNotParsable = "SF1012";
 
+    /// <summary>
+    /// A <c>version</c> field was found at the top level of the frontmatter, where the schema does not look for
+    /// it. SkillForge reads it anyway rather than losing it silently, and says so.
+    /// </summary>
+    public const string VersionOutsideMetadata = "SF1013";
+
     /// <summary>The skill contains a script.</summary>
     public const string ContainsScript = "SF2001";
 

@@ -93,6 +93,17 @@ number in front of it.
 | SF1010 | No agent compatibility information is declared | **Implemented** |
 | SF1011 | A reference points at a sibling skill, outside this skill's own directory | **Implemented** |
 | SF1012 | `skillforge.yaml` exists but could not be parsed, so its settings were ignored | **Implemented** |
+| SF1013 | A `version` field was written at the top level instead of under `metadata` | **Implemented** (loader) |
+
+SF1013 exists because the old behaviour was to discard the value without a word. Every other field a skill declares
+is top-level, so writing `version:` there is an easy mistake — and it meant SF0010 never checked the version,
+`inspect`, `pack` and `diff` reported none, and SF6001 could not fire at all. It was found by writing a test fixture
+that way and believing the tool.
+
+Two responses were available and neither alone was right. Accepting it silently leaves the schema permanently
+ambiguous. Reporting it without reading it leaves the author's value unusable while telling them off. So SkillForge
+does both: it reads the value, and it says where the value belongs. An explicit `metadata.version` wins if both are
+present — the author has said the same thing twice, and the schema decides which one to believe.
 
 ## Info
 

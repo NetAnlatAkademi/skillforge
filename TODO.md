@@ -370,7 +370,7 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 
 ### Found while building SF6001
 
-- [ ] A top-level `version:` in frontmatter is silently ignored — the schema reads it from `metadata.version`, so
+- [x] A top-level `version:` in frontmatter is silently ignored — the schema reads it from `metadata.version`, so
   an author who writes it at the top level gets no version anywhere: no SF0010 check, nothing in `inspect`,
   `pack` or `diff`, and SF6001 cannot fire. Found by writing a fixture the wrong way and believing the tool.
   Deciding whether to accept both spellings, or to report the misplaced one, is a schema decision rather than a

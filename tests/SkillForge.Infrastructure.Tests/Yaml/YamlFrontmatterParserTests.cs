@@ -192,6 +192,64 @@ public sealed class YamlFrontmatterParserTests
     }
 
     [Fact]
+    public void ATopLevelVersionIsReadAndReported()
+    {
+        // The trap: every other field a skill declares is top-level, so authors write version there too. It used to
+        // be discarded in silence -- SF0010 never checked it, inspect/pack/diff showed nothing, SF6001 could not
+        // fire. Read it, and say where it belongs.
+        var result = _parser.Parse(
+            """
+            name: demo
+            version: 2.1.0
+            """,
+            startLine: 1,
+            FilePath);
+
+        result.Value!.Version.Should().Be("2.1.0");
+
+        var diagnostic = result.Diagnostics.Should()
+            .ContainSingle(d => d.Code == DiagnosticCodes.VersionOutsideMetadata).Subject;
+        diagnostic.Severity.Should().Be(DiagnosticSeverity.Warning);
+        diagnostic.Fix.Should().Contain("metadata:").And.Contain("version: 2.1.0");
+    }
+
+    [Fact]
+    public void MetadataVersionWinsWhenBothArePresent()
+    {
+        // The author said the same thing twice; believe the spelling the schema defines.
+        var result = _parser.Parse(
+            """
+            name: demo
+            version: 9.9.9
+            metadata:
+              version: 2.1.0
+            """,
+            startLine: 1,
+            FilePath);
+
+        result.Value!.Version.Should().Be("2.1.0");
+        result.Diagnostics.Should()
+            .ContainSingle(d => d.Code == DiagnosticCodes.VersionOutsideMetadata)
+            .Which.Message.Should().Contain("as well as");
+    }
+
+    [Fact]
+    public void AVersionInTheRightPlaceIsNotReported()
+    {
+        var result = _parser.Parse(
+            """
+            name: demo
+            metadata:
+              version: 2.1.0
+            """,
+            startLine: 1,
+            FilePath);
+
+        result.Value!.Version.Should().Be("2.1.0");
+        result.Diagnostics.Should().NotContain(d => d.Code == DiagnosticCodes.VersionOutsideMetadata);
+    }
+
+    [Fact]
     public void RejectsInvalidArguments()
     {
         var nullYaml = () => _parser.Parse(null!, 1, FilePath);
