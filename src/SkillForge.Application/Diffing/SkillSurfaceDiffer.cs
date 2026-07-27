@@ -38,7 +38,13 @@ public static class SkillSurfaceDiffer
             SurfaceSetDiff.Between(Scripts(before), Scripts(after)),
             SurfaceSetDiff.Between(Files(before), Files(after)),
             Findings(after).Except(Findings(before), FindingComparer).Select(finding => finding.Diagnostic).ToArray(),
-            Findings(before).Except(Findings(after), FindingComparer).Select(finding => finding.Diagnostic).ToArray());
+            Findings(before).Except(Findings(after), FindingComparer).Select(finding => finding.Diagnostic).ToArray())
+        {
+            // Both sides, because the question is whether a promise was kept. A version that only appears in the
+            // later revision made no promise about the earlier one.
+            VersionDeclared = before.Skill.Frontmatter.Version is { Length: > 0 }
+                && after.Skill.Frontmatter.Version is { Length: > 0 },
+        };
     }
 
     /// <summary>

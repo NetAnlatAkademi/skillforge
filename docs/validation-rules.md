@@ -231,6 +231,25 @@ the same class as SF1009 and SF1010, which between them already make `--strict` 
 of that shape would make the default report worse without telling anyone anything they could act on. It waits for
 a reason to exist beyond being true.
 
+## Version and evolution
+
+| Code | Rule | Status |
+|---|---|---|
+| SF6001 | The reach grew while the declared version stayed the same | **Implemented** (`diff`) |
+
+The only evolution risk that can be computed honestly, and it needs **two** revisions rather than one — which is
+why it belongs to `diff` and not to `validate`. A consumer pinned to `1.0.0` who now receives a skill that can run
+shell commands was not protected by their pin, and nothing in the version told them.
+
+It requires a version on both sides. An unversioned skill on both sides makes no promise, so it breaks none; a
+version appearing for the first time made no promise about the revision before it.
+
+**"No version is declared" is deliberately not a rule.** Measured: 210 of 229 real skills — 91% — declare no
+version. It is a true observation and a useless warning, the same shape as SF1009 and SF1010, which between them
+already make `--strict` unusable by default. It was also the reason to reject provenance as an SF5xxx rule, so
+letting it in here through the back door would be inconsistent as well as noisy. That is what the both-sides
+requirement is protecting.
+
 ## Measured against real skills
 
 Run over 32 skills installed on a working machine (2026-07-27), the rules behaved like this:

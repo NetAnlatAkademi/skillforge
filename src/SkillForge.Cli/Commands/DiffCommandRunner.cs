@@ -160,6 +160,15 @@ internal sealed class DiffCommandRunner
             AppendSet(builder, "Domains added", diff.ExternalDomains.Added, depth: 1);
         }
 
+        // Immediately after the growth, because it is the sentence that says who the growth happened to.
+        if (diff.VersionIsSilentAboutGrowth)
+        {
+            builder.AppendLine(
+                $"! {DiagnosticCodes.VersionSilentAboutGrowth} The version did not change, so anyone pinned to "
+                    + "it received this quietly.");
+            builder.AppendLine();
+        }
+
         AppendValue(builder, "Name", diff.Name);
         AppendValue(builder, "Version", diff.Version);
 
@@ -265,6 +274,7 @@ internal sealed class DiffCommandRunner
             ["after"] = diff.AfterPath,
             ["hasChanges"] = diff.HasChanges,
             ["reachGrew"] = diff.ReachGrew,
+            ["versionIsSilentAboutGrowth"] = diff.VersionIsSilentAboutGrowth,
             ["name"] = ToJson(diff.Name),
             ["version"] = ToJson(diff.Version),
             ["description"] = ToJson(diff.Description),

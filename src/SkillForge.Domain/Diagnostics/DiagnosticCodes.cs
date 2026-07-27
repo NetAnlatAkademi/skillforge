@@ -124,4 +124,10 @@ public static class DiagnosticCodes
     /// latest-release URL — so running it twice is not guaranteed to run the same thing twice.
     /// </summary>
     public const string MutableRemoteReference = "SF5001";
+
+    /// <summary>
+    /// The skill's reach grew while its declared version stayed the same, so a consumer pinned to that version
+    /// received the change without being told. Reported by <c>diff</c>, which is the only command that can see it.
+    /// </summary>
+    public const string VersionSilentAboutGrowth = "SF6001";
 }

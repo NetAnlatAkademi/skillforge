@@ -368,6 +368,14 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
   that has decided a rule does not apply has a reason we cannot see — the always-reported count is what keeps it
   honest.
 
+### Found while building SF6001
+
+- [ ] A top-level `version:` in frontmatter is silently ignored — the schema reads it from `metadata.version`, so
+  an author who writes it at the top level gets no version anywhere: no SF0010 check, nothing in `inspect`,
+  `pack` or `diff`, and SF6001 cannot fire. Found by writing a fixture the wrong way and believing the tool.
+  Deciding whether to accept both spellings, or to report the misplaced one, is a schema decision rather than a
+  bug fix, so it is a task rather than a patch.
+
 ### v0.3 — Evals and provider compatibility
 
 - [ ] `skillforge eval` with deterministic assertions
@@ -391,7 +399,7 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 | `SF3xxx` | Activation and retrieval risks | SF3001, SF3002 shipped |
 | `SF4xxx` | Instruction injection risks | SF4001, SF4002 shipped |
 | `SF5xxx` | Supply-chain and provenance risks | SF5001 shipped; provenance deferred |
-| `SF6xxx` | Version and evolution risks | next |
+| `SF6xxx` | Version and evolution risks | SF6001 shipped (`diff`); "no version declared" deferred at 91% firing |
 
 Through v0.1.0 the code set was deliberately fixed at 24 — an unreadable `SKILL.md` widened SF0001's meaning
 rather than inventing a 25th code. These bands lift that constraint **on purpose**: the code set is open,

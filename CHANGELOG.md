@@ -49,6 +49,19 @@ test.
 Provenance ("no source declared, so the origin cannot be checked") was considered and **not** shipped: it would
 fire on approximately every skill, and SF1009 and SF1010 already occupy that shape.
 
+### Added — `SF6xxx`, version and evolution
+
+- SF6001: the skill's reach grew while its declared version stayed the same, so anyone pinned to that version
+  received the change without being told. Reported by `diff`, because it needs two revisions — it is not a
+  validation rule and could not be one.
+
+It requires a version on both sides. An unversioned skill promises nothing, so it breaks nothing, and a version
+appearing for the first time said nothing about the revision before it.
+
+"No version is declared" is deliberately **not** a rule: measured at 210 of 229 real skills, 91%. Same shape as
+SF1009 and SF1010, and the same reason provenance was rejected from SF5xxx — the both-sides requirement is what
+keeps it from arriving through the back door.
+
 ## [26.208.1] — 2026-07-27
 
 ### Added — milestone v0.1.0, Local Validator

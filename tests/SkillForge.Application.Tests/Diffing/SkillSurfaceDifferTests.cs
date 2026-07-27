@@ -186,6 +186,64 @@ public sealed class SkillSurfaceDifferTests
         noAfter.Should().Throw<ArgumentNullException>();
     }
 
+    [Fact]
+    public void AVersionThatDidNotMoveWhileTheReachGrewIsReported()
+    {
+        // The `SF6xxx` question: a consumer pinned to 1.0.0 now gets a skill that can run shell commands. The pin
+        // did not protect them, and nothing in the version says so.
+        var diff = SkillSurfaceDiffer.Compare(
+            Snapshot(version: "1.0.0", tools: ["filesystem.read"]),
+            Snapshot(version: "1.0.0", tools: ["filesystem.read", "shell.execute"]));
+
+        diff.ReachGrew.Should().BeTrue();
+        diff.VersionIsSilentAboutGrowth.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AVersionThatMovedWithTheReachIsNotReported()
+    {
+        var diff = SkillSurfaceDiffer.Compare(
+            Snapshot(version: "1.0.0", tools: ["filesystem.read"]),
+            Snapshot(version: "1.1.0", tools: ["filesystem.read", "shell.execute"]));
+
+        diff.ReachGrew.Should().BeTrue();
+        diff.VersionIsSilentAboutGrowth.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AnUnchangedVersionWithNoGrowthIsNotReported()
+    {
+        var diff = SkillSurfaceDiffer.Compare(
+            Snapshot(version: "1.0.0", description: "Use this skill when testing the differ carefully."),
+            Snapshot(version: "1.0.0", description: "Use this skill when testing the differ thoroughly."));
+
+        diff.HasChanges.Should().BeTrue();
+        diff.VersionIsSilentAboutGrowth.Should().BeFalse();
+    }
+
+    [Fact]
+    public void NoVersionOnEitherSideIsADifferentProblemAndNotThisOne()
+    {
+        // Nothing was promised, so nothing was broken. "No version is declared" fires on 91% of real skills and is
+        // deliberately not a rule; conflating the two would smuggle it in through the back door.
+        var diff = SkillSurfaceDiffer.Compare(
+            Snapshot(version: null, tools: ["filesystem.read"]),
+            Snapshot(version: null, tools: ["filesystem.read", "shell.execute"]));
+
+        diff.ReachGrew.Should().BeTrue();
+        diff.VersionIsSilentAboutGrowth.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AVersionAppearingForTheFirstTimeIsNotSilence()
+    {
+        var diff = SkillSurfaceDiffer.Compare(
+            Snapshot(version: null, tools: ["filesystem.read"]),
+            Snapshot(version: "1.0.0", tools: ["filesystem.read", "shell.execute"]));
+
+        diff.VersionIsSilentAboutGrowth.Should().BeFalse();
+    }
+
     private static SkillSnapshot Snapshot(
         string name = "demo-skill",
         string? version = "1.0.0",

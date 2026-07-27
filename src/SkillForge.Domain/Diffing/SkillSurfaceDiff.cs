@@ -66,4 +66,25 @@ public sealed record SkillSurfaceDiff(
     /// <summary>Gets the new findings that are errors, which is what makes a diff a regression.</summary>
     public IReadOnlyList<Diagnostic> NewErrors =>
         [.. NewFindings.Where(finding => finding.Severity == DiagnosticSeverity.Error)];
+
+    /// <summary>
+    /// Gets a value indicating whether the skill's reach grew while its declared version stayed put.
+    /// </summary>
+    /// <remarks>
+    /// The evolution risk that can be computed honestly, and it needs two revisions rather than one — which is why
+    /// it lives here and not among the validation rules. A consumer pinned to <c>1.0.0</c> who now receives a skill
+    /// that can run shell commands was not protected by their pin, and nothing in the version told them.
+    ///
+    /// It requires a version on **both** sides, deliberately. <see cref="Version"/> being <see langword="null"/>
+    /// means the value did not change, so an unversioned skill on both sides makes this false: nothing was
+    /// promised, so nothing was broken. "No version is declared" is a separate observation, it fires on 91% of real
+    /// skills, and it is deliberately not a rule — letting it in through this property would smuggle it back.
+    /// </remarks>
+    public bool VersionIsSilentAboutGrowth => ReachGrew && Version is null && VersionDeclared;
+
+    /// <summary>
+    /// Gets a value indicating whether a version was declared at all. Set by the differ, because this record sees
+    /// only the change and an unchanged value is indistinguishable from an absent one.
+    /// </summary>
+    public bool VersionDeclared { get; init; }
 }
