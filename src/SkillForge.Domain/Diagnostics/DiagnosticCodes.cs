@@ -118,4 +118,10 @@ public static class DiagnosticCodes
     /// The body's prose tells the agent to keep something from the person it is working for.
     /// </summary>
     public const string BodyConcealmentInstruction = "SF4002";
+
+    /// <summary>
+    /// The skill fetches something remote from a reference that can change — a branch, a "latest" tag, a
+    /// latest-release URL — so running it twice is not guaranteed to run the same thing twice.
+    /// </summary>
+    public const string MutableRemoteReference = "SF5001";
 }

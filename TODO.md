@@ -390,8 +390,8 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 |---|---|---|
 | `SF3xxx` | Activation and retrieval risks | SF3001, SF3002 shipped |
 | `SF4xxx` | Instruction injection risks | SF4001, SF4002 shipped |
-| `SF5xxx` | Supply-chain and provenance risks | next |
-| `SF6xxx` | Version and evolution risks | reserved |
+| `SF5xxx` | Supply-chain and provenance risks | SF5001 shipped; provenance deferred |
+| `SF6xxx` | Version and evolution risks | next |
 
 Through v0.1.0 the code set was deliberately fixed at 24 — an unreadable `SKILL.md` widened SF0001's meaning
 rather than inventing a 25th code. These bands lift that constraint **on purpose**: the code set is open,

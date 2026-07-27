@@ -32,6 +32,23 @@ Credential-file access and exfiltration patterns were written and then **not** s
 either shape, and D-29 forbids publishing a rule on a guess about its firing rate. They are candidates for
 `SF5xxx`.
 
+### Added — `SF5xxx`, supply chain
+
+- SF5001: the skill fetches something remote from a reference that can change — a branch, a package or image
+  resolved to `latest`, a latest-release download. Reads the body **including code blocks**, plus every script,
+  because to this question a fenced block is the install command the agent will run, not an example being shown.
+  That is the opposite of SF4001's choice, and deliberately so.
+
+Measured on 229 real skills, and the measurement changed the rule. Matching the version selector alone gave four
+findings, one of which was a skill *recommending* pinned tags, with the rule firing on the counter-example it
+cited — "Use specific version tags (node:22-alpine, not node:latest)". Markdown structure could not separate that
+case: the false positive is inside a fence and a true positive is inside an inline span in a bullet list.
+Requiring a fetch verb on the line could: **3 findings, 0 false positives.** The measured false positive is now a
+test.
+
+Provenance ("no source declared, so the origin cannot be checked") was considered and **not** shipped: it would
+fire on approximately every skill, and SF1009 and SF1010 already occupy that shape.
+
 ## [26.208.1] — 2026-07-27
 
 ### Added — milestone v0.1.0, Local Validator

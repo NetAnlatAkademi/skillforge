@@ -45,6 +45,7 @@ public static class SkillValidationRules
             new ActivationManipulationRule(),
             new InstructionOverrideRule(),
             new ConcealmentRule(),
+            new MutableRemoteReferenceRule(fileSystem),
         ];
     }
 }

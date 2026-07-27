@@ -190,6 +190,47 @@ instructing exfiltration to an external destination. Both were speculative — n
 shape, and D-29 forbids publishing a rule on a guess about how often it fires. They are candidates for `SF5xxx`,
 where provenance and supply chain give them a better home than injection does.
 
+## Supply chain and provenance
+
+| Code | Rule | Status |
+|---|---|---|
+| SF5001 | The skill fetches something remote from a reference that can change | **Implemented** |
+
+The supply-chain question a skill can honestly be asked from its own text is narrow: *run this tomorrow, get the
+same thing?* A URL pointing at a branch, a package resolved to `latest`, a container image with no version, a
+latest-release download — all answer no. None of those is a vulnerability. What they have in common is that they
+turn somebody else's compromise into yours, silently, without the skill changing.
+
+**This rule reads code blocks on purpose, which is the opposite of SF4001, and the reason is worth stating.** To an
+injection rule a fenced block is an example being displayed, so reading it invents findings. To a supply-chain rule
+it is the install command the agent will actually run, so skipping it hides them. Same construct, opposite
+treatment, because the questions differ.
+
+Measured on the same 229 real skills, and the measurement changed the rule. The first version matched the version
+selector alone (`@latest`, `:latest`) and produced four findings, of which **one was a skill giving exactly this
+advice** — "Use specific version tags (node:22-alpine, not node:latest)" — with the rule firing on the
+counter-example it cited. The same failure that killed SF3002's body scan.
+
+Note what did *not* fix it: markdown structure. That false positive sits inside a fenced block and one of the true
+positives sits in an inline code span in a bullet list, so neither "code only" nor "prose only" separates them. The
+distinction is grammatical — a fetch has a verb. Requiring one (`npm install`, `npx`, `pip install`, `docker run`,
+`FROM`, and their kin) keeps both real install commands and drops the advice.
+
+| | On 229 real skills |
+|---|---|
+| Selector alone | 4 findings, 1 false positive |
+| Selector plus a fetch verb | **3 findings, 0 false positives** |
+
+The cost is stated rather than hidden: a mutable reference invoked through a verb the list does not know is missed.
+For a rule nobody asked for, silence is the right direction to fail in, and the list is cheap to extend once a
+measurement justifies it.
+
+**Provenance was considered and deferred.** "No source or repository is declared, so the skill's origin cannot be
+checked" is a real supply-chain observation, and it would also fire on approximately every skill in existence —
+the same class as SF1009 and SF1010, which between them already make `--strict` unusable by default. A third rule
+of that shape would make the default report worse without telling anyone anything they could act on. It waits for
+a reason to exist beyond being true.
+
 ## Measured against real skills
 
 Run over 32 skills installed on a working machine (2026-07-27), the rules behaved like this:
