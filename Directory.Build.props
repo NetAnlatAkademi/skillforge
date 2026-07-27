@@ -29,12 +29,17 @@
     version appears as tool.version in JSON and SARIF reports. That is correct — a report should say which build
     produced it — and it does not affect package hashes, which cover the skill's files and never SkillForge's own
     version.
+
+    That same consequence is why VersionPrefix can be overridden. A release is built from a tag, and a tag built a
+    day late would otherwise produce a package whose version disagrees with the tag that triggered it. The release
+    workflow passes -p:VersionPrefix=<version from the tag>, and the date computation below is skipped.
   -->
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(VersionPrefix)' == ''">
     <SkillForgeBuild Condition="'$(SkillForgeBuild)' == '' and '$(SKILLFORGE_BUILD)' != ''">$(SKILLFORGE_BUILD)</SkillForgeBuild>
     <SkillForgeBuild Condition="'$(SkillForgeBuild)' == ''">1</SkillForgeBuild>
     <SkillForgeYear>$([System.DateTime]::UtcNow.ToString('yy'))</SkillForgeYear>
     <SkillForgeDayOfYear>$([System.DateTime]::UtcNow.DayOfYear)</SkillForgeDayOfYear>
+    <VersionPrefix>$(SkillForgeYear).$(SkillForgeDayOfYear).$(SkillForgeBuild)</VersionPrefix>
   </PropertyGroup>
 
   <!-- Shared package metadata. Individual projects override PackageId / Description. -->
@@ -42,7 +47,6 @@
     <Product>SkillForge</Product>
     <Authors>SkillForge Contributors</Authors>
     <Company>SkillForge</Company>
-    <VersionPrefix>$(SkillForgeYear).$(SkillForgeDayOfYear).$(SkillForgeBuild)</VersionPrefix>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>

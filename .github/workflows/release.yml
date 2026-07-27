@@ -1,0 +1,130 @@
+# Publishes SkillForge.Cli to NuGet.org when a v* tag is pushed.
+#
+# No API key is stored anywhere. NuGet.org trusted publishing exchanges this workflow's OIDC token for a
+# short-lived key at run time, which is why `id-token: write` is here and why the policy on nuget.org names
+# this exact file — renaming it breaks publishing until the policy is updated to match.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Publishing an existing tag by hand, for when a run failed for a reason that has since been fixed.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag to publish, for example v26.208.1.
+        required: true
+
+permissions:
+  contents: write # to attach the .nupkg to the GitHub release
+  id-token: write # required by trusted publishing; without it NuGet/login cannot mint a key
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  ContinuousIntegrationBuild: true
+
+jobs:
+  publish:
+    name: publish to NuGet.org
+    runs-on: ubuntu-latest
+    # Deliberately not pinned to a GitHub environment. An environment would be a useful gate — publishing is
+    # not undoable — but it also lands in the OIDC claims, so adding one here without adding it to the
+    # nuget.org policy would be rejected. Add both together or neither.
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      # The version comes from the tag, not from the clock. Directory.Build.props derives YY.DayOfYear.Build
+      # from UTC when nothing overrides it, so a tag built a day late would otherwise produce a package whose
+      # version disagrees with the tag that triggered the run.
+      - name: Read the version from the tag
+        id: version
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.ref_name }}"
+          version="${tag#v}"
+
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$tag' is not vYY.DayOfYear.Build, so there is no version to publish."
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing $version from $tag"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: >
+          dotnet build --no-restore --configuration Release
+          -p:VersionPrefix=${{ steps.version.outputs.version }}
+
+      # A release is not the place to discover a failing test. The same suite CI runs, run again against the
+      # exact tree being published.
+      - name: Test
+        run: >
+          dotnet test --no-build --configuration Release
+          -p:VersionPrefix=${{ steps.version.outputs.version }}
+          --settings coverlet.runsettings
+
+      - name: Pack
+        run: >
+          dotnet pack src/SkillForge.Cli --no-build --configuration Release
+          -p:VersionPrefix=${{ steps.version.outputs.version }}
+          --output ./artifacts/release
+
+      - name: Check the package version matches the tag
+        run: |
+          set -euo pipefail
+          expected="./artifacts/release/SkillForge.Cli.${{ steps.version.outputs.version }}.nupkg"
+
+          if [ ! -f "$expected" ]; then
+            echo "::error::Expected $expected. Packed instead:"
+            ls -1 ./artifacts/release
+            exit 1
+          fi
+
+      # Checked here rather than left to fail inside the action, whose error does not say what to set.
+      - name: Check the NuGet account is configured
+        env:
+          NUGET_USER: ${{ vars.NUGET_USER }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NUGET_USER:-}" ]; then
+            echo "::error::Repository variable NUGET_USER is not set. It is the nuget.org account that owns"
+            echo "::error::the trusted publishing policy. Set it with:"
+            echo "::error::  gh variable set NUGET_USER --repo ${{ github.repository }} --body '<account>'"
+            exit 1
+          fi
+
+      - name: Authenticate to NuGet.org
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      # --skip-duplicate so re-running a tag is harmless: NuGet.org refuses to replace a published version,
+      # and that refusal should not read as a broken release.
+      - name: Push
+        run: >
+          dotnet nuget push ./artifacts/release/*.nupkg
+          --source https://api.nuget.org/v3/index.json
+          --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+          --skip-duplicate
+
+      - name: Attach the package to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release upload "${{ inputs.tag || github.ref_name }}"
+          ./artifacts/release/*.nupkg --clobber --repo "${{ github.repository }}"
