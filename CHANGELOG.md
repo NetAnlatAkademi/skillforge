@@ -49,6 +49,30 @@ test.
 Provenance ("no source declared, so the origin cannot be checked") was considered and **not** shipped: it would
 fire on approximately every skill, and SF1009 and SF1010 already occupy that shape.
 
+### Added — `skillforge eval`, milestone v0.3
+
+- `skillforge eval <path>` checks a skill against the expectations its author declared under `evals/*.yaml`:
+  required files, a required or forbidden shell permission, diagnostic codes to forbid or to pin, terms the
+  description must mention, and vocabulary-overlap cases. Console or JSON output; exit 0 all held, 1 one did not.
+- SF1014: an `evals` file that cannot be read or parsed is reported and skipped rather than failing the run — the
+  same choice SF1012 makes for `skillforge.yaml`.
+- `samples/dotnet-api-review/evals/eval.yaml` is the worked example, and CI runs it.
+
+Three deliberate asymmetries. A skill with **no** `evals` folder exits 0 saying there is nothing to run; a skill with
+an **empty** suite fails, because an author who made the folder and wrote no cases should not be told everything is
+fine. A case that asserts nothing is *skipped*, not passed — counting it would make a suite look larger than it is.
+`expect` exists so an author who has accepted a finding can pin it instead of fixing it to stay green.
+
+**The `activation` cases report shared vocabulary and refuse to call it activation.** Whether an agent chooses a skill
+is decided by a model reading a whole prompt and a whole toolbox; SkillForge sends nothing to a model, so it cannot
+answer that. What it can answer is a necessary condition — an agent that never sees the skill's vocabulary has nothing
+to match on — so a failure is informative while a pass only means the skill is not disqualified on wording. The output
+never says "would fire". Real activation testing needs a model runner, which is a separate thing with an honest name.
+
+A length filter alone was tried for the overlap check and failed: "Use this skill when tuning a database index" and
+"translate this paragraph into Turkish" share **"this"**, enough to make two unrelated sentences look related. A
+stop-word list was therefore necessary, and it is **English only** — a limitation stated rather than hidden.
+
 ### Changed — reports say how to fix things, not just what is wrong
 
 - A finding whose resolution is one known edit now carries a `Fix`: the literal text to paste. It prints **without**

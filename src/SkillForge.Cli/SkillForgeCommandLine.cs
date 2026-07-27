@@ -59,6 +59,7 @@ internal static partial class SkillForgeCommandLine
         root.Subcommands.Add(BuildInitCommand(services, globals));
         root.Subcommands.Add(BuildValidateCommand(services, globals));
         root.Subcommands.Add(BuildInspectCommand(services, globals));
+        root.Subcommands.Add(BuildEvalCommand(services, globals));
         root.Subcommands.Add(BuildDiffCommand(services, globals));
         root.Subcommands.Add(BuildPackCommand(services, globals));
 
@@ -225,6 +226,35 @@ internal static partial class SkillForgeCommandLine
                     parseResult.GetValue(showFiles),
                     parseResult.GetValue(showLinks),
                     parseResult.GetValue(showPermissions),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return command;
+    }
+
+    private static Command BuildEvalCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var path = CreateSkillPathArgument();
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var output = CreateOutputOption();
+
+        var command = new Command("eval", "Check a skill against the expectations declared under evals/.")
+        {
+            path,
+            format,
+            output,
+        };
+
+        command.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<EvalCommandRunner>();
+
+            return await runner.RunAsync(
+                new EvalRequest(
+                    parseResult.GetValue(path) ?? DefaultPath,
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
                     globals.Read(parseResult)),
                 cancellationToken).ConfigureAwait(false);
         });

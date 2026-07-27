@@ -32,6 +32,7 @@ internal static class CompositionRoot
         services.AddSingleton<IFileSystem, FileSystem>();
         services.AddSingleton<IFrontmatterParser, YamlFrontmatterParser>();
         services.AddSingleton<ISkillConfigurationReader, YamlSkillConfigurationReader>();
+        services.AddSingleton<IEvalCaseReader, Infrastructure.Yaml.YamlEvalCaseReader>();
         services.AddSingleton<IArchiveWriter, DeterministicZipArchiveWriter>();
         services.AddSingleton<IHashCalculator, Sha256HashCalculator>();
 
@@ -58,6 +59,7 @@ internal static class CompositionRoot
         services.AddSingleton<ValidateCommandRunner>();
         services.AddSingleton<InitCommandRunner>();
         services.AddSingleton<InspectCommandRunner>();
+        services.AddSingleton<EvalCommandRunner>();
         services.AddSingleton<DiffCommandRunner>();
         services.AddSingleton<PackCommandRunner>();
 

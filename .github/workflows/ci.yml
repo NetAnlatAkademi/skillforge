@@ -90,6 +90,9 @@ jobs:
           fi
 
           run inspect ./samples/dotnet-api-review --no-color > /dev/null
+
+          # The sample's evals are the worked example of the format, so they have to keep passing.
+          run eval ./samples/dotnet-api-review > /dev/null
           run pack ./samples/valid-skill --output ./artifacts/packages --no-color
 
       - name: Upload test results

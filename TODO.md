@@ -378,8 +378,13 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 
 ### v0.3 — Evals and provider compatibility
 
-- [ ] `skillforge eval` with deterministic assertions
-- [ ] Positive and negative activation tests: does the skill fire when it should, and stay quiet when it should not
+- [x] `skillforge eval` with deterministic assertions — files, shell permission, diagnostic codes to forbid or pin,
+  description terms, vocabulary overlap. `SF1014` for an unreadable eval file.
+- [~] Positive and negative activation tests — the *deterministic* half is done as vocabulary overlap, which is a
+  necessary condition for retrieval and is reported in exactly those words. Testing whether a skill actually fires
+  needs a model runner, which SkillForge does not have and which must not be smuggled in under this name.
+- [ ] A model runner, so activation can be tested rather than approximated. Needs a decision first: SkillForge
+  currently sends nothing to any service, and this would change that. Opt-in, explicit, and never the default.
 - [ ] Provider compatibility checks
 - [ ] Codex / Claude Code / Copilot adapters
 

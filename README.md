@@ -55,6 +55,7 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 | `skillforge validate <path>` | Validate structure, frontmatter and quality rules |
 | `skillforge inspect <path>` | Summarise files, links, scripts and inferred capabilities |
 | `skillforge diff <before> <after>` | Compare two versions by what they can do, not which bytes changed |
+| `skillforge eval <path>` | Check a skill against the expectations declared under `evals/` |
 | `skillforge pack <path>` | Produce a deterministic `.skill.zip` with a SHA-256 hash and manifest |
 
 Full options are in [docs/cli-reference.md](docs/cli-reference.md); CI usage, including SARIF upload, is in

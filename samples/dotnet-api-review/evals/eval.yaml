@@ -1,0 +1,29 @@
+# What this skill's author claims should stay true about it.
+#
+# An eval is a regression check, not a behavioural one: SkillForge sends nothing to a model, so it cannot
+# answer "would an agent choose this skill?" and does not pretend to. See the activation case below.
+cases:
+  - name: keeps the reference it points at
+    files:
+      - references/api-versioning.md
+
+  - name: never regains a broken reference
+    forbid:
+      - SF0007
+      - SF0008
+
+  - name: stays about API review
+    mentions:
+      - API
+      - review
+
+  - name: a security review request shares its vocabulary
+    activation:
+      prompt: review my ASP.NET Core API before it ships
+      # Shared wording is a necessary condition for retrieval, never a prediction of it.
+      overlap: true
+
+  - name: an unrelated request shares nothing
+    activation:
+      prompt: translate this paragraph into Turkish
+      overlap: false

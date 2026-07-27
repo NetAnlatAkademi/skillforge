@@ -90,6 +90,12 @@ public static class DiagnosticCodes
     /// </summary>
     public const string VersionOutsideMetadata = "SF1013";
 
+    /// <summary>
+    /// A file under <c>evals</c> could not be read or parsed, so its cases were skipped. Reported rather than
+    /// fatal, for the same reason as SF1012: the rest of the suite is still worth running.
+    /// </summary>
+    public const string EvalFileNotParsable = "SF1014";
+
     /// <summary>The skill contains a script.</summary>
     public const string ContainsScript = "SF2001";
 

@@ -86,7 +86,10 @@ public sealed class SkillLoaderIntegrationTests
         skill.Name.Should().Be("dotnet-api-review");
         skill.Frontmatter.Compatibility.Should().Equal("codex", "claude-code", "github-copilot");
         skill.Frontmatter.AllowedTools.Should().Equal("filesystem.read");
-        skill.Resources.Should().HaveCount(2);
+        // SKILL.md, references/api-versioning.md and evals/eval.yaml. The eval file arrived with `skillforge eval`
+        // and is part of the sample on purpose: it is the worked example of the format.
+        skill.Resources.Should().HaveCount(3);
+        skill.Resources.Select(resource => resource.RelativePath).Should().Contain("evals/eval.yaml");
     }
 
     [Fact]

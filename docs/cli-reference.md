@@ -315,3 +315,67 @@ actually fired are named. `--quiet` drops the footer.
 In JSON output the same text is available as a `fix` field on each diagnostic. It is additive, so the schema version
 is unchanged and a consumer that does not know the field ignores it. **SARIF deliberately does not carry it**: SARIF's
 `fixes` property describes precise artifact edits, and a paste-this-in snippet is not one.
+
+## `skillforge eval`
+
+Checks a skill against the expectations its author wrote down under `evals/`. A regression harness: it asks whether
+the skill still looks the way it was declared to look.
+
+```bash
+skillforge eval ./skills/dotnet-api-review
+skillforge eval ./skills/dotnet-api-review --format json --output eval.json
+```
+
+Cases live in `evals/*.yaml`, merged in file-name order so a run is reproducible:
+
+```yaml
+cases:
+  - name: keeps the reference it points at
+    files:
+      - references/api-versioning.md
+
+  - name: never regains a broken reference
+    forbid: [SF0007, SF0008]
+
+  - name: keeps its accepted finding pinned
+    expect: [SF1009]
+
+  - name: declares what it runs
+    shell: required        # or: forbidden
+
+  - name: stays about API review
+    mentions: [API, review]
+
+  - name: a security review request shares its vocabulary
+    activation:
+      prompt: review my ASP.NET Core API before it ships
+      overlap: true        # default; use false for a prompt that should share nothing
+```
+
+`expect` exists so an author who has deliberately accepted a finding can pin it, rather than having to fix it to keep
+their evals green.
+
+Exit codes: `0` every case held · `1` at least one did not · `2` usage error. A skill with **no** `evals` folder exits
+`0` and says there is nothing to run; a skill with an empty suite **fails**, because an author who made the folder and
+wrote no cases should not be told everything is fine. A case that asserts nothing is reported as skipped rather than
+passed — counting it would make a suite look larger than it is. An `evals` file that cannot be parsed is reported as
+SF1014 and skipped, the same choice SF1012 makes for `skillforge.yaml`.
+
+### What `activation` does and does not do
+
+**It is not an activation test, and calling it one would be a lie.** Whether an agent chooses a skill is decided by a
+model reading a whole prompt, a whole toolbox and a whole conversation. SkillForge sends nothing to a model, so it
+cannot answer that and does not pretend to.
+
+What it checks is a **necessary condition**: an agent that never sees the skill's vocabulary in the prompt has nothing
+to match on. So a failure is informative — the description is missing the words — while a pass proves only that the
+skill is not disqualified on vocabulary. The report is phrased as "shares wording with" throughout and never says
+"would fire".
+
+Two limits worth knowing. Words of three characters or fewer are dropped, and so is a list of common English function
+words — a length filter alone was tried first and failed, because "Use this skill when tuning a database index" and
+"translate this paragraph into Turkish" share **"this"**, which was enough to make two unrelated sentences look
+related. That stop-word list is **English only**, so a Turkish or German description will share function words this
+check does not recognise and its overlap result will be correspondingly generous.
+
+Real activation testing needs a model runner. That is a separate thing to build, and it needs an honest name.
