@@ -41,12 +41,22 @@ public sealed class ScriptPermissionRule : ISkillValidationRule
 
         var names = string.Join(", ", scripts.Select(script => script.RelativePath));
 
+        // The place to *fix* this is skillforge.yaml, but that is not the same as the place to *point at*. Most
+        // skills have no skillforge.yaml, and a finding whose location is a file that does not exist sends a reader
+        // to an empty path and makes a SARIF consumer annotate something outside the repository. So the location is
+        // the configuration file when there is one and SKILL.md when there is not — matching SF1009 and SF1010,
+        // which report the same shape of problem — while the suggestion still names the file to create.
+        var (file, line) = skill.Configuration.Exists
+            ? (SkillDefinition.ConfigurationFileName, (int?)null)
+            : (SkillDefinition.SkillFileName, 1);
+
         return RuleResult.One(Diagnostic.Warning(
             Code,
             $"The skill ships {(scripts.Length == 1 ? "a script" : $"{scripts.Length} scripts")} "
                 + $"({names}) but declares no shell permission.",
-            SkillDefinition.ConfigurationFileName,
-            suggestion: "List what the skill needs to run under 'permissions.shell.allowed' in "
+            file,
+            line,
+            "List what the skill needs to run under 'permissions.shell.allowed' in "
                 + "skillforge.yaml, so somebody deciding whether to install it can see it beforehand."));
     }
 }

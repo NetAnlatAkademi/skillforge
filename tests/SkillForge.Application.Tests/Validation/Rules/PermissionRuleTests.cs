@@ -92,6 +92,24 @@ public sealed class ScriptPermissionRuleTests
         var diagnostic = (await _rule.Run(skill)).Should().ContainSingle().Subject;
         diagnostic.Severity.Should().Be(DiagnosticSeverity.Warning);
         diagnostic.Message.Should().Contain("scripts/run.ps1");
+
+        // SKILL.md, not skillforge.yaml, because this skill has no skillforge.yaml. A finding must not point at a
+        // file that does not exist: a reader opens it and finds nothing, and a SARIF consumer annotates a path
+        // that is not in the repository at all.
+        diagnostic.FilePath.Should().Be("SKILL.md");
+        diagnostic.Line.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task PointsAtTheConfigurationFileWhenThereIsOne()
+    {
+        // When the file exists, it is both the place to fix and a real location, so it wins.
+        var skill = new SkillBuilder().WithResources("SKILL.md", "scripts/run.ps1").Build() with
+        {
+            Configuration = SkillConfiguration.Default with { Exists = true },
+        };
+
+        var diagnostic = (await _rule.Run(skill)).Should().ContainSingle().Subject;
         diagnostic.FilePath.Should().Be("skillforge.yaml");
     }
 
