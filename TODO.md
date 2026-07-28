@@ -383,10 +383,14 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 - [~] Positive and negative activation tests — the *deterministic* half is done as vocabulary overlap, which is a
   necessary condition for retrieval and is reported in exactly those words. Testing whether a skill actually fires
   needs a model runner, which SkillForge does not have and which must not be smuggled in under this name.
-- [ ] A model runner, so activation can be tested rather than approximated. Needs a decision first: SkillForge
-  currently sends nothing to any service, and this would change that. Opt-in, explicit, and never the default.
-  **Decision taken (2026-07-28, D-47):** the operator picks the model, local or third party — SkillForge takes an endpoint
-  and a model name rather than blessing one vendor — and setup must stay easy. Not yet implemented.
+- [x] A model runner, so activation is tested rather than approximated. Shipped as `eval --model --model-endpoint`
+  against an OpenAI-compatible endpoint, so Ollama, LM Studio, vLLM, OpenRouter and OpenAI all work through one adapter
+  (D-47). Opt-in per run: no default endpoint, no default model, and a run naming neither makes no network call.
+  `model_activation` in an eval file, a separate key from the published `activation`. Siblings are offered as
+  distractors, each prompt asked `runs` times at temperature zero, reported as k of n against the author's threshold.
+  The API key is the **name** of an environment variable, never a value, and no type could hold one.
+  Model results carry no `SFxxxx` code and live in their own section (D-51).
+  Verified end to end against the built CLI, including the unreachable-endpoint and request-cap paths.
 - [x] Provider compatibility checks — `SF7001` unknown provider, `SF7002`/`SF7003` name and description over a
   declared provider's documented limit, plus `validate --provider` to ask about a provider the skill does not
   declare. Nothing is ever checked against a provider the skill did not name.

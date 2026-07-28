@@ -1,3 +1,4 @@
+using System.Globalization;
 using SkillForge.Application.Abstractions;
 using SkillForge.Domain;
 using SkillForge.Domain.Diagnostics;
@@ -145,6 +146,13 @@ public sealed class YamlEvalCaseReader : IEvalCaseReader
                 ? ReadActivation(activationNode)
                 : null;
 
+        // A separate key from 'activation', not an extension of it: 'activation' is published and means vocabulary
+        // overlap, so widening it would change what an existing eval file asserts without its author touching it.
+        var modelActivation = entry.Children.TryGetValue(new YamlScalarNode("model_activation"), out var modelNode)
+            && modelNode is YamlMappingNode modelActivationNode
+                ? ReadModelActivation(modelActivationNode)
+                : null;
+
         return new EvalCase(
             name,
             Sequence(entry, "files"),
@@ -152,8 +160,45 @@ public sealed class YamlEvalCaseReader : IEvalCaseReader
             Sequence(entry, "forbid"),
             Sequence(entry, "expect"),
             Sequence(entry, "mentions"),
-            activation);
+            activation,
+            modelActivation);
     }
+
+    /// <summary>
+    /// Reads a model activation case. A case naming no prompt at all is nothing, not an empty expectation, so that a
+    /// mistyped key fails the file's own "asserts something" check rather than passing silently.
+    /// </summary>
+    private static ModelActivationExpectation? ReadModelActivation(YamlMappingNode node)
+    {
+        var shouldFire = Sequence(node, "should_fire");
+        var shouldNotFire = Sequence(node, "should_not_fire");
+
+        if (shouldFire.Count == 0 && shouldNotFire.Count == 0)
+        {
+            return null;
+        }
+
+        return new ModelActivationExpectation(
+            shouldFire,
+            shouldNotFire,
+            Integer(node, "runs") ?? ModelActivationExpectation.DefaultRuns,
+            Number(node, "threshold") ?? ModelActivationExpectation.DefaultThreshold);
+    }
+
+    private static int? Integer(YamlMappingNode node, string field) =>
+        Scalar(node, field) is { } text
+            && int.TryParse(text, CultureInfo.InvariantCulture, out var parsed)
+            && parsed > 0
+                ? parsed
+                : null;
+
+    /// <summary>A threshold outside 0 to 1 is ignored rather than clamped: a typo should not become a policy.</summary>
+    private static double? Number(YamlMappingNode node, string field) =>
+        Scalar(node, field) is { } text
+            && double.TryParse(text, CultureInfo.InvariantCulture, out var parsed)
+            && parsed is >= 0 and <= 1
+                ? parsed
+                : null;
 
     /// <summary>
     /// Reads an activation case. <c>overlap</c> defaults to <see langword="true"/>, since a case naming a prompt

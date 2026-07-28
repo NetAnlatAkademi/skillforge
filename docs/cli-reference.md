@@ -444,3 +444,24 @@ future `migrate apply` must not be reachable by mistyping a flag on the read.
 Which paths are read for each provider — and which of them were verified against a real installation rather than taken
 from documentation — is in [migration.md](migration.md), along with the two things this command deliberately does not
 do yet.
+
+### Asking a model whether it would choose the skill
+
+`eval` runs `model_activation` cases only when the run names a model. Without one they are reported as skipped, with a
+line saying so.
+
+```bash
+skillforge eval ./my-skill --model qwen3:8b --model-endpoint http://localhost:11434/v1
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `--model` | none | Model to ask, e.g. `qwen3:8b` or `gpt-5`. Must be given with `--model-endpoint` |
+| `--model-endpoint` | none | Base URL of an OpenAI-compatible API. There is no default: SkillForge sends nothing anywhere until told where |
+| `--model-api-key-env` | none | **Name** of the environment variable holding the API key. The key is never an argument, so it cannot reach a shell history or a CI log |
+| `--max-model-requests` | 100 | Refuse the run, before any request, if the cases need more than this |
+
+The skill is offered to the model alongside its siblings as distractors, each prompt is asked `runs` times at
+temperature zero, and the result is reported as `k` of `n` against the threshold the author declared. Model results carry
+no diagnostic code and live in their own section — see [model-runner.md](model-runner.md) for why, and for what this
+still does not prove.

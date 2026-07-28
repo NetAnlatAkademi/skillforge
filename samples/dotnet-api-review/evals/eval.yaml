@@ -27,3 +27,14 @@ cases:
     activation:
       prompt: translate this paragraph into Turkish
       overlap: false
+
+  # Asking a model whether it would route a request here. Unlike the vocabulary case above, this needs a model, so it
+  # is skipped — and says so — unless the run supplies --model and --model-endpoint. Never reported as passed.
+  - name: a model routes an API review request here
+    model_activation:
+      should_fire:
+        - review my ASP.NET Core controller before release
+      should_not_fire:
+        - translate this paragraph into Turkish
+      runs: 3
+      threshold: 0.67

@@ -56,7 +56,7 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 | `skillforge validate <path>` | Validate structure, frontmatter, quality rules and provider compatibility |
 | `skillforge inspect <path>` | Summarise files, links, scripts and inferred capabilities |
 | `skillforge diff <before> <after>` | Compare two versions by what they can do, not which bytes changed |
-| `skillforge eval <path>` | Check a skill against the expectations declared under `evals/` |
+| `skillforge eval <path>` | Check a skill against the expectations declared under `evals/`, optionally by asking a model |
 | `skillforge pack <path>` | Produce a deterministic `.skill.zip` with a SHA-256 hash and manifest |
 | `skillforge migrate inspect` | Report the agent tooling installed here: skills, MCP servers and instruction files, per provider |
 
@@ -77,6 +77,21 @@ skillforge validate ./skills --provider claude-code
 SkillForge today; the others are recognised so that declaring them is not reported as a typo, and an unread limit is
 never checked rather than guessed at. The reasoning and the measurements are in
 [docs/validation-rules.md](docs/validation-rules.md#provider-compatibility).
+
+### Asking a model whether it would choose a skill
+
+Everything above runs locally and sends nothing anywhere. One question cannot be answered that way — would an agent
+actually choose this skill for this request? — so `eval` can ask a model, opt-in, per run:
+
+```bash
+skillforge eval ./my-skill --model qwen3:8b --model-endpoint http://localhost:11434/v1
+```
+
+You pick the model, local or hosted: the transport is OpenAI-compatible `/chat/completions`, which Ollama, LM Studio,
+vLLM, OpenRouter and OpenAI all speak. There is no default endpoint, the API key is passed as the **name** of an
+environment variable rather than a value, and the skill is judged against its siblings as distractors over several runs
+so the answer is a rate rather than an anecdote. Model results carry no diagnostic code and are reported separately from
+the deterministic findings. See [docs/model-runner.md](docs/model-runner.md).
 
 ## Requirements
 

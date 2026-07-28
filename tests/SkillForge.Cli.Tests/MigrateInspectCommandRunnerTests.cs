@@ -166,5 +166,7 @@ public sealed class MigrateInspectCommandRunnerTests
     private sealed class StubUserEnvironment : IUserEnvironment
     {
         public string HomeDirectory => "/home/stub";
+
+        public string? GetEnvironmentVariable(string name) => null;
     }
 }

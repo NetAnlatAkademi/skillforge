@@ -8,6 +8,55 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
+## [Unreleased]
+
+### Added — the model runner: `eval` can ask a model whether it would choose the skill
+
+The last open item of v0.3, and the one thing the deterministic vocabulary check was careful never to claim. Opt-in per
+run: no default endpoint, no default model, and a run that names neither makes no network call at all.
+
+```bash
+skillforge eval ./my-skill --model qwen3:8b --model-endpoint http://localhost:11434/v1
+```
+
+- `IModelRunner` with an **OpenAI-compatible** adapter, so one adapter reaches Ollama, LM Studio, llama.cpp, vLLM,
+  OpenRouter, Azure OpenAI and OpenAI itself. The operator picks the model, local or hosted; SkillForge blesses no
+  vendor. A different API shape gets its own adapter beside this one.
+- `model_activation` in an eval file: `should_fire`, `should_not_fire`, `runs`, `threshold`. A **separate key** from
+  `activation`, which is published and means vocabulary overlap — widening it would change what an existing eval file
+  asserts without its author touching it.
+- The skill is offered alongside its **siblings as distractors**. Asked alone, a model says yes to almost anything, so a
+  probe without competition measures the model's agreeableness. A skill with no siblings is still probed and the report
+  says the result is weak evidence.
+- Each prompt is asked `runs` times at temperature zero and reported as **k of n**, always — 8 of 10 and 10 of 10 both
+  clear a 0.8 threshold, and the difference is most of what an author needs.
+
+**The API key is a variable name, never a value.** `--model-api-key-env` names an environment variable; no field on any
+settings, identity or report type could hold a key, and the key is never an argument, so it cannot reach a shell history
+or a CI log. A named-but-unset variable fails before any request, because "your endpoint rejected you" is the wrong thing
+to tell somebody whose shell has no key in it.
+
+**Model results get no `SFxxxx` code** and live in their own report section, naming the model, the endpoint, the request
+count and the tokens. A code means a fact someone can see in a file; a model's answer is a sample from a distribution,
+and the same shape would invite the same reading — including into SARIF, where a generated claim would arrive as a
+finding about source code nobody can verify by looking.
+
+Guards: `--max-model-requests` (default 100) refuses the run before the first request; `--model` and `--model-endpoint`
+must be given together; an unreachable endpoint is a **usage error** naming the endpoint and quoting the underlying
+reason, never "the skill did not fire".
+
+### Fixed
+
+- A case whose only assertion was `model_activation` was reported as **passed** when no model ran, because the
+  deterministic evaluator had nothing to check. That is exactly the lie this feature must not tell; it is now skipped,
+  with a reason that says so instead of the false "asserts nothing". Found by running the built CLI over the sample.
+- The adapter sends `Content-Length` rather than a chunked body. Every real endpoint accepts chunked, but small local
+  servers and gateways may not, and they fail by closing the socket — which reached the user as an unexplained "could
+  not send". Found the same way, against a stub endpoint.
+- A model transport failure now quotes the **innermost** exception. `HttpRequestException` says "an error occurred while
+  sending the request"; its inner socket exception says "the target machine actively refused it", which is the sentence
+  somebody can act on.
+
 ## [26.209.2] — 2026-07-28
 
 ### Changed — the NuGet package page

@@ -38,11 +38,35 @@ public static class EvalRunner
             [.. cases.Select(evalCase => RunCase(skill, report, evalCase))]);
     }
 
+    /// <summary>
+    /// Whether a case declares a model activation expectation and nothing this evaluator can answer.
+    /// </summary>
+    private static bool OnlyAssertsModelActivation(EvalCase evalCase) =>
+        evalCase.ModelActivation is not null
+        && evalCase.RequiredFiles.Count == 0
+        && evalCase.RequiresShellPermission is null
+        && evalCase.ForbiddenDiagnostics.Count == 0
+        && evalCase.ExpectedDiagnostics.Count == 0
+        && evalCase.DescriptionMentions.Count == 0
+        && evalCase.Activation is null;
+
     private static EvalCaseResult RunCase(SkillDefinition skill, ValidationReport report, EvalCase evalCase)
     {
         if (!evalCase.AssertsSomething)
         {
             return new EvalCaseResult(evalCase.Name, [], Skipped: true);
+        }
+
+        // A case whose only assertion is model_activation has nothing for a deterministic run to check, and reporting
+        // it as passed would be the exact lie this evaluator exists to avoid — it would say a model routed correctly
+        // when no model was asked. It is skipped here and answered in the model activation section instead.
+        if (OnlyAssertsModelActivation(evalCase))
+        {
+            return new EvalCaseResult(
+                evalCase.Name,
+                [],
+                Skipped: true,
+                SkipReason: "answered in the model activation section, which needs a model");
         }
 
         var assertions = new List<EvalAssertion>();
