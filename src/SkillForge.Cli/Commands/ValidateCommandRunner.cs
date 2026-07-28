@@ -1,4 +1,5 @@
 using SkillForge.Application.Abstractions;
+using SkillForge.Application.Providers;
 using SkillForge.Application.Validation;
 using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Skills;
@@ -19,6 +20,7 @@ internal sealed class ValidateCommandRunner
     private readonly ISkillValidator _validator;
     private readonly ISkillDiscovery _discovery;
     private readonly IFileSystem _fileSystem;
+    private readonly IProviderCompatibilityChecker _providerChecker;
     private readonly ReportOutput _output;
 
     /// <summary>Initialises the runner.</summary>
@@ -26,6 +28,10 @@ internal sealed class ValidateCommandRunner
     /// <param name="validator">Runs the rules.</param>
     /// <param name="discovery">Finds the skills when the path holds several of them.</param>
     /// <param name="fileSystem">Used to tell one skill from a directory of skills.</param>
+    /// <param name="providerChecker">
+    /// Checks the skill against the providers it declares, plus any given with <c>--provider</c>. Separate from
+    /// the rule set because it needs the run's options, not just the skill.
+    /// </param>
     /// <param name="output">Writes the report where the user asked for it.</param>
     /// <remarks>
     /// Public because the dependency injection container will only use a public constructor, even for an
@@ -36,18 +42,21 @@ internal sealed class ValidateCommandRunner
         ISkillValidator validator,
         ISkillDiscovery discovery,
         IFileSystem fileSystem,
+        IProviderCompatibilityChecker providerChecker,
         ReportOutput output)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(validator);
         ArgumentNullException.ThrowIfNull(discovery);
         ArgumentNullException.ThrowIfNull(fileSystem);
+        ArgumentNullException.ThrowIfNull(providerChecker);
         ArgumentNullException.ThrowIfNull(output);
 
         _loader = loader;
         _validator = validator;
         _discovery = discovery;
         _fileSystem = fileSystem;
+        _providerChecker = providerChecker;
         _output = output;
     }
 
@@ -172,10 +181,14 @@ internal sealed class ValidateCommandRunner
 
         var report = await _validator.ValidateAsync(load.Value, cancellationToken).ConfigureAwait(false);
 
+        // The provider checks are not rules: they depend on --provider as well as on the skill. They are merged
+        // here for the same reason the loader's diagnostics are — the report is the one place a user looks.
+        var providerFindings = _providerChecker.Check(load.Value, request.Providers);
+
         // Loader diagnostics belong in the report too — a duplicated frontmatter field, or a skillforge.yaml that
         // had to be ignored, is not something the rules can see.
         return new SkillResult(
-            Finish(report, [.. load.Diagnostics, .. report.Diagnostics], suppressed),
+            Finish(report, [.. load.Diagnostics, .. report.Diagnostics, .. providerFindings], suppressed),
             strict);
     }
 

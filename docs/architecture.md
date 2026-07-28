@@ -17,6 +17,17 @@ SkillForge.Cli            Commands, options, exit codes, DI bootstrap
                         SkillForge.Domain            Models, diagnostics, severities
 ```
 
+### Provider knowledge is data behind an interface
+
+What SkillForge knows about an agent provider — its identifier and any documented frontmatter limits — lives in
+`SkillForge.Application/Providers`, one profile per file, behind `IAgentProviderRegistry`. Nothing about a provider
+is embedded in a rule.
+
+That is deliberate, because the same knowledge has three consumers arriving at different times: the SF7xxx checks
+today, `migrate inspect` in v0.4, and the MCP version adapters after that. A protocol or provider that changes
+should mean editing one profile, never the validation pipeline — the same reason the roadmap refuses to bind the
+core to an MCP protocol version.
+
 ## Dependency rules
 
 | Layer | May reference | Must not reference |

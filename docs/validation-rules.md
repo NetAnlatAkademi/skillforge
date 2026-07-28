@@ -262,6 +262,70 @@ already make `--strict` unusable by default. It was also the reason to reject pr
 letting it in here through the back door would be inconsistent as well as noisy. That is what the both-sides
 requirement is protecting.
 
+## Provider compatibility
+
+| Code | Rule | Status |
+|---|---|---|
+| SF7001 | Compatibility is declared with a provider SkillForge does not recognise | **Implemented** |
+| SF7002 | The `name` is longer than a declared provider accepts | **Implemented** |
+| SF7003 | The `description` is longer than a declared provider accepts | **Implemented** |
+
+These are reported by `validate` but they are not rules: a rule sees the skill and nothing else, and these also
+depend on what the run asked for (`--provider`). They come from `ProviderCompatibilityChecker` and are merged into
+the report the same way the loader's diagnostics are, so suppression, ordering, JSON and SARIF apply unchanged.
+SF6001 already set the precedent that a code's owner need not be the rule pipeline.
+
+**Nothing is checked against a provider the skill does not name.** A skill is only measured against `claude-code`
+if it says `compatibility: [claude-code]`, or if the caller asked with `--provider claude-code`. Judging every skill
+against every provider SkillForge knows would report portability problems to authors who never claimed to be
+portable — which is the exact failure mode the SF3xxx measurements were introduced to prevent.
+
+### What each provider profile declares
+
+| Provider | `name` limit | `description` limit |
+|---|---|---|
+| `claude-code` | 64 | 1024 |
+| `codex` | not known | not known |
+| `cursor` | not known | not known |
+| `github-copilot` | not known | not known |
+
+A limit SkillForge has not read from that provider's own documentation is left **unset**, and an unset limit is
+never checked — it does not mean "no limit", and it is not filled in with a guess. Those providers are still in the
+registry, because recognising the identifier is what stops a legitimate `compatibility: [codex]` being reported as
+a typo. Only `claude-code` can produce SF7002 or SF7003 today, and a test asserts that so the moment another
+provider's limit is added, the suite says this table has to be updated with it.
+
+The length comparison ignores trailing whitespace, because a block scalar's closing newline is YAML syntax rather
+than part of the description. Measured on the finding below: 1065 characters raw, 1064 of description.
+
+### Measured on 229 real skills
+
+| Run | SF7xxx findings |
+|---|---|
+| Plain `validate` | **0** |
+| `validate --provider claude-code` | **1** |
+
+The zero is real but it proves nothing on its own: none of the 229 skills declares `compatibility` at all — SF1010
+fires on all 229 — so the checks never ran. That is worth stating rather than presenting as a clean result.
+
+Asking the question explicitly is what produced signal. `--provider claude-code` on the same 229 skills gives one
+finding: `vgen-pr`'s description is 1064 characters against a documented limit of 1024. It was verified by parsing
+the frontmatter independently, and it is a skill actually installed in Claude Code, so it is a true positive rather
+than a crafted one.
+
+SF7001's value cannot be measured on this corpus for the same reason, and is shown with the near-misses its
+suggester resolves — `claude_code`, `ClaudeCode`, `claude-cod`, `copilot` — each pinned by a test. When two known
+identifiers are equally close it suggests neither, because naming one of two would be a coin toss presented as
+advice.
+
+### Why there is no "capability not supported" rule
+
+A fourth code was designed and dropped: "the skill ships scripts, or uses `allowed-tools`, and a declared provider
+does not support that". It would need a documented fact per provider about what they execute, and SkillForge has
+read none. Shipping the rule with no data behind it would mean shipping a rule that can never fire — or worse,
+filling the gap with a guess and reporting a constraint that may not exist. The profile type has room for it; the
+code will be added when a measurement justifies one.
+
 ## Measured against real skills
 
 Run over 32 skills installed on a working machine (2026-07-27), the rules behaved like this:

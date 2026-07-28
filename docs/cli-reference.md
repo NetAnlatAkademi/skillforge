@@ -104,6 +104,33 @@ Machine-readable output changes shape for a batch, and each format does what its
 | `--format`, `-f` | `console` | `console`, `json` or `sarif` |
 | `--output`, `-o` | stdout | Write machine-readable output to a file |
 | `--suppress` | nothing | Codes not to report, comma-separated or repeated. A value that is not a code is a usage error, because a typo would otherwise silently suppress nothing |
+| `--provider` | nothing | Also check against these agent providers, comma-separated or repeated, even when the skill does not declare them |
+
+### Checking against an agent provider
+
+A skill is checked against the providers it declares under `compatibility`, and against nothing else. `--provider`
+asks the other question — "would this work on Claude Code?" — without editing the skill to find out:
+
+```bash
+skillforge validate ./skills --provider claude-code
+skillforge validate ./skills --provider claude-code,codex
+```
+
+The providers SkillForge recognises are `claude-code`, `codex`, `cursor` and `github-copilot`. An identifier it does
+not recognise is reported as **SF7001** rather than rejected as a usage error, because it may be a real provider
+SkillForge has not learned yet — and when it is a near miss, the finding names the identifier it was probably meant
+to be:
+
+```text
+! SF7001 Compatibility is declared with 'claude_code', which SkillForge does not recognise, so nothing was
+         checked against it. (SKILL.md:1)
+         fix:  in 'compatibility', replace 'claude_code' with 'claude-code'
+```
+
+**SF7002** and **SF7003** compare the `name` and `description` against the limits a declared provider documents.
+Only `claude-code` has documented limits in SkillForge today (64 and 1024 characters); the other three are
+recognised but declare none, and an unread limit is never checked rather than guessed at. See
+[validation-rules.md](validation-rules.md#provider-compatibility) for the profile table and the measurements.
 
 ### Suppressing rules
 

@@ -142,4 +142,20 @@ public static class DiagnosticCodes
     /// received the change without being told. Reported by <c>diff</c>, which is the only command that can see it.
     /// </summary>
     public const string VersionSilentAboutGrowth = "SF6001";
+
+    /// <summary>
+    /// The skill declares compatibility with a provider SkillForge does not recognise, so nothing was checked
+    /// against it. Usually a spelling of a known identifier; sometimes a provider SkillForge has not learned yet.
+    /// </summary>
+    public const string ProviderUnknown = "SF7001";
+
+    /// <summary>
+    /// The <c>name</c> is longer than a provider the skill declares compatibility with accepts.
+    /// </summary>
+    public const string ProviderNameTooLong = "SF7002";
+
+    /// <summary>
+    /// The <c>description</c> is longer than a provider the skill declares compatibility with accepts.
+    /// </summary>
+    public const string ProviderDescriptionTooLong = "SF7003";
 }

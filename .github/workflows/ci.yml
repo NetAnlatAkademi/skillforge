@@ -89,6 +89,19 @@ jobs:
             exit 1
           fi
 
+          # valid-skill declares compatibility with claude-code, so the provider checks really run on it and
+          # --strict above already proves they stay silent. Asking about a provider it does not declare must
+          # also stay clean, and an identifier SkillForge does not know must be a warning rather than a
+          # usage error — otherwise a real provider it has not learned yet would break somebody's build.
+          run validate ./samples/valid-skill --strict --provider claude-code,codex --no-color
+          provider_output=$(run validate ./samples/valid-skill --provider some-future-agent --no-color)
+          printf '%s\n' "$provider_output"
+
+          if ! printf '%s\n' "$provider_output" | grep -q 'SF7001'; then
+            echo "Expected an unrecognised --provider value to report SF7001"
+            exit 1
+          fi
+
           run inspect ./samples/dotnet-api-review --no-color > /dev/null
 
           # The sample's evals are the worked example of the format, so they have to keep passing.

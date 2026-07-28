@@ -10,8 +10,8 @@
 A local, open source CLI for AI agent skills. SkillForge creates, validates, inspects and packages
 `SKILL.md`-based skills, and reports findings as human-readable console output, JSON or SARIF.
 
-> Status: **v0.1.0 complete, v0.2.0 in progress.** All five commands work end to end. CI builds and tests on
-> Linux and Windows, and runs the CLI over the sample skills.
+> Status: **v0.2 complete and released as `26.208.2`; v0.3 in progress.** All six commands work end to end. CI
+> builds and tests on Linux and Windows, and runs the CLI over the sample skills.
 
 ## Try it
 
@@ -52,7 +52,7 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 | Command | Purpose |
 |---|---|
 | `skillforge init <name>` | Scaffold a skill that already passes validation |
-| `skillforge validate <path>` | Validate structure, frontmatter and quality rules |
+| `skillforge validate <path>` | Validate structure, frontmatter, quality rules and provider compatibility |
 | `skillforge inspect <path>` | Summarise files, links, scripts and inferred capabilities |
 | `skillforge diff <before> <after>` | Compare two versions by what they can do, not which bytes changed |
 | `skillforge eval <path>` | Check a skill against the expectations declared under `evals/` |
@@ -60,6 +60,21 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 
 Full options are in [docs/cli-reference.md](docs/cli-reference.md); CI usage, including SARIF upload, is in
 [docs/ci.md](docs/ci.md).
+
+### Checking a skill against an agent provider
+
+A skill is checked against the providers it declares under `compatibility`, and against nothing else — judging every
+skill against every provider would report portability problems to authors who never claimed to be portable.
+`--provider` asks the other question without editing the skill to find out:
+
+```bash
+skillforge validate ./skills --provider claude-code
+```
+
+`claude-code`, `codex`, `cursor` and `github-copilot` are recognised. Only `claude-code` has documented limits in
+SkillForge today; the others are recognised so that declaring them is not reported as a typo, and an unread limit is
+never checked rather than guessed at. The reasoning and the measurements are in
+[docs/validation-rules.md](docs/validation-rules.md#provider-compatibility).
 
 ## Requirements
 

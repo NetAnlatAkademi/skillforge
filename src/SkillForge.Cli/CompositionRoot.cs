@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Inspection;
 using SkillForge.Application.Packaging;
+using SkillForge.Application.Providers;
 using SkillForge.Application.Skills;
 using SkillForge.Application.Validation;
 using SkillForge.Cli.Commands;
@@ -35,6 +36,9 @@ internal static class CompositionRoot
         services.AddSingleton<IEvalCaseReader, Infrastructure.Yaml.YamlEvalCaseReader>();
         services.AddSingleton<IArchiveWriter, DeterministicZipArchiveWriter>();
         services.AddSingleton<IHashCalculator, Sha256HashCalculator>();
+
+        services.AddSingleton<IAgentProviderRegistry, AgentProviderRegistry>();
+        services.AddSingleton<IProviderCompatibilityChecker, ProviderCompatibilityChecker>();
 
         services.AddSingleton<ISkillLoader, SkillLoader>();
         services.AddSingleton<ISkillDiscovery, SkillDiscovery>();
