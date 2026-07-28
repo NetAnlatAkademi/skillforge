@@ -62,6 +62,7 @@ internal static partial class SkillForgeCommandLine
         root.Subcommands.Add(BuildEvalCommand(services, globals));
         root.Subcommands.Add(BuildDiffCommand(services, globals));
         root.Subcommands.Add(BuildPackCommand(services, globals));
+        root.Subcommands.Add(BuildMigrateCommand(services, globals));
 
         return root;
     }
@@ -240,6 +241,62 @@ internal static partial class SkillForgeCommandLine
         });
 
         return command;
+    }
+
+    /// <summary>
+    /// Builds <c>migrate</c>, which is a group rather than a command of its own.
+    /// </summary>
+    /// <remarks>
+    /// <c>inspect</c> is the only thing under it today and it would have been shorter as <c>migrate-inspect</c>.
+    /// The group is deliberate: reading a setup and changing one are different acts with different risks, and a
+    /// later <c>migrate apply</c> must not be reachable by a typo in a flag. Naming the read explicitly keeps the
+    /// write in its own place.
+    /// </remarks>
+    private static Command BuildMigrateCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var project = new Argument<string?>("project")
+        {
+            Description = "Project directory to include project-scoped configuration from. Optional; without it "
+                + "only user-scoped configuration is read.",
+            Arity = ArgumentArity.ZeroOrOne,
+        };
+
+        var userDirectory = new Option<string?>("--user-directory")
+        {
+            Description = "Read this directory instead of the current user's home directory.",
+        };
+
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var output = CreateOutputOption();
+
+        var inspect = new Command(
+            "inspect",
+            "Report the installed agent tooling: skills, MCP servers and instruction files, per provider.")
+        {
+            project,
+            userDirectory,
+            format,
+            output,
+        };
+
+        inspect.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<MigrateInspectCommandRunner>();
+
+            return await runner.RunAsync(
+                new MigrateInspectRequest(
+                    parseResult.GetValue(project),
+                    parseResult.GetValue(userDirectory),
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return new Command("migrate", "Inspect agent tooling across providers, ahead of moving between them.")
+        {
+            inspect,
+        };
     }
 
     private static Command BuildEvalCommand(IServiceProvider services, GlobalOptions globals)

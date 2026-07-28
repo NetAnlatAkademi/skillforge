@@ -406,3 +406,41 @@ related. That stop-word list is **English only**, so a Turkish or German descrip
 check does not recognise and its overlap result will be correspondingly generous.
 
 Real activation testing needs a model runner. That is a separate thing to build, and it needs an honest name.
+
+---
+
+## `skillforge migrate inspect`
+
+Reports the agent tooling installed on this machine, per provider: skills, MCP servers and instruction files.
+
+```bash
+skillforge migrate inspect                       # user scope only
+skillforge migrate inspect .                     # plus this project's configuration
+skillforge migrate inspect . --format json
+skillforge migrate inspect --user-directory /exported/profile
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `project` | none | Project directory to include project-scoped configuration from. Without it, only user scope is read |
+| `--user-directory` | the current user's home | Read this directory instead — an exported profile, or a fixture |
+| `--format`, `-f` | `console` | `console` or `json`. **No SARIF**: an inventory is not a set of findings, and dressing one up as findings would misuse the format |
+| `--output`, `-o` | stdout | Write to a file |
+
+It **describes and does not judge**, like `inspect`, and always exits `0`. A provider that is not installed is still
+listed, as absent — that absence is the answer to "can I move to it?", and leaving it out would look like it was
+never looked for.
+
+**Environment variable values are never read or printed** — only the names a declaration sets. The model has no field
+for a value, so there is nothing to filter and nothing to leak. `~/.claude/.credentials.json` and `~/.codex/auth.json`
+are never opened at all.
+
+A configuration file that exists but cannot be parsed is reported as **SF1015** and the rest of the inventory is still
+shown, because a silently skipped file makes an incomplete inventory look complete.
+
+`migrate` is a command group with one member on purpose: reading a setup and changing one are different acts, and a
+future `migrate apply` must not be reachable by mistyping a flag on the read.
+
+Which paths are read for each provider — and which of them were verified against a real installation rather than taken
+from documentation — is in [migration.md](migration.md), along with the two things this command deliberately does not
+do yet.

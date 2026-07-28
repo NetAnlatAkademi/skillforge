@@ -82,6 +82,18 @@ internal sealed class FakeFileSystem : IFileSystem
             .ToArray();
     }
 
+    public IEnumerable<string> EnumerateDirectories(string directoryPath)
+    {
+        var prefix = Normalise(directoryPath).TrimEnd('/') + "/";
+
+        // Immediate children only, matching the real implementation: a name under the prefix with no further '/'.
+        return _directories
+            .Where(directory => directory.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && !directory[prefix.Length..].Contains('/', StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
     public void CreateDirectory(string path) => _directories.Add(Normalise(path));
 
     public Task WriteAllTextAsync(string path, string content, CancellationToken cancellationToken)

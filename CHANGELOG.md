@@ -10,6 +10,39 @@ Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases
 
 ## [Unreleased]
 
+### Added — `skillforge migrate inspect`
+
+Reports the agent tooling installed on a machine, per provider: skills, MCP servers and instruction files. It
+describes and does not judge, like `inspect`, and always exits `0`. A provider that is not installed is still listed
+as absent, because that absence is the answer to "can I move to it?".
+
+- One `IAgentToolAdapter` per provider (`claude-code`, `codex`, `cursor`, `github-copilot`), each stating its own
+  provider's paths and nothing else. The inspector that runs them knows no path at all, so a provider that moves a
+  file is a one-class diff — the seam the MCP protocol adapters will use next.
+- `IMcpConfigurationReader` declares which **format** it handles, not which provider wrote the file: JSON for Claude
+  Code, Cursor and VS Code, TOML for Codex.
+- `--user-directory` reads an exported profile instead of the current user's home. `--format json` for scripts; no
+  SARIF, because an inventory is not a set of findings.
+- SF1015 when a provider's configuration exists but cannot be parsed. The rest of the inventory is still reported —
+  skipping the file would make an incomplete inventory look complete, the same reasoning as SF1012 and SF1014.
+
+**Environment variable values are never read.** `McpServerDeclaration` has no field for them: the readers take the
+names out of `env` and drop the values. An MCP declaration is one of the likeliest places in a home directory to hold
+a token, and filtering on the way out would be one refactor away from a leak — having nothing to filter is not. Two
+tests assert a known secret value appears nowhere in the console output or the JSON. `~/.claude/.credentials.json` and
+`~/.codex/auth.json` are never opened.
+
+Verified against a real machine: 32 skills across 34 directories (two hold no `SKILL.md`), three MCP servers from
+`~/.claude.json` and one from `~/.codex/config.toml`, env names only. Two facts came out of looking rather than
+reading — `~/.copilot/config.json` is JSON **with `//` comments**, so a strict parser calls a working configuration
+corrupt; and Codex is the only provider using TOML, which is why `Tomlyn` is now a dependency (justified in
+`docs/architecture.md`).
+
+Two of the roadmap's five asks are deliberately absent, with reasons recorded in `docs/migration.md`: "conflicting
+instructions" is a judgement about prose, and "missing dependencies" cannot say "not on this PATH" without implying
+"broken". Copilot's and Cursor's skill directories are not guessed at either — an invented path yields a heading that
+is permanently empty for the wrong reason.
+
 ### Added — `SF7xxx`, provider compatibility
 
 - Provider profiles behind `IAgentProviderRegistry`, one file per provider: `claude-code`, `codex`, `cursor`,

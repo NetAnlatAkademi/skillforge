@@ -95,6 +95,7 @@ number in front of it.
 | SF1012 | `skillforge.yaml` exists but could not be parsed, so its settings were ignored | **Implemented** |
 | SF1013 | A `version` field was written at the top level instead of under `metadata` | **Implemented** (loader) |
 | SF1014 | A file under `evals` could not be read or parsed, so its cases were skipped | **Implemented** (`eval`) |
+| SF1015 | A provider's own configuration file could not be read, so what it declares is missing from the migration inventory | **Implemented** (`migrate inspect`) |
 
 SF1013 exists because the old behaviour was to discard the value without a word. Every other field a skill declares
 is top-level, so writing `version:` there is an easy mistake — and it meant SF0010 never checked the version,

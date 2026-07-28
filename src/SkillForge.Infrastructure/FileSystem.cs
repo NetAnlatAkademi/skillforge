@@ -62,6 +62,27 @@ public sealed class FileSystem : IFileSystem
     }
 
     /// <inheritdoc />
+    public IEnumerable<string> EnumerateDirectories(string directoryPath)
+    {
+        // A provider that is not installed has no directory, and that is an ordinary answer for the migration
+        // inventory rather than a failure — so it is [] instead of DirectoryNotFoundException.
+        if (!Directory.Exists(directoryPath))
+        {
+            return [];
+        }
+
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = false,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.System,
+            MatchType = MatchType.Simple,
+        };
+
+        return Directory.EnumerateDirectories(directoryPath, "*", options);
+    }
+
+    /// <inheritdoc />
     public Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken = default) =>
         File.ReadAllBytesAsync(path, cancellationToken);
 
