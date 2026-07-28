@@ -111,7 +111,7 @@ There is a GitHub Action that runs `validate`, writes SARIF and uploads it to co
 inline on the pull request:
 
 ```yaml
-- uses: NetAnlatAkademi/skillforge@v26.209.1
+- uses: NetAnlatAkademi/skillforge@v26.209.2
   with:
     path: ./skills
     suppress: SF1009,SF1010
