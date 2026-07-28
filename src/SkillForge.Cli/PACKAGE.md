@@ -105,13 +105,27 @@ Lists which providers are present, what skills each has, what MCP servers each d
 files are in play. It describes and never judges, and **environment variable values are never read or printed** —
 only the names a declaration sets.
 
+## Ask a model whether it would choose the skill
+
+Everything above runs locally and sends nothing anywhere. One question cannot be answered that way, so `eval` can ask a
+model — opt-in, per run, with no default endpoint:
+
+```bash
+skillforge eval ./my-skill --model qwen3:8b --model-endpoint http://localhost:11434/v1
+```
+
+You pick the model, local or hosted: the transport is OpenAI-compatible, which Ollama, LM Studio, vLLM, OpenRouter and
+OpenAI all speak. The API key is passed as the **name** of an environment variable, never a value. The skill competes
+against its siblings as distractors over several runs, so the answer is a rate rather than an anecdote, and model results
+carry no diagnostic code — they are reported separately from the deterministic findings.
+
 ## In CI
 
 There is a GitHub Action that runs `validate`, writes SARIF and uploads it to code scanning, so findings land
 inline on the pull request:
 
 ```yaml
-- uses: NetAnlatAkademi/skillforge@v26.209.2
+- uses: NetAnlatAkademi/skillforge@v26.209.3
   with:
     path: ./skills
     suppress: SF1009,SF1010
