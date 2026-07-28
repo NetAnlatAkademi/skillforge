@@ -13,4 +13,12 @@ public sealed class UserEnvironment : IUserEnvironment
     /// <c>%USERPROFILE%</c> on Windows and <c>$HOME</c> elsewhere.
     /// </remarks>
     public string HomeDirectory => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    /// <inheritdoc />
+    public string? GetEnvironmentVariable(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        return Environment.GetEnvironmentVariable(name);
+    }
 }

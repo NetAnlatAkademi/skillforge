@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Evaluation;
+using SkillForge.Application.Modeling;
 using SkillForge.Application.Validation;
 using SkillForge.Domain.Evaluation;
 using SkillForge.Domain.Validation;
@@ -31,6 +32,8 @@ internal sealed class EvalCommandRunner
     private readonly IEvalCaseReader _cases;
     private readonly IFileSystem _fileSystem;
     private readonly IValidationReportRenderer _renderer;
+    private readonly IModelRunnerFactory _modelRunners;
+    private readonly SkillCatalogue _catalogue;
 
     /// <summary>Initialises the runner.</summary>
     /// <param name="loader">Loads the skill.</param>
@@ -38,24 +41,35 @@ internal sealed class EvalCommandRunner
     /// <param name="cases">Reads the eval cases.</param>
     /// <param name="fileSystem">Writes machine-readable output when asked.</param>
     /// <param name="renderer">Reports a skill that could not be loaded.</param>
+    /// <param name="modelRunners">
+    /// Creates the model runner for <c>model_activation</c> cases. Registered always, used only when the caller names a
+    /// model, and it opens no connection until it is asked a question.
+    /// </param>
+    /// <param name="catalogue">Finds the sibling skills a probe offers as distractors.</param>
     public EvalCommandRunner(
         ISkillLoader loader,
         ISkillValidator validator,
         IEvalCaseReader cases,
         IFileSystem fileSystem,
-        IValidationReportRenderer renderer)
+        IValidationReportRenderer renderer,
+        IModelRunnerFactory modelRunners,
+        SkillCatalogue catalogue)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(validator);
         ArgumentNullException.ThrowIfNull(cases);
         ArgumentNullException.ThrowIfNull(fileSystem);
         ArgumentNullException.ThrowIfNull(renderer);
+        ArgumentNullException.ThrowIfNull(modelRunners);
+        ArgumentNullException.ThrowIfNull(catalogue);
 
         _loader = loader;
         _validator = validator;
         _cases = cases;
         _fileSystem = fileSystem;
         _renderer = renderer;
+        _modelRunners = modelRunners;
+        _catalogue = catalogue;
     }
 
     /// <summary>Runs a skill's evals and prints the result.</summary>
@@ -95,9 +109,57 @@ internal sealed class EvalCommandRunner
         var validation = await _validator.ValidateAsync(skill, cancellationToken).ConfigureAwait(false);
         var report = EvalRunner.Run(skill, validation, cases);
 
+        var expectation = MergedModelActivation(cases);
+
+        if (expectation is not null && request.Model is null)
+        {
+            // Skipped, and said out loud. Reporting it as passed would be the worst of the three options, and leaving
+            // it out entirely would hide a case the author wrote.
+            await Console.Out.WriteLineAsync(
+                $"Skipped {expectation.PromptCount} model activation prompt(s): no model was given. "
+                + "Pass --model and --model-endpoint to run them.").ConfigureAwait(false);
+        }
+
+        ModelActivationReport? activation = null;
+
+        if (expectation is not null && request.Model is not null)
+        {
+            var requests = expectation.RequestCount;
+
+            if (requests > request.MaxModelRequests)
+            {
+                await Console.Error.WriteLineAsync(
+                    $"These model activation cases need {requests} model requests, over the limit of "
+                    + $"{request.MaxModelRequests}. Raise --max-model-requests, or lower 'runs' in the eval file.")
+                    .ConfigureAwait(false);
+
+                return ExitCodes.InvalidUsage;
+            }
+
+            try
+            {
+                var runner = _modelRunners.Create(request.Model);
+                var distractors = await _catalogue
+                    .DistractorsAsync(skill, cancellationToken)
+                    .ConfigureAwait(false);
+
+                activation = await new ActivationProber(runner)
+                    .ProbeAsync(skill, distractors, expectation, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (ModelRunnerException exception)
+            {
+                // An unreachable model is not a fact about the skill. Reporting "did not fire" here would be a lie
+                // dressed as evidence, so the run fails as a usage problem and says which endpoint.
+                await Console.Error.WriteLineAsync(exception.Message).ConfigureAwait(false);
+
+                return ExitCodes.InvalidUsage;
+            }
+        }
+
         var text = string.Equals(request.Format, OutputFormat.Json, StringComparison.OrdinalIgnoreCase)
-            ? ToJson(report, read.Diagnostics)
-            : ToText(report, read.Diagnostics);
+            ? ToJson(report, read.Diagnostics, activation)
+            : ToText(report, read.Diagnostics, activation);
 
         if (request.OutputPath is { Length: > 0 } outputPath)
         {
@@ -114,10 +176,44 @@ internal sealed class EvalCommandRunner
             await Console.Out.WriteAsync(text).ConfigureAwait(false);
         }
 
-        return report.Passed ? ExitCodes.Success : ExitCodes.ValidationFailed;
+        // A model result can fail the run, but only when the author declared what they expected of it — the threshold
+        // is theirs, so the verdict is theirs too.
+        var modelFailed = activation is { Outcomes.Count: > 0 } and { AllMet: false };
+
+        return report.Passed && !modelFailed ? ExitCodes.Success : ExitCodes.ValidationFailed;
     }
 
-    private static string ToText(EvalReport report, IReadOnlyList<Domain.Diagnostics.Diagnostic> readProblems)
+    /// <summary>
+    /// Collects every <c>model_activation</c> case into one expectation, so the whole file's prompts are probed against
+    /// one catalogue and one request budget rather than case by case.
+    /// </summary>
+    /// <remarks>
+    /// Runs and threshold come from the first case that declares them: two cases disagreeing about how many runs to
+    /// make is a question the file has to answer, not something to average away silently.
+    /// </remarks>
+    private static ModelActivationExpectation? MergedModelActivation(IReadOnlyList<EvalCase> cases)
+    {
+        var declared = cases
+            .Select(evalCase => evalCase.ModelActivation)
+            .OfType<ModelActivationExpectation>()
+            .ToArray();
+
+        if (declared.Length == 0)
+        {
+            return null;
+        }
+
+        return new ModelActivationExpectation(
+            [.. declared.SelectMany(expectation => expectation.ShouldFire)],
+            [.. declared.SelectMany(expectation => expectation.ShouldNotFire)],
+            declared[0].Runs,
+            declared[0].Threshold);
+    }
+
+    private static string ToText(
+        EvalReport report,
+        IReadOnlyList<Domain.Diagnostics.Diagnostic> readProblems,
+        ModelActivationReport? activation)
     {
         var builder = new StringBuilder();
 
@@ -141,7 +237,7 @@ internal sealed class EvalCommandRunner
         {
             if (result.Skipped)
             {
-                builder.AppendLine($"- {result.Name}  (asserts nothing)");
+                builder.AppendLine($"- {result.Name}  ({result.SkipReason ?? "asserts nothing"})");
                 continue;
             }
 
@@ -166,10 +262,88 @@ internal sealed class EvalCommandRunner
         builder.AppendLine(
             $"Passed: {report.PassedCount}  Failed: {report.FailedCount}  Skipped: {report.SkippedCount}");
 
+        AppendModelActivation(builder, activation);
+
         return builder.ToString();
     }
 
-    private static string ToJson(EvalReport report, IReadOnlyList<Domain.Diagnostics.Diagnostic> readProblems)
+    /// <summary>
+    /// Writes the model's answers as their own section, under a heading that names the model.
+    /// </summary>
+    /// <remarks>
+    /// Every line here says <c>k/n</c> rather than pass or fail alone, because 8 of 10 and 10 of 10 both "pass" a 0.8
+    /// threshold and an author needs to see which one they have. A probe that ran without distractors is called out:
+    /// offered alone, a model picks almost any skill for almost any prompt, so the number is weak evidence and the
+    /// reader has to know which kind they are holding.
+    /// </remarks>
+    private static void AppendModelActivation(StringBuilder builder, ModelActivationReport? activation)
+    {
+        if (activation is null)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine($"Model activation — asked {activation.Model.Name} at {activation.Model.Endpoint}");
+        builder.AppendLine(activation.HadDistractors
+            ? $"Competing against {activation.Distractors.Count} sibling skill(s)."
+            : "No sibling skills to compete against, so this is weak evidence: offered alone, a model chooses "
+                + "almost any skill for almost any prompt.");
+        builder.AppendLine();
+
+        foreach (var outcome in activation.Outcomes)
+        {
+            var marker = outcome.Met ? "ok  " : "fail";
+            var expected = outcome.ExpectedToFire ? "should be chosen" : "should not be chosen";
+
+            builder.AppendLine(
+                $"  {marker} {expected}: chosen in {outcome.ChosenRuns}/{outcome.Runs} runs "
+                + $"(needs {outcome.Threshold:P0} agreement) — \"{outcome.Prompt}\"");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine(
+            $"{activation.RequestCount} model request(s), {activation.PromptTokens} prompt and "
+            + $"{activation.CompletionTokens} completion tokens reported.");
+        builder.AppendLine(
+            "This is a sample of one model's routing decision, not a guarantee about any agent. It is the closest "
+            + "SkillForge gets to testing activation, and it is still not proof.");
+    }
+
+    private static JsonObject ToJson(ModelActivationReport activation) =>
+        new()
+        {
+            ["model"] = new JsonObject
+            {
+                ["name"] = activation.Model.Name,
+                ["endpoint"] = activation.Model.Endpoint,
+            },
+            ["distractors"] = new JsonArray(
+                [.. activation.Distractors.Select(name => (JsonNode)JsonValue.Create(name))]),
+            ["requestCount"] = activation.RequestCount,
+            ["promptTokens"] = activation.PromptTokens,
+            ["completionTokens"] = activation.CompletionTokens,
+            ["allMet"] = activation.AllMet,
+            ["outcomes"] = new JsonArray(
+                [.. activation.Outcomes.Select(outcome => (JsonNode)new JsonObject
+                {
+                    ["prompt"] = outcome.Prompt,
+                    ["expectedToFire"] = outcome.ExpectedToFire,
+                    ["chosenRuns"] = outcome.ChosenRuns,
+                    ["runs"] = outcome.Runs,
+                    ["chosenRate"] = outcome.ChosenRate,
+                    ["agreementRate"] = outcome.AgreementRate,
+                    ["threshold"] = outcome.Threshold,
+                    ["met"] = outcome.Met,
+                })]),
+            ["disclaimer"] = "Generated by the model named above, not computed from the skill's files. A sample of "
+                + "one model's routing decision, not a guarantee about any agent.",
+        };
+
+    private static string ToJson(
+        EvalReport report,
+        IReadOnlyList<Domain.Diagnostics.Diagnostic> readProblems,
+        ModelActivationReport? activation)
     {
         var document = new JsonObject
         {
@@ -200,6 +374,13 @@ internal sealed class EvalCommandRunner
             ["disclaimer"] = "A regression check against the author's declared expectations. Activation cases "
                 + "report shared vocabulary, not agent behaviour.",
         };
+
+        // A separate key, never mixed into "cases": these results were generated by a model, and a consumer must be
+        // able to tell computed facts from sampled ones without reading the disclaimer.
+        if (activation is not null)
+        {
+            document["modelActivation"] = ToJson(activation);
+        }
 
         return JsonSerializer.Serialize(document, JsonOptions) + Environment.NewLine;
     }

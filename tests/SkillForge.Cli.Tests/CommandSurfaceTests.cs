@@ -33,6 +33,10 @@ public sealed class CommandSurfaceTests
     [InlineData("migrate inspect .")]
     [InlineData("migrate inspect . --format json")]
     [InlineData("migrate inspect --user-directory /exported/profile")]
+    [InlineData("eval ./samples/dotnet-api-review")]
+    [InlineData("eval ./samples/dotnet-api-review --model qwen3:8b --model-endpoint http://localhost:11434/v1")]
+    [InlineData("eval . --model gpt-5 --model-endpoint https://api.openai.com/v1 --model-api-key-env OPENAI_API_KEY")]
+    [InlineData("eval . --model m --model-endpoint http://e/v1 --max-model-requests 20")]
     public void AcceptsTheDocumentedInvocations(string commandLine)
     {
         var result = Root().Parse(commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries));
@@ -45,6 +49,10 @@ public sealed class CommandSurfaceTests
     [InlineData("frobnicate")]
     [InlineData("migrate apply")]
     [InlineData("migrate inspect --format sarif")]
+
+    // A model named with nowhere to send it, or an endpoint with no model, would quietly probe nothing.
+    [InlineData("eval . --model qwen3:8b")]
+    [InlineData("eval . --model-endpoint http://localhost:11434/v1")]
     public void RejectsWhatItDoesNotUnderstand(string commandLine)
     {
         var result = Root().Parse(commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries));

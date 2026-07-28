@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Application.Abstractions;
 using SkillForge.Cli.Commands;
+using SkillForge.Domain.Modeling;
 
 namespace SkillForge.Cli;
 
@@ -305,12 +306,53 @@ internal static partial class SkillForgeCommandLine
         var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
         var output = CreateOutputOption();
 
+        // Model options. Two flags rather than one, and no default endpoint anywhere: SkillForge sends nothing to
+        // anything unless the person running it says where to send it, and a default would make that decision for them.
+        var model = new Option<string?>("--model")
+        {
+            Description = "Model to ask for model_activation cases, e.g. qwen3:8b or gpt-5. Requires --model-endpoint.",
+        };
+
+        var modelEndpoint = new Option<string?>("--model-endpoint")
+        {
+            Description = "Base URL of an OpenAI-compatible API, e.g. http://localhost:11434/v1 for Ollama.",
+        };
+
+        var modelApiKeyEnv = new Option<string?>("--model-api-key-env")
+        {
+            Description = "Name of the environment variable holding the API key. The key itself is never read from "
+                + "an argument, so it cannot end up in a shell history or a CI log.",
+        };
+
+        var maxModelRequests = new Option<int>("--max-model-requests")
+        {
+            Description = "Refuse to make more than this many model requests in one run.",
+            DefaultValueFactory = _ => EvalRequest.DefaultMaxModelRequests,
+        };
+
         var command = new Command("eval", "Check a skill against the expectations declared under evals/.")
         {
             path,
             format,
             output,
+            model,
+            modelEndpoint,
+            modelApiKeyEnv,
+            maxModelRequests,
         };
+
+        // One without the other is a mistake worth catching at parse time: --model alone would otherwise look like it
+        // worked and quietly probe nothing.
+        command.Validators.Add(result =>
+        {
+            var hasModel = result.GetValue(model) is { Length: > 0 };
+            var hasEndpoint = result.GetValue(modelEndpoint) is { Length: > 0 };
+
+            if (hasModel != hasEndpoint)
+            {
+                result.AddError("--model and --model-endpoint go together: name the model and say where it lives.");
+            }
+        });
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
@@ -321,7 +363,12 @@ internal static partial class SkillForgeCommandLine
                     parseResult.GetValue(path) ?? DefaultPath,
                     parseResult.GetValue(format) ?? OutputFormat.Console,
                     parseResult.GetValue(output),
-                    globals.Read(parseResult)),
+                    globals.Read(parseResult),
+                    ReadModelSettings(
+                        parseResult.GetValue(model),
+                        parseResult.GetValue(modelEndpoint),
+                        parseResult.GetValue(modelApiKeyEnv)),
+                    parseResult.GetValue(maxModelRequests)),
                 cancellationToken).ConfigureAwait(false);
         });
 
@@ -473,6 +520,15 @@ internal static partial class SkillForgeCommandLine
     /// </summary>
     private static string[] ReadSuppressedCodes(string[]? tokens) =>
         tokens is null ? [] : [.. tokens.SelectMany(SplitCodes)];
+
+    /// <summary>
+    /// Builds the model settings, or <see langword="null"/> when the caller named no model — which is what keeps every
+    /// other run of every other command entirely offline.
+    /// </summary>
+    private static ModelSettings? ReadModelSettings(string? model, string? endpoint, string? apiKeyEnvironment) =>
+        model is { Length: > 0 } && endpoint is { Length: > 0 }
+            ? new ModelSettings(endpoint, model, apiKeyEnvironment)
+            : null;
 
     private static IEnumerable<string> SplitCodes(string token) =>
         token.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

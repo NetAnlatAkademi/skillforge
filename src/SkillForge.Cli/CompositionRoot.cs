@@ -3,6 +3,7 @@ using SkillForge.Application.Abstractions;
 using SkillForge.Application.Inspection;
 using SkillForge.Application.Migration;
 using SkillForge.Application.Migration.Adapters;
+using SkillForge.Application.Modeling;
 using SkillForge.Application.Packaging;
 using SkillForge.Application.Providers;
 using SkillForge.Application.Skills;
@@ -10,6 +11,7 @@ using SkillForge.Application.Validation;
 using SkillForge.Cli.Commands;
 using SkillForge.Infrastructure;
 using SkillForge.Infrastructure.Migration;
+using SkillForge.Infrastructure.Modeling;
 using SkillForge.Infrastructure.Yaml;
 using SkillForge.Reporting;
 
@@ -61,6 +63,11 @@ internal static class CompositionRoot
         services.AddSingleton<IAgentToolAdapter, GitHubCopilotToolAdapter>();
 
         services.AddSingleton<IMigrationInspector, MigrationInspector>();
+
+        // Registered always, used only when a command is given a model. It opens no connection until
+        // it is asked a question, so a run that never mentions a model stays entirely offline.
+        services.AddSingleton<IModelRunnerFactory, HttpModelRunnerFactory>();
+        services.AddSingleton<SkillCatalogue>();
 
         services.AddSingleton<ISkillLoader, SkillLoader>();
         services.AddSingleton<ISkillDiscovery, SkillDiscovery>();
