@@ -8,7 +8,7 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
-## [Unreleased]
+## [26.209.1] — 2026-07-28
 
 ### Added — `skillforge migrate inspect`
 
