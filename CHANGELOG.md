@@ -8,6 +8,24 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
+## [Unreleased]
+
+### Changed — the NuGet package page
+
+- **The package no longer ships the repository README.** nuget.org renders neither relative links nor relative
+  images, so two releases went out with a broken logo and a dozen dead `docs/...` links on the package page.
+  Nothing failed and nothing warned; the page just looked neglected. `src/SkillForge.Cli/PACKAGE.md` replaces it,
+  with absolute URLs throughout, and answers what a package page is actually asked — how to install this and what
+  to type — rather than how to build the repository from source.
+- `PackageProjectUrl` and `RepositoryUrl` are set. Without them the page showed no repository or project link at
+  all.
+- The `Description` says what the tool does instead of what it is; it is the one sentence shown in search results.
+- Tags widened to the terms somebody would actually search: `agent-skills`, `claude-code`, `mcp`, `dotnet-tool`,
+  `linter`.
+- A test guards it: every link in `PACKAGE.md` must be absolute, the install command must be present, and every
+  shipped command must be named. A page that lists five of seven commands is worse than one that lists none,
+  because a reader believes it.
+
 ## [26.209.1] — 2026-07-28
 
 ### Added — `skillforge migrate inspect`
