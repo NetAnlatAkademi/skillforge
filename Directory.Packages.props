@@ -12,6 +12,8 @@
 
   <ItemGroup Label="Infrastructure">
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
+    <!-- Tomlyn (BSD-2-Clause): Codex declares its MCP servers in config.toml. See docs/architecture.md. -->
+    <PackageVersion Include="Tomlyn" Version="2.10.1" />
   </ItemGroup>
 
   <ItemGroup Label="CLI and reporting">

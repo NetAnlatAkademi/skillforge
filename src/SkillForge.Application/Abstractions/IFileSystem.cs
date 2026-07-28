@@ -48,6 +48,16 @@ public interface IFileSystem
     /// <returns>Absolute paths of the files found, in unspecified order.</returns>
     IEnumerable<string> EnumerateFiles(string directoryPath);
 
+    /// <summary>
+    /// Enumerates the immediate subdirectories of a directory.
+    /// </summary>
+    /// <param name="directoryPath">Directory to look in.</param>
+    /// <returns>
+    /// Absolute paths of the subdirectories found, in unspecified order. Empty when the directory does not exist,
+    /// because "the provider is not installed" is an ordinary answer here rather than an error.
+    /// </returns>
+    IEnumerable<string> EnumerateDirectories(string directoryPath);
+
     /// <summary>Reads a file's raw bytes.</summary>
     /// <param name="path">Path of the file.</param>
     /// <param name="cancellationToken">Token used to cancel the read.</param>

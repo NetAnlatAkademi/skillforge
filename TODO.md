@@ -405,8 +405,15 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 
 ### v0.4 — Migration and MCP
 
-- [ ] `skillforge migrate inspect` — read Cursor / Claude Code / Codex / Copilot configuration and report the
-  skill inventory, MCP inventory, conflicting instructions, missing dependencies and provider incompatibilities
+- [~] `skillforge migrate inspect` — skill inventory, MCP inventory and instruction files shipped, per provider,
+  behind one `IAgentToolAdapter` each. Verified on a real machine: 32 skills of 34 directories, three MCP servers from
+  `~/.claude.json` and one from `~/.codex/config.toml`. **Environment variable values are never read** — the model has
+  no field for them. `SF1015` for a configuration that cannot be parsed.
+  Two of the five asks are deliberately not shipped, with reasons in `docs/migration.md`: "conflicting instructions"
+  is a judgement about prose (the report names the files and says it does not judge), and "missing dependencies"
+  cannot say "not on this PATH" without implying "broken". Provider incompatibilities are answered by
+  `validate --provider`, which is sharper than an inventory line.
+  Also found by looking: `~/.copilot/config.json` is JSON **with `//` comments**, so the JSON reader tolerates them.
 - [ ] MCP protocol inspection, behind version adapters rather than in the CLI core: protocol version in use,
   deprecated capability use, stateful transport dependency, authorization method, tool schema conformance
 - [ ] MCP 2025-11-25 and 2026-07-28 adapters
@@ -421,6 +428,9 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 | `SF5xxx` | Supply-chain and provenance risks | SF5001 shipped; provenance deferred |
 | `SF6xxx` | Version and evolution risks | SF6001 shipped (`diff`); "no version declared" deferred at 91% firing |
 | `SF7xxx` | Provider compatibility | SF7001–SF7003 shipped; a capability rule dropped for want of data |
+
+`migrate inspect` reports SF1015 rather than opening an `SF8xxx` band: "a file I could not read" is the same kind of
+finding as SF1012 and SF1014, and a new band for it would say something new about a problem that is not new.
 
 Through v0.1.0 the code set was deliberately fixed at 24 — an unreadable `SKILL.md` widened SF0001's meaning
 rather than inventing a 25th code. These bands lift that constraint **on purpose**: the code set is open,

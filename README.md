@@ -10,8 +10,8 @@
 A local, open source CLI for AI agent skills. SkillForge creates, validates, inspects and packages
 `SKILL.md`-based skills, and reports findings as human-readable console output, JSON or SARIF.
 
-> Status: **v0.2 complete and released as `26.208.2`; v0.3 in progress.** All six commands work end to end. CI
-> builds and tests on Linux and Windows, and runs the CLI over the sample skills.
+> Status: **v0.2 released as `26.208.2`; v0.3 and the migration inventory of v0.4 are in.** All seven commands work
+> end to end. CI builds and tests on Linux and Windows, and runs the CLI over the sample skills.
 
 ## Try it
 
@@ -57,6 +57,7 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 | `skillforge diff <before> <after>` | Compare two versions by what they can do, not which bytes changed |
 | `skillforge eval <path>` | Check a skill against the expectations declared under `evals/` |
 | `skillforge pack <path>` | Produce a deterministic `.skill.zip` with a SHA-256 hash and manifest |
+| `skillforge migrate inspect` | Report the agent tooling installed here: skills, MCP servers and instruction files, per provider |
 
 Full options are in [docs/cli-reference.md](docs/cli-reference.md); CI usage, including SARIF upload, is in
 [docs/ci.md](docs/ci.md).

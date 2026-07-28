@@ -28,6 +28,15 @@ today, `migrate inspect` in v0.4, and the MCP version adapters after that. A pro
 should mean editing one profile, never the validation pipeline — the same reason the roadmap refuses to bind the
 core to an MCP protocol version.
 
+`migrate inspect` extends the same seam with a second kind of per-provider knowledge: **where** a provider keeps
+its files. Each `IAgentToolAdapter` in `SkillForge.Application/Migration/Adapters` states its own provider's paths
+and nothing else; the inspector that runs them knows no path at all. A provider that moves a configuration file
+should be a one-class diff.
+
+Formats are separate from providers. `IMcpConfigurationReader` declares which *file format* it handles — JSON for
+Claude Code, Cursor and VS Code, TOML for Codex — so a provider that switches format changes which reader claims
+its file, and nothing else moves.
+
 ## Dependency rules
 
 | Layer | May reference | Must not reference |
@@ -98,6 +107,7 @@ justification row here.
 | `Microsoft.Extensions.DependencyInjection` | Cli | Composition root. Small enough to hand-wire today, but the rule set already benefits from `GetServices<T>()`. |
 | `Microsoft.Extensions.Logging`(`.Console`) | Cli | Diagnostic logging behind `--verbose`. Abstractions only in the lower layers. |
 | `YamlDotNet` | Infrastructure | YAML frontmatter parsing. The de-facto .NET YAML library; writing a YAML parser by hand is out of the question, and the alternatives are unmaintained. Confined to Infrastructure so Application stays parser-agnostic behind `IFrontmatterParser`. |
+| `Tomlyn` | Infrastructure | TOML parsing for Codex's `config.toml`, the one provider configuration in the migration inventory that is not JSON. A hand-written scanner was the alternative and was rejected: a real file mixes quoted and literal strings, empty arrays and nested `env` tables, and mishandling one form would drop a server from an inventory **silently** — the one failure `migrate inspect` must not have. Confined to Infrastructure behind `IMcpConfigurationReader`. Note that Tomlyn v1 parses TOML 1.1 only; it read a real Codex configuration without complaint, and a file it cannot parse is reported as SF1015 rather than crashing. |
 | `Microsoft.NET.Test.Sdk` | tests | Required test host for `dotnet test`. |
 | `xunit`, `xunit.runner.visualstudio` | tests | Test framework chosen by the roadmap. |
 | `FluentAssertions` 7.x | tests | Readable assertions. Pinned to 7.x because 8.x moved to a commercial license. |

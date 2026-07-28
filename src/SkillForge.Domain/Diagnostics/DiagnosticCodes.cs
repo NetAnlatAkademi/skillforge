@@ -96,6 +96,13 @@ public static class DiagnosticCodes
     /// </summary>
     public const string EvalFileNotParsable = "SF1014";
 
+    /// <summary>
+    /// A provider's own configuration file was found but could not be read or parsed, so what it declares is
+    /// missing from the migration inventory. Same shape as SF1012 and SF1014: reported rather than fatal, because
+    /// the rest of the inventory is still worth having and a silent gap would look like an empty configuration.
+    /// </summary>
+    public const string ProviderConfigurationNotParsable = "SF1015";
+
     /// <summary>The skill contains a script.</summary>
     public const string ContainsScript = "SF2001";
 

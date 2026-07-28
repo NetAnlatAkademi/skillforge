@@ -46,6 +46,8 @@ internal sealed class FakeFileSystem : IFileSystem
     public Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken) =>
         Task.FromResult(System.Text.Encoding.UTF8.GetBytes(_files[Normalise(path)]));
 
+    public IEnumerable<string> EnumerateDirectories(string directoryPath) => [];
+
     public void CreateDirectory(string path) => _directories.Add(Normalise(path));
 
     public Task WriteAllTextAsync(string path, string content, CancellationToken cancellationToken)

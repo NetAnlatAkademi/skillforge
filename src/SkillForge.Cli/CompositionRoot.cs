@@ -1,12 +1,15 @@
 using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Inspection;
+using SkillForge.Application.Migration;
+using SkillForge.Application.Migration.Adapters;
 using SkillForge.Application.Packaging;
 using SkillForge.Application.Providers;
 using SkillForge.Application.Skills;
 using SkillForge.Application.Validation;
 using SkillForge.Cli.Commands;
 using SkillForge.Infrastructure;
+using SkillForge.Infrastructure.Migration;
 using SkillForge.Infrastructure.Yaml;
 using SkillForge.Reporting;
 
@@ -40,6 +43,25 @@ internal static class CompositionRoot
         services.AddSingleton<IAgentProviderRegistry, AgentProviderRegistry>();
         services.AddSingleton<IProviderCompatibilityChecker, ProviderCompatibilityChecker>();
 
+        services.AddSingleton<IUserEnvironment, UserEnvironment>();
+
+        // One reader per format, one adapter per provider — the seam the roadmap asks for, so a provider that moves
+        // a file or a protocol that changes touches one class rather than the inspector.
+        services.AddSingleton<IMcpConfigurationReader, JsonMcpConfigurationReader>();
+        services.AddSingleton<IMcpConfigurationReader, TomlMcpConfigurationReader>();
+
+        services.AddSingleton<SkillInventoryScanner>();
+        services.AddSingleton<McpConfigurationScanner>();
+        services.AddSingleton<InstructionFileScanner>();
+        services.AddSingleton<AgentToolScanner>();
+
+        services.AddSingleton<IAgentToolAdapter, ClaudeCodeToolAdapter>();
+        services.AddSingleton<IAgentToolAdapter, CodexToolAdapter>();
+        services.AddSingleton<IAgentToolAdapter, CursorToolAdapter>();
+        services.AddSingleton<IAgentToolAdapter, GitHubCopilotToolAdapter>();
+
+        services.AddSingleton<IMigrationInspector, MigrationInspector>();
+
         services.AddSingleton<ISkillLoader, SkillLoader>();
         services.AddSingleton<ISkillDiscovery, SkillDiscovery>();
         services.AddSingleton<ISkillInitializer, SkillInitializer>();
@@ -66,6 +88,7 @@ internal static class CompositionRoot
         services.AddSingleton<EvalCommandRunner>();
         services.AddSingleton<DiffCommandRunner>();
         services.AddSingleton<PackCommandRunner>();
+        services.AddSingleton<MigrateInspectCommandRunner>();
 
         // ValidateOnBuild turns a missing or unresolvable registration into a failure here rather than when
         // the user runs a command. It is what makes the composition smoke test meaningful.

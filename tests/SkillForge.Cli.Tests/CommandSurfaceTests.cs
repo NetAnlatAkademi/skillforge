@@ -29,6 +29,10 @@ public sealed class CommandSurfaceTests
     [InlineData("validate ./samples/valid-skill --provider claude-code --provider codex")]
     [InlineData("validate ./samples/valid-skill --suppress SF7001")]
     [InlineData("validate ./samples/valid-skill --provider some-future-agent")]
+    [InlineData("migrate inspect")]
+    [InlineData("migrate inspect .")]
+    [InlineData("migrate inspect . --format json")]
+    [InlineData("migrate inspect --user-directory /exported/profile")]
     public void AcceptsTheDocumentedInvocations(string commandLine)
     {
         var result = Root().Parse(commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries));
@@ -39,6 +43,8 @@ public sealed class CommandSurfaceTests
     [Theory]
     [InlineData("validate --nonsense")]
     [InlineData("frobnicate")]
+    [InlineData("migrate apply")]
+    [InlineData("migrate inspect --format sarif")]
     public void RejectsWhatItDoesNotUnderstand(string commandLine)
     {
         var result = Root().Parse(commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries));
