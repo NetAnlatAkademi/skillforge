@@ -4,17 +4,34 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>skillforge</AssemblyName>
     <RootNamespace>SkillForge.Cli</RootNamespace>
-    <Description>SkillForge command line interface.</Description>
+    <!--
+      This is the summary nuget.org shows under the title and in search results, so it says what the tool does
+      rather than what it is. One sentence; the README carries the detail.
+    -->
+    <Description>Local, open source CLI for AI agent skills: validate, inspect, diff, eval and package SKILL.md skills, with console, JSON or SARIF output. Nothing is sent to any service.</Description>
 
     <!-- Distributed as a .NET global tool; see docs/cli-reference.md for the install command. -->
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>skillforge</ToolCommandName>
     <PackageId>SkillForge.Cli</PackageId>
     <IsPackable>true</IsPackable>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!--
+      A package-specific README, not the repository's. nuget.org renders neither relative links nor relative
+      images, so shipping the repository README put a broken logo and a dozen dead 'docs/...' links on the package
+      page. PACKAGE.md uses absolute URLs throughout, and a test asserts it stays that way. It also answers the
+      question a package page is actually asked — "how do I install this and what do I type?" — rather than how to
+      build the repository from source.
+    -->
+    <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
+
+    <!-- Without these, the package page shows no repository or project link at all. -->
+    <PackageProjectUrl>https://github.com/NetAnlatAkademi/skillforge</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/NetAnlatAkademi/skillforge.git</RepositoryUrl>
+    <PackageReleaseNotes>See https://github.com/NetAnlatAkademi/skillforge/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <!-- NuGet rejects SVG, so this is the rasterised copy of assets/logo-mark.svg. -->
     <PackageIcon>logo-128.png</PackageIcon>
-    <PackageTags>ai-agents;skills;cli;validation;sarif</PackageTags>
+    <PackageTags>ai-agents;agent-skills;skills;claude-code;mcp;cli;dotnet-tool;validation;linter;sarif</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,7 +43,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="SkillForge.Cli.Tests" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="PACKAGE.md" Pack="true" PackagePath="\" />
     <None Include="..\..\assets\logo-128.png" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
