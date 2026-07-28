@@ -8,6 +8,46 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
+## [Unreleased]
+
+### Added — `SF8xxx`, MCP protocol inspection
+
+Two layers, split on whether SkillForge has to talk to anything.
+
+**From the declaration alone**, always, at no cost — `SF8001` the deprecated HTTP+SSE transport, `SF8002` a plaintext
+`http://` URL on a remote host, `SF8003` a command that resolves a package at launch without pinning a version.
+
+**From the server itself**, only with `migrate inspect --probe-mcp`, and only over HTTP — `SF8004` a server with no
+`server/discover` (so a handshake-based revision, `2025-11-25` or earlier), `SF8005` a declared capability the
+specification has deprecated. One request per server: `server/discover` is mandatory under `2026-07-28` and returns
+supported versions, capabilities and identity together, so an inspection costs a single POST and no session.
+
+**A stdio server is never launched.** Inspecting a local server by running it is the exact act SkillForge exists to let
+somebody defer until they have looked. Such a server is reported as *not asked*, with the reason, so it cannot be
+mistaken for one that failed to answer.
+
+The protocol version lives in an adapter, never in the core (roadmap §30.6): `IMcpProtocolAdapter` has one implementation,
+`2026-07-28`, and a revision that changes the handshake gets its own beside it.
+
+**The whole band is `Info`.** `migrate inspect` describes and does not judge, and `SF8003` fires on three of the four MCP
+servers declared on the machine this was written against — as a warning that is the SF1009 shape, as an observation in an
+inventory it is neither. `validate` never emits SF8xxx: it looks at a skill, and none of this is in a skill.
+
+Facts were read from the specification at modelcontextprotocol.io rather than from a summary, and that changed the code.
+A secondhand summary listed Roots, Sampling and Logging together as deprecated server capabilities; the registry shows
+Roots and Sampling are **client** capabilities, so `SF8005` looks for `logging` only — otherwise it would have been a
+check that could never fire. The reported server identity is labelled **self-reported** everywhere, because the
+specification says outright that `serverInfo` is not verified and must not drive security decisions.
+
+Two exclusions, both load-bearing: loopback URLs are never reported by `SF8002` (no network to cross), and a local
+executable is never reported by `SF8003` (a file on disk does not change underneath you — Codex declares its own server
+exactly that way). A pinned scoped package is not reported either: `@scope/pkg@1.4.2` pins, `@scope/pkg` does not.
+
+### Fixed
+
+- `migrate inspect` printed MCP observations under the heading "Could not read:", which said an observation was a failure
+  to read a file. They now have their own heading. Found by running the command against a fixture carrying both kinds.
+
 ## [26.209.3] — 2026-07-28
 
 ### Added — the model runner: `eval` can ask a model whether it would choose the skill

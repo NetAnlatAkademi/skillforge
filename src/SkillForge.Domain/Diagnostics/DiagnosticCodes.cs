@@ -165,4 +165,33 @@ public static class DiagnosticCodes
     /// The <c>description</c> is longer than a provider the skill declares compatibility with accepts.
     /// </summary>
     public const string ProviderDescriptionTooLong = "SF7003";
+
+    /// <summary>
+    /// An MCP server is declared over the HTTP+SSE transport, which the specification deprecated in
+    /// <c>2025-03-26</c> in favour of Streamable HTTP.
+    /// </summary>
+    public const string McpDeprecatedTransport = "SF8001";
+
+    /// <summary>
+    /// An MCP server is declared at a plaintext <c>http://</c> URL on a host that is not loopback, so whatever
+    /// authorises the connection crosses the network in the clear.
+    /// </summary>
+    public const string McpPlaintextEndpoint = "SF8002";
+
+    /// <summary>
+    /// An MCP server's command resolves a package at launch without pinning a version, so two launches are not
+    /// guaranteed to run the same code. The MCP-declaration counterpart of SF5001.
+    /// </summary>
+    public const string McpServerCommandNotPinned = "SF8003";
+
+    /// <summary>
+    /// A probed MCP server does not implement <c>server/discover</c>, which <c>2026-07-28</c> made mandatory — so it
+    /// is almost certainly a handshake-based revision (<c>2025-11-25</c> or earlier).
+    /// </summary>
+    public const string McpNoDiscovery = "SF8004";
+
+    /// <summary>
+    /// A probed MCP server declares a capability the specification has deprecated, such as <c>logging</c>.
+    /// </summary>
+    public const string McpDeprecatedCapability = "SF8005";
 }

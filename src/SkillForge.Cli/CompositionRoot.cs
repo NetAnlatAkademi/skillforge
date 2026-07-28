@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Inspection;
+using SkillForge.Application.Mcp;
 using SkillForge.Application.Migration;
 using SkillForge.Application.Migration.Adapters;
 using SkillForge.Application.Modeling;
@@ -10,6 +11,7 @@ using SkillForge.Application.Skills;
 using SkillForge.Application.Validation;
 using SkillForge.Cli.Commands;
 using SkillForge.Infrastructure;
+using SkillForge.Infrastructure.Mcp;
 using SkillForge.Infrastructure.Migration;
 using SkillForge.Infrastructure.Modeling;
 using SkillForge.Infrastructure.Yaml;
@@ -61,6 +63,13 @@ internal static class CompositionRoot
         services.AddSingleton<IAgentToolAdapter, CodexToolAdapter>();
         services.AddSingleton<IAgentToolAdapter, CursorToolAdapter>();
         services.AddSingleton<IAgentToolAdapter, GitHubCopilotToolAdapter>();
+
+        // MCP: the declaration checks are free and always run; the protocol adapters only speak when --probe-mcp asks.
+        // One adapter per revision, newest first, so the core stays unbound to a protocol version (roadmap §30.6).
+        services.AddSingleton<McpDeclarationInspector>();
+        services.AddSingleton<IMcpProtocolAdapter>(_ => new Mcp20260728ProtocolAdapter(
+            new HttpClient { Timeout = TimeSpan.FromSeconds(20) }));
+        services.AddSingleton<McpProber>();
 
         services.AddSingleton<IMigrationInspector, MigrationInspector>();
 

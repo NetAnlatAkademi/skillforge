@@ -424,6 +424,7 @@ skillforge migrate inspect --user-directory /exported/profile
 |---|---|---|
 | `project` | none | Project directory to include project-scoped configuration from. Without it, only user scope is read |
 | `--user-directory` | the current user's home | Read this directory instead — an exported profile, or a fixture |
+| `--probe-mcp` | off | Ask each **HTTP** MCP server about itself with one `server/discover` request. Local stdio servers are never launched |
 | `--format`, `-f` | `console` | `console` or `json`. **No SARIF**: an inventory is not a set of findings, and dressing one up as findings would misuse the format |
 | `--output`, `-o` | stdout | Write to a file |
 

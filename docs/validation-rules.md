@@ -327,6 +327,60 @@ read none. Shipping the rule with no data behind it would mean shipping a rule t
 filling the gap with a guess and reporting a constraint that may not exist. The profile type has room for it; the
 code will be added when a measurement justifies one.
 
+## MCP servers
+
+| Code | Rule | Status |
+|---|---|---|
+| SF8001 | An MCP server is declared over the HTTP+SSE transport, deprecated since `2025-03-26` | **Implemented** (`migrate inspect`) |
+| SF8002 | An MCP server is declared at a plaintext `http://` URL on a remote host | **Implemented** (`migrate inspect`) |
+| SF8003 | An MCP server's command resolves a package at launch without a pinned version | **Implemented** (`migrate inspect`) |
+| SF8004 | A probed server does not implement `server/discover`, so it is a handshake-based revision | **Implemented** (`migrate inspect --probe-mcp`) |
+| SF8005 | A probed server declares a capability the specification has deprecated | **Implemented** (`migrate inspect --probe-mcp`) |
+
+**The whole band is `Info`, and that is a decision.** `migrate inspect` describes and does not judge (ADR-006) and always
+exits `0`, so nothing here is a gate. It also solves a real measurement problem: SF8003 fires on **three of the four** MCP
+servers declared on the machine this was written against. As a warning that is the SF1009 shape — true and nagging. As an
+observation in an inventory it is neither.
+
+`validate` never emits SF8xxx: it looks at a skill, and none of this is in a skill.
+
+### Measured on the real declarations
+
+| Code | On 4 real MCP servers |
+|---|---|
+| SF8003 | **3** — `npx -y @azure-devops/mcp`, and `npx -y obsidian-mcp` twice |
+| SF8001, SF8002 | **0** — no HTTP server is declared on this machine at all |
+| SF8004, SF8005 | **0** — nothing was probed, because probing is opt-in and there is nothing HTTP to probe |
+
+Those zeros prove nothing on their own, and the same honesty applies as with SF7xxx: the checks did not run rather than
+ran clean. Each was verified against a fixture instead — a `/sse` endpoint, a plaintext remote URL, a stub server that
+answers `server/discover` and one that returns `-32601`.
+
+Two exclusions came out of that fixture work, and both are load-bearing:
+
+- **Loopback is never reported** by SF8002. `http://127.0.0.1:8801/mcp` exposes nothing to a network, and reporting it
+  would train people to ignore the code.
+- **A local executable is never reported** by SF8003. Codex declares its own server as an absolute path to an `.exe`; a
+  file on disk does not change underneath you, which is the opposite of the property the check is about. Nor is a pinned
+  package reported, including a scoped one — `@scope/pkg@1.4.2` pins, `@scope/pkg` does not, and the leading `@` is not a
+  version separator.
+
+### What a probe can and cannot say
+
+Only servers reached over **HTTP** are probed, and only with `--probe-mcp`. A stdio server is never launched: inspecting
+a local server by running it is the exact act SkillForge exists to let somebody defer until they have looked. Such a
+server is reported as "not asked", with the reason, so it cannot be mistaken for one that failed to answer.
+
+A probe is one `server/discover` request, which `2026-07-28` made mandatory for servers and which returns supported
+versions, capabilities and identity together. The reported identity is always labelled **self-reported**: the
+specification states plainly that `serverInfo` is not verified by the protocol and that clients should not use it for
+security decisions, so printing it as bare fact would repeat a claim as though SkillForge had checked it.
+
+SF8005 looks for **`logging` only**. Roots and Sampling were deprecated by the same SEP and are listed beside it
+everywhere, but they are *client* capabilities — a server cannot declare them, so looking for them here would be a check
+that can never fire. That correction came from the specification's own deprecated-features registry, against a secondhand
+summary that grouped all three as server-side.
+
 ## Measured against real skills
 
 Run over 32 skills installed on a working machine (2026-07-27), the rules behaved like this:

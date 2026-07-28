@@ -62,6 +62,52 @@ The alternative — skipping the file — would present an incomplete inventory 
 planning a migration from it would silently lose a server. Same reasoning as SF1012 for `skillforge.yaml` and
 SF1014 for eval files.
 
+## MCP protocol inspection
+
+Two layers, and the split is the point.
+
+**From the declaration alone**, always, at no cost: the transport, the deprecated HTTP+SSE transport, a plaintext
+`http://` URL on a remote host, and a command that resolves a package at launch without pinning a version. These are
+`SF8001`–`SF8003`, and like everything this command emits they are **informational** — see
+[validation-rules.md](validation-rules.md#mcp-servers) for the measurement behind that choice.
+
+**From the server itself**, only with `--probe-mcp`, and only over HTTP:
+
+```bash
+skillforge migrate inspect . --probe-mcp
+```
+
+```text
+MCP protocol probe:
+  legacy-http — no server/discover, so a handshake-based revision (2025-11-25 or earlier): method not found
+  local-stdio — not asked: not an HTTP server; SkillForge never launches a local command to inspect it
+  modern-http — answered server/discover
+      supports:     2026-07-28, 2025-11-25
+      capabilities: logging, resources, tools
+      identity:     StubServer 3.1.0 (self-reported, not verified by the protocol)
+```
+
+**A stdio server is never launched.** Inspecting a local server by running it is the exact act SkillForge exists to let
+somebody defer until they have looked; a tool that ran it in order to inspect it would be arguing with itself. Such a
+server is reported as *not asked*, with the reason, so it cannot be mistaken for one that failed to answer.
+
+One request per server. `server/discover` is mandatory for servers under `2026-07-28` and returns supported versions,
+capabilities and identity together, so a whole inspection costs a single POST and no session. A server that answers
+`-32601` — or 404, or 405 — is reported as a handshake-based revision (`2025-11-25` or earlier) rather than as broken.
+That is `SF8004`; the `initialize` handshake those revisions need is a separate adapter that does not exist yet, and its
+absence is stated instead of guessed around.
+
+The protocol version lives in an adapter, never in the core — roadmap §30.6. `IMcpProtocolAdapter` has one
+implementation today, `2026-07-28`. A revision that changes the handshake gets its own beside it and nothing above them
+moves.
+
+### Where the facts came from
+
+The field names, the mandatory status of `server/discover`, the deprecated-features list and the `serverInfo` caveat were
+read from the specification at modelcontextprotocol.io, not from a summary. That mattered: a secondhand summary listed
+Roots, Sampling and Logging together as deprecated server capabilities, and the registry shows Roots and Sampling are
+**client** capabilities. Looking for them on a server would have been a check that could never fire.
+
 ## What it does not do yet
 
 The roadmap asks for five things from this command. Three are here — skill inventory, MCP inventory and the
