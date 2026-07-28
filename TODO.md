@@ -5,7 +5,7 @@ mirrored into the Obsidian vault under `SkillForge/` for cross-session context.
 
 Legend: `[ ]` open · `[x]` done · `[~]` in progress · `[-]` deliberately deferred
 
-Last updated: 2026-07-27
+Last updated: 2026-07-28
 
 ---
 
@@ -385,8 +385,23 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
   needs a model runner, which SkillForge does not have and which must not be smuggled in under this name.
 - [ ] A model runner, so activation can be tested rather than approximated. Needs a decision first: SkillForge
   currently sends nothing to any service, and this would change that. Opt-in, explicit, and never the default.
-- [ ] Provider compatibility checks
-- [ ] Codex / Claude Code / Copilot adapters
+  **Decision taken (2026-07-28, D-47):** the operator picks the model, local or third party — SkillForge takes an endpoint
+  and a model name rather than blessing one vendor — and setup must stay easy. Not yet implemented.
+- [x] Provider compatibility checks — `SF7001` unknown provider, `SF7002`/`SF7003` name and description over a
+  declared provider's documented limit, plus `validate --provider` to ask about a provider the skill does not
+  declare. Nothing is ever checked against a provider the skill did not name.
+  Measured on 229 skills: plain `validate` gives **0** findings, and that zero proves nothing — none of the 229
+  declares `compatibility` at all, so the checks never ran. `--provider claude-code` on the same corpus gives **1**,
+  a 1064-character description against a documented limit of 1024, verified independently and in a skill actually
+  installed in Claude Code.
+  A fourth code ("uses a capability the declared provider does not support") was designed and dropped: no
+  documented per-provider fact was available to drive it, and a rule with no data behind it either never fires or
+  invents a constraint.
+- [x] Codex / Claude Code / Copilot adapters — `IAgentProviderRegistry` with one profile file per provider
+  (`claude-code`, `codex`, `cursor`, `github-copilot`). Only `claude-code` carries documented limits; the others are
+  recognised so declaring them is not reported as a typo, and an unread limit stays unset rather than guessed at.
+  This is the seam v0.4 needs: `migrate inspect` asks the same question of a wider set, and the MCP adapters sit
+  beside these profiles rather than inside the rules.
 
 ### v0.4 — Migration and MCP
 
@@ -405,6 +420,7 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 | `SF4xxx` | Instruction injection risks | SF4001, SF4002 shipped |
 | `SF5xxx` | Supply-chain and provenance risks | SF5001 shipped; provenance deferred |
 | `SF6xxx` | Version and evolution risks | SF6001 shipped (`diff`); "no version declared" deferred at 91% firing |
+| `SF7xxx` | Provider compatibility | SF7001–SF7003 shipped; a capability rule dropped for want of data |
 
 Through v0.1.0 the code set was deliberately fixed at 24 — an unreadable `SKILL.md` widened SF0001's meaning
 rather than inventing a 25th code. These bands lift that constraint **on purpose**: the code set is open,

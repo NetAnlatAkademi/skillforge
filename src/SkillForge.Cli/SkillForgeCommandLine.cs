@@ -101,6 +101,13 @@ internal static partial class SkillForgeCommandLine
             }
         });
 
+        var provider = new Option<string[]>("--provider")
+        {
+            Description = "Also check the skill against these agent providers, comma-separated or repeated "
+                + "(e.g. claude-code,codex), even when it does not declare them.",
+            AllowMultipleArgumentsPerToken = true,
+        };
+
         var command = new Command("validate", "Validate a skill against the SkillForge rules.")
         {
             path,
@@ -108,6 +115,7 @@ internal static partial class SkillForgeCommandLine
             format,
             output,
             suppress,
+            provider,
         };
 
         command.SetAction(async (parseResult, cancellationToken) =>
@@ -121,7 +129,8 @@ internal static partial class SkillForgeCommandLine
                     parseResult.GetValue(format) ?? OutputFormat.Console,
                     parseResult.GetValue(output),
                     globals.Read(parseResult),
-                    ReadSuppressedCodes(parseResult.GetValue(suppress))),
+                    ReadSuppressedCodes(parseResult.GetValue(suppress)),
+                    ReadProviders(parseResult.GetValue(provider))),
                 cancellationToken).ConfigureAwait(false);
         });
 
@@ -411,7 +420,15 @@ internal static partial class SkillForgeCommandLine
     private static IEnumerable<string> SplitCodes(string token) =>
         token.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    [GeneratedRegex("^SF[0-6][0-9]{3}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    /// <summary>
+    /// Reads <c>--provider</c> the same way as <c>--suppress</c>. Unlike a diagnostic code, an unrecognised
+    /// provider identifier is not rejected here: SF7001 reports it as a finding, which is more use than a usage
+    /// error, because the identifier may be a real provider SkillForge has not learned yet.
+    /// </summary>
+    private static string[] ReadProviders(string[]? tokens) =>
+        tokens is null ? [] : [.. tokens.SelectMany(SplitCodes)];
+
+    [GeneratedRegex("^SF[0-7][0-9]{3}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DiagnosticCodePattern();
 
     private static Option<string?> CreateOutputOption() =>

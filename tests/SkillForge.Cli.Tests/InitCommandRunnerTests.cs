@@ -1,4 +1,5 @@
 using SkillForge.Application.Abstractions;
+using SkillForge.Application.Providers;
 using SkillForge.Application.Validation;
 using SkillForge.Cli.Commands;
 using SkillForge.Domain;
@@ -118,6 +119,7 @@ public sealed class InitCommandRunnerTests
             validator,
             new NoSkillsFound(),
             fileSystem,
+            new ProviderCompatibilityChecker(new AgentProviderRegistry()),
             output);
 
         return new InitCommandRunner(fileSystem, initializer, validate, renderer);

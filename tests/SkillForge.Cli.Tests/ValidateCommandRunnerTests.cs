@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SkillForge.Application.Abstractions;
+using SkillForge.Application.Providers;
 using SkillForge.Application.Validation;
 using SkillForge.Cli.Commands;
 using SkillForge.Domain;
@@ -331,9 +332,39 @@ public sealed class ValidateCommandRunnerTests
     }
 
     [Fact]
+    public async Task ProviderFindingsReachTheReportAlongsideRuleFindings()
+    {
+        // The provider checks are not rules, so the wiring that merges them is the only thing keeping them
+        // visible — and suppression and counting have to apply to them like anything else.
+        var runner = Build(out var renderer);
+
+        var exitCode = await runner.RunAsync(
+            Request(providers: ["some-future-agent"]),
+            CancellationToken.None);
+
+        exitCode.Should().Be(0, "an unrecognised provider is a warning, not a failure");
+        renderer.Rendered!.Diagnostics.Should().ContainSingle()
+            .Which.Code.Should().Be(DiagnosticCodes.ProviderUnknown);
+        renderer.Rendered.Summary.Warnings.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AProviderFindingCanBeSuppressedLikeAnyOther()
+    {
+        var runner = Build(out var renderer);
+
+        await runner.RunAsync(
+            Request(providers: ["some-future-agent"], suppressed: [DiagnosticCodes.ProviderUnknown]),
+            CancellationToken.None);
+
+        renderer.Rendered!.Diagnostics.Should().BeEmpty();
+        renderer.Rendered.SuppressedCount.Should().Be(1);
+    }
+
+    [Fact]
     public void RejectsMissingDependencies()
     {
-        var act = () => new ValidateCommandRunner(null!, null!, null!, null!, null!);
+        var act = () => new ValidateCommandRunner(null!, null!, null!, null!, null!, null!);
 
         act.Should().Throw<ArgumentNullException>();
     }
@@ -343,8 +374,9 @@ public sealed class ValidateCommandRunnerTests
         bool strict = false,
         string format = OutputFormat.Console,
         string? outputPath = null,
-        IReadOnlyList<string>? suppressed = null) =>
-        new(path, strict, format, outputPath, new ReportRenderOptions(), suppressed ?? []);
+        IReadOnlyList<string>? suppressed = null,
+        IReadOnlyList<string>? providers = null) =>
+        new(path, strict, format, outputPath, new ReportRenderOptions(), suppressed ?? [], providers ?? []);
 
     private static ValidateCommandRunner Build(
         out RecordingRenderer renderer,
@@ -372,6 +404,7 @@ public sealed class ValidateCommandRunnerTests
             new StubValidator(validationFindings ?? []),
             new StubDiscovery(discovered ?? []),
             files,
+            new ProviderCompatibilityChecker(new AgentProviderRegistry()),
             output);
     }
 

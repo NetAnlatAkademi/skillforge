@@ -104,7 +104,8 @@ internal sealed class InitCommandRunner
                 OutputFormat.Console,
                 OutputPath: null,
                 request.RenderOptions,
-                SuppressedCodes: []),
+                SuppressedCodes: [],
+                Providers: []),
             cancellationToken).ConfigureAwait(false);
     }
 }

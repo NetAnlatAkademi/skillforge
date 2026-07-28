@@ -34,7 +34,7 @@ public sealed class DiagnosticCodesTests
     {
         AllCodes.Should().AllSatisfy(code =>
         {
-            code.Should().MatchRegex("^SF[0-6][0-9]{3}$");
+            code.Should().MatchRegex("^SF[0-7][0-9]{3}$");
         });
     }
 

@@ -25,6 +25,10 @@ public sealed class CommandSurfaceTests
     [InlineData("validate ./samples/valid-skill")]
     [InlineData("validate ./samples/valid-skill --strict")]
     [InlineData("validate --quiet --no-color ./samples/valid-skill")]
+    [InlineData("validate ./samples/valid-skill --provider claude-code,codex")]
+    [InlineData("validate ./samples/valid-skill --provider claude-code --provider codex")]
+    [InlineData("validate ./samples/valid-skill --suppress SF7001")]
+    [InlineData("validate ./samples/valid-skill --provider some-future-agent")]
     public void AcceptsTheDocumentedInvocations(string commandLine)
     {
         var result = Root().Parse(commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries));

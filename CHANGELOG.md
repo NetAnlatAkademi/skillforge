@@ -8,6 +8,45 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
+## [Unreleased]
+
+### Added — `SF7xxx`, provider compatibility
+
+- Provider profiles behind `IAgentProviderRegistry`, one file per provider: `claude-code`, `codex`, `cursor`,
+  `github-copilot`. This is the adapter seam v0.4 needs — `migrate inspect` asks the same question of a wider set,
+  and MCP adapters will sit beside these rather than inside the rules.
+- SF7001: compatibility is declared with a provider SkillForge does not recognise. When the identifier is a near
+  miss it names the one it was probably meant to be and offers the replacement as a fix — `claude_code`,
+  `ClaudeCode`, `claude-cod` and `copilot` all resolve. When two known identifiers are equally close it suggests
+  neither: naming one of two would be a coin toss presented as advice.
+- SF7002 / SF7003: the `name` or `description` is longer than a declared provider accepts.
+- `validate --provider claude-code,codex` — check against providers the skill does not declare, without editing it
+  to find out. Unlike `--suppress`, an unrecognised value is a finding rather than a usage error, because it may be
+  a real provider SkillForge has not learned yet.
+
+**Nothing is checked against a provider the skill does not name.** Measured on 229 real skills, plain `validate`
+produces **0** SF7xxx findings — and that zero proves nothing on its own, because none of the 229 declares
+`compatibility` at all, so the checks never ran. Saying so is the point. `--provider claude-code` on the same corpus
+produces **1**: a description of 1064 characters against a documented limit of 1024, verified by parsing the
+frontmatter independently, in a skill actually installed in Claude Code.
+
+Only `claude-code` carries documented limits. The other three profiles declare none and therefore check nothing —
+an unread limit is left unset rather than guessed at, and unset is not "no limit". They are still in the registry
+because recognising the identifier is what stops a legitimate `compatibility: [codex]` being reported as a typo.
+
+A fourth code — "the skill uses a capability a declared provider does not support" — was designed and **dropped**:
+no documented fact per provider was available to drive it, and a rule with no data behind it either never fires or
+reports a constraint that may not exist.
+
+### Changed
+
+- The provider checks are not `ISkillValidationRule`s. A rule sees the skill and nothing else, and these also depend
+  on `--provider`; threading run options through all twenty rules to serve three of them would be the wrong trade.
+  They are merged into the report where the loader's diagnostics already are, so suppression, ordering, JSON and
+  SARIF apply unchanged. SF6001, reported by `diff`, set the precedent.
+- `--suppress` accepts `SF7xxx`. The validating regex stopped at `SF6xxx`, so a new band would have been reported
+  and then refused suppression.
+
 ## [26.208.2] — 2026-07-27
 
 ### Added — `SF4xxx`, instruction injection in the body
