@@ -10,7 +10,7 @@
 A local, open source CLI for AI agent skills. SkillForge creates, validates, inspects and packages
 `SKILL.md`-based skills, and reports findings as human-readable console output, JSON or SARIF.
 
-> Status: **released as `26.209.3`** — v0.2 and v0.3 complete, v0.4's migration inventory in.
+> Status: **released as `26.210.1`** — v0.2 and v0.3 complete; v0.4's migration inventory and MCP inspection in.
 > All seven commands work end to end. CI builds and tests on Linux and Windows, and runs the CLI over the sample
 > skills.
 
@@ -157,7 +157,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: NetAnlatAkademi/skillforge@v26.209.3
+      - uses: NetAnlatAkademi/skillforge@v26.210.1
         with:
           path: ./skills
           suppress: SF1009,SF1010
