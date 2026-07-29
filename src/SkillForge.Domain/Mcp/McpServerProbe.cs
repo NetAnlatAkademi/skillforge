@@ -16,6 +16,14 @@ namespace SkillForge.Domain.Mcp;
 /// <param name="Detail">
 /// Why a probe did not answer, in the underlying error's own words. <see langword="null"/> when it answered.
 /// </param>
+/// <param name="AnsweredRevision">
+/// The protocol revision whose adapter got an answer, so a reader knows which dialect the numbers above are in.
+/// </param>
+/// <param name="Authorization">The <c>401</c> challenge, when the server asked to be authorised against.</param>
+/// <param name="Tools">
+/// What <c>tools/list</c> returned, when the server declared the <c>tools</c> capability. Empty otherwise — including
+/// when it declares tools and has none, which are not distinguished here because the specification allows an empty set.
+/// </param>
 public sealed record McpServerProbe(
     string ServerName,
     McpProbeStatus Status,
@@ -23,21 +31,31 @@ public sealed record McpServerProbe(
     IReadOnlyList<string> Capabilities,
     string? SelfReportedName,
     string? SelfReportedVersion,
-    string? Detail)
+    string? Detail,
+    string? AnsweredRevision = null,
+    McpAuthorizationChallenge? Authorization = null,
+    IReadOnlyList<McpToolSummary>? Tools = null)
 {
+    /// <summary>Gets the tools the probe read, or an empty list when it read none.</summary>
+    public IReadOnlyList<McpToolSummary> ToolsOrEmpty => Tools ?? [];
+
     /// <summary>A server that answered.</summary>
     /// <param name="serverName">The declared name.</param>
     /// <param name="supportedVersions">Versions it listed.</param>
     /// <param name="capabilities">Capabilities it declared.</param>
     /// <param name="selfReportedName">Its self-reported name.</param>
     /// <param name="selfReportedVersion">Its self-reported version.</param>
+    /// <param name="answeredRevision">The revision whose adapter got the answer.</param>
+    /// <param name="tools">What <c>tools/list</c> returned, when it was asked.</param>
     /// <returns>The probe result.</returns>
     public static McpServerProbe Answered(
         string serverName,
         IReadOnlyList<string> supportedVersions,
         IReadOnlyList<string> capabilities,
         string? selfReportedName,
-        string? selfReportedVersion) =>
+        string? selfReportedVersion,
+        string? answeredRevision = null,
+        IReadOnlyList<McpToolSummary>? tools = null) =>
         new(
             serverName,
             McpProbeStatus.Answered,
@@ -45,6 +63,30 @@ public sealed record McpServerProbe(
             capabilities,
             selfReportedName,
             selfReportedVersion,
+            null,
+            answeredRevision,
+            null,
+            tools);
+
+    /// <summary>A server that asked to be authorised against.</summary>
+    /// <param name="serverName">The declared name.</param>
+    /// <param name="challenge">What its <c>401</c> said.</param>
+    /// <param name="answeredRevision">The revision whose adapter asked.</param>
+    /// <returns>The probe result.</returns>
+    public static McpServerProbe NeedsAuthorization(
+        string serverName,
+        McpAuthorizationChallenge challenge,
+        string? answeredRevision = null) =>
+        new(
+            serverName,
+            McpProbeStatus.RequiresAuthorization,
+            [],
+            [],
+            null,
+            null,
+            null,
+            answeredRevision,
+            challenge,
             null);
 
     /// <summary>A server that could not be asked, or refused.</summary>

@@ -237,9 +237,18 @@ internal sealed class MigrateInspectCommandRunner
             switch (probe.Status)
             {
                 case McpProbeStatus.Answered:
-                    builder.AppendLine($"  {probe.ServerName} — answered server/discover");
+                    builder.AppendLine(
+                        $"  {probe.ServerName} — answered, speaking {probe.AnsweredRevision ?? "an unnamed revision"}");
                     builder.AppendLine($"      supports:     {Join(probe.SupportedVersions)}");
                     builder.AppendLine($"      capabilities: {Join(probe.Capabilities)}");
+
+                    if (probe.ToolsOrEmpty.Count > 0)
+                    {
+                        builder.AppendLine(
+                            $"      tools:        {probe.ToolsOrEmpty.Count} read "
+                            + $"({Join([.. probe.ToolsOrEmpty.Select(tool => tool.Name)])})");
+                    }
+
                     builder.AppendLine(
                         $"      identity:     {probe.SelfReportedName ?? "(none)"} "
                         + $"{probe.SelfReportedVersion ?? string.Empty}".TrimEnd()
@@ -250,6 +259,20 @@ internal sealed class MigrateInspectCommandRunner
                     builder.AppendLine(
                         $"  {probe.ServerName} — no server/discover, so a handshake-based revision "
                         + $"(2025-11-25 or earlier): {probe.Detail}");
+                    break;
+
+                case McpProbeStatus.RequiresAuthorization:
+                    builder.AppendLine(
+                        $"  {probe.ServerName} — requires {probe.Authorization?.Scheme ?? "unknown"} authorization");
+                    builder.AppendLine(
+                        "      metadata:     "
+                        + (probe.Authorization?.ResourceMetadataUrl ?? "(the challenge names none — see SF8006)"));
+
+                    if (probe.Authorization?.Scope is { Length: > 0 } scope)
+                    {
+                        builder.AppendLine($"      scope:        {scope}");
+                    }
+
                     break;
 
                 case McpProbeStatus.NotProbed:
@@ -356,6 +379,25 @@ internal sealed class MigrateInspectCommandRunner
                     // Named self-reported here too: a JSON consumer is the likeliest to treat it as verified.
                     ["selfReportedName"] = probe.SelfReportedName,
                     ["selfReportedVersion"] = probe.SelfReportedVersion,
+                    ["answeredRevision"] = probe.AnsweredRevision,
+                    ["authorization"] = probe.Authorization is null
+                        ? null
+                        : new JsonObject
+                        {
+                            ["scheme"] = probe.Authorization.Scheme,
+                            ["resourceMetadataUrl"] = probe.Authorization.ResourceMetadataUrl,
+                            ["scope"] = probe.Authorization.Scope,
+                        },
+                    ["tools"] = new JsonArray(
+                        [.. probe.ToolsOrEmpty.Select(tool => (JsonNode)new JsonObject
+                        {
+                            ["name"] = tool.Name,
+                            ["hasObjectInputSchema"] = tool.HasObjectInputSchema,
+
+                            // Reported, never judged: the spec defaults to 2020-12 and shows draft-07 as valid.
+                            ["declaredSchemaDialect"] = tool.DeclaredSchemaDialect,
+                            ["headerAnnotations"] = tool.HeaderAnnotations.Count,
+                        })]),
                     ["detail"] = probe.Detail,
                 })]),
             ["diagnostics"] = new JsonArray(

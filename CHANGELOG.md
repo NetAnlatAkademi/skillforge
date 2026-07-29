@@ -48,6 +48,49 @@ exactly that way). A pinned scoped package is not reported either: `@scope/pkg@1
 - `migrate inspect` printed MCP observations under the heading "Could not read:", which said an observation was a failure
   to read a file. They now have their own heading. Found by running the command against a fixture carrying both kinds.
 
+## [Unreleased]
+
+### Added — MCP authorization, tool conformance and the `2025-11-25` adapter
+
+Completes the MCP work: `migrate inspect --probe-mcp` now reports how to authorise against a server, checks the tools it
+advertises, and understands the handshake-based revision.
+
+- `SF8006` — a server that requires authorization and names no `resource_metadata`. How to authorise *is* reported when
+  the challenge names it (scheme, metadata URL, scope), in the probe section rather than as a finding: a server
+  challenging correctly is behaving correctly. Only the gap is a finding, because MCP servers **MUST** implement RFC 9728
+  and clients **MUST** use it for discovery.
+- `SF8007`–`SF8009` from one `tools/list` request, made only when the server declares the `tools` capability: an
+  `inputSchema` that is not an object, an `x-mcp-header` breaking a constraint a Streamable HTTP client **must** reject
+  the whole tool over, and a name outside the naming guidance.
+- A `2025-11-25` adapter sending `initialize`. Adapters are tried newest first and fall back only on "no discovery" — an
+  unreachable host or a `401` answers the same whichever revision asks. A server answered by the older adapter still gets
+  its `SF8004` note and now also reports which revision it speaks.
+
+**A rule was deliberately not written.** The ecosystem summary said `2026-07-28` requires JSON Schema 2020-12 for tool
+schemas. The specification says `inputSchema` "defaults to 2020-12 if no `$schema` field is present" and then shows an
+explicit `draft-07` schema as a valid example — that rule would have failed conforming servers. The declared dialect is
+reported and never judged, and a test is named for it. Third time reading the spec instead of the summary changed the
+code.
+
+Two limits stated rather than discovered: `x-mcp-header` annotations are read from **top-level properties only** (the
+constraint applies to statically reachable properties, and deciding reachability through `$ref`s is a schema resolver's
+job), and only the first page of `tools/list` is read.
+
+The `2025-11-25` adapter sends `initialize` and stops — no `notifications/initialized`, because SkillForge has no
+operations to begin — and declares no client capabilities, because claiming `roots` or `sampling` it does not implement to
+get a richer answer would be a lie told to a server.
+
+### Changed — SF1003's threshold is 1000 lines, up from 500
+
+At the operator's request, and the measurement supports it: on the 229-skill corpus SF1003 spoke about **33 skills at 500
+and 0 at 1000**. The longest real `SKILL.md` is 734 lines, and inspecting the longest of those 33 showed instructions that
+are long because the job is long, not because reference material sat in the wrong file. A warning that fires on a seventh
+of real input is the SF1009 shape.
+
+The cost is recorded rather than buried: at 1000 the rule fires on nothing in the corpus, so its value now rests entirely
+on entry points that are genuinely unusual. A test pins 734 lines as passing, so any future tightening has to face that it
+would start speaking about a real skill again.
+
 ## [26.209.3] — 2026-07-28
 
 ### Added — the model runner: `eval` can ask a model whether it would choose the skill

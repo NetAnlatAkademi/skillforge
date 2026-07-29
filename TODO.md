@@ -99,7 +99,7 @@ I/O failure, so it is left alone deliberately.
 - [x] Description quality rules (SF1001, SF1002)
 - [x] File reference rules (SF0007) — Markdown links in the body checked against the file inventory
 - [x] Path traversal rules (SF0008) — body references that escape the skill directory
-- [x] Length rules (SF1003)
+- [x] Length rules (SF1003) — threshold raised 500 → 1000 on 2026-07-29; measured 33 findings → 0
 - [x] License and compatibility warnings (SF1009, SF1010)
 - [x] Package version rule (SF0010)
 - [x] Summary calculation (`ValidationSummary`)
@@ -425,10 +425,11 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
   the act SkillForge exists to let somebody defer. It is reported as "not asked", with the reason.
   Measured on 4 real declarations: SF8003 3 findings, everything else 0 because no HTTP server is declared here; each
   check verified against a fixture instead. Whole band is Info (D-52).
-  Still open: authorization method and tool schema conformance. Both need `tools/list` and a JSON Schema 2020-12 check,
-  which is a second request and a validator — worth its own pass.
-- [~] MCP 2025-11-25 and 2026-07-28 adapters — `2026-07-28` shipped. `2025-11-25` needs the `initialize` handshake, so a
-  server that only speaks it is reported as SF8004 rather than probed; the adapter is the next step.
+  Authorization method and tool conformance shipped too: `SF8006` a challenge with no `resource_metadata`, `SF8007`–`SF8009`
+  from one `tools/list` request. **No 2020-12 rule was written** — the spec shows `draft-07` as valid, so that claim from
+  the ecosystem summary was wrong (D-54).
+- [x] MCP 2025-11-25 and 2026-07-28 adapters — both shipped, tried newest first, falling back only on "no discovery".
+  The older one sends `initialize` and stops: no `notifications/initialized`, and no client capabilities it does not have.
 - [x] Deprecated capability detection — `SF8005`, `logging` only, verified against the registry
 
 ### New diagnostic bands — and the stance this changes
@@ -440,7 +441,7 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 | `SF5xxx` | Supply-chain and provenance risks | SF5001 shipped; provenance deferred |
 | `SF6xxx` | Version and evolution risks | SF6001 shipped (`diff`); "no version declared" deferred at 91% firing |
 | `SF7xxx` | Provider compatibility | SF7001–SF7003 shipped; a capability rule dropped for want of data |
-| `SF8xxx` | MCP servers and protocol | SF8001–SF8005 shipped, all Info; reported by `migrate inspect` |
+| `SF8xxx` | MCP servers and protocol | SF8001–SF8009 shipped, all Info; reported by `migrate inspect` |
 
 "A file I could not read" stays `SF1015`, beside SF1012 and SF1014, even though `migrate inspect` now also owns an
 `SF8xxx` band. The two answer different questions: SF1015 says the inventory above is incomplete, while an SF8xxx finding

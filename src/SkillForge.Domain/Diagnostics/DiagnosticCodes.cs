@@ -194,4 +194,27 @@ public static class DiagnosticCodes
     /// A probed MCP server declares a capability the specification has deprecated, such as <c>logging</c>.
     /// </summary>
     public const string McpDeprecatedCapability = "SF8005";
+
+    /// <summary>
+    /// A server requires authorization but its challenge does not name its Protected Resource Metadata, which MCP
+    /// servers must implement and clients must use to find the authorization server.
+    /// </summary>
+    public const string McpAuthorizationWithoutMetadata = "SF8006";
+
+    /// <summary>
+    /// A tool's <c>inputSchema</c> is absent or is not a JSON object, where the specification requires a valid JSON
+    /// Schema object.
+    /// </summary>
+    public const string McpToolInputSchemaInvalid = "SF8007";
+
+    /// <summary>
+    /// A tool carries an <c>x-mcp-header</c> annotation that breaks the constraints a Streamable HTTP client must reject
+    /// the whole tool over, so the tool would silently disappear from that client's tool list.
+    /// </summary>
+    public const string McpToolHeaderAnnotationInvalid = "SF8008";
+
+    /// <summary>
+    /// A tool's name falls outside the specification's naming guidance on length, characters or uniqueness.
+    /// </summary>
+    public const string McpToolNameOutsideGuidance = "SF8009";
 }

@@ -10,10 +10,15 @@ namespace SkillForge.Application.Validation.Rules;
 /// <remarks>
 /// A long entry point is a sign that reference material should move into its own file, which the agent
 /// can then read only when it needs to. The limit is a warning: some skills genuinely are long.
+///
+/// **Raised from 500 to 1000 on 2026-07-29**, at the operator's request. The measurement supports it: at 500 the rule
+/// spoke about 33 skills in the 229-skill corpus, and inspecting the longest of them showed instructions that were long
+/// because the job is long, not because reference material was in the wrong place. A threshold that fires on a seventh
+/// of real input is the SF1009 shape. At 1000 it speaks only about entry points that are genuinely unusual.
 /// </remarks>
 public sealed class SkillFileLengthRule : ISkillValidationRule
 {
-    private const int MaximumRecommendedLines = 500;
+    private const int MaximumRecommendedLines = 1000;
 
     /// <inheritdoc />
     public string Code => DiagnosticCodes.SkillFileTooLong;
