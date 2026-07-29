@@ -106,6 +106,16 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
                     $"the endpoint answered {(int)response.StatusCode} to server/discover");
             }
 
+            // A 401 is an answer, not a failure: the challenge is how a client learns to authorise, and reading it is
+            // the whole of the authorization question that can be answered without credentials.
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                return McpServerProbe.NeedsAuthorization(
+                    server.Name,
+                    McpAuthorizationChallenge(response),
+                    Revision);
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 return McpServerProbe.Failed(
@@ -114,7 +124,110 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
                     $"it answered {(int)response.StatusCode} {response.ReasonPhrase}");
             }
 
-            return Read(server.Name, payload);
+            var probe = Read(server.Name, payload);
+
+            // A second request, and only when the server said it has tools. Tool conformance cannot be checked without
+            // the tool list, and the list cannot be had without asking — but a server that declares no tools is never
+            // asked, and only the first page is read: paging through a large catalogue to inspect it is not proportionate.
+            return probe.Status == McpProbeStatus.Answered
+                && probe.Capabilities.Contains("tools", StringComparer.OrdinalIgnoreCase)
+                    ? probe with { Tools = await ToolsAsync(url, cancellationToken).ConfigureAwait(false) }
+                    : probe;
+        }
+    }
+
+    /// <summary>
+    /// Reads the <c>WWW-Authenticate</c> challenge. The parameters are a comma-separated list of
+    /// <c>name="value"</c> pairs, and the two that matter here are <c>resource_metadata</c> — where a client must look
+    /// to find the authorization server — and <c>scope</c>.
+    /// </summary>
+    private static McpAuthorizationChallenge McpAuthorizationChallenge(HttpResponseMessage response)
+    {
+        var challenge = response.Headers.WwwAuthenticate.FirstOrDefault();
+
+        return new McpAuthorizationChallenge(
+            challenge?.Scheme ?? "unknown",
+            Parameter(challenge?.Parameter, "resource_metadata"),
+            Parameter(challenge?.Parameter, "scope"));
+    }
+
+    private static string? Parameter(string? parameters, string name)
+    {
+        if (parameters is null)
+        {
+            return null;
+        }
+
+        foreach (var part in parameters.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = part.IndexOf('=', StringComparison.Ordinal);
+
+            if (separator > 0 && part[..separator].Trim().Equals(name, StringComparison.OrdinalIgnoreCase))
+            {
+                return part[(separator + 1)..].Trim().Trim('"');
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads the first page of <c>tools/list</c>, reducing each tool to the facts a conformance check needs.
+    /// </summary>
+    /// <remarks>
+    /// Failure here is deliberately quiet: the probe already succeeded, and a server that answers discovery but refuses
+    /// its tool list has told us something less interesting than what we already have. An empty list is the honest
+    /// result, and it produces no findings rather than false ones.
+    /// </remarks>
+    private async Task<IReadOnlyList<McpToolSummary>> ToolsAsync(string url, CancellationToken cancellationToken)
+    {
+        var body = new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = "skillforge-tools-1",
+            ["method"] = "tools/list",
+            ["params"] = new JsonObject
+            {
+                ["_meta"] = new JsonObject
+                {
+                    [ProtocolVersionKey] = Revision,
+                    [ClientInfoKey] = new JsonObject
+                    {
+                        ["name"] = ClientName,
+                        ["version"] = ClientVersion,
+                    },
+                    [ClientCapabilitiesKey] = new JsonObject(),
+                },
+            },
+        }.ToJsonString();
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            };
+
+            request.Headers.TryAddWithoutValidation("MCP-Protocol-Version", Revision);
+
+            using var response = await _client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return [];
+            }
+
+            var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            return McpToolReader.Read(JsonNode.Parse(payload)?["result"]?["tools"]);
+        }
+        catch (HttpRequestException)
+        {
+            return [];
+        }
+        catch (JsonException)
+        {
+            return [];
         }
     }
 
@@ -179,7 +292,8 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
             Strings(result["supportedVersions"]),
             Names(result["capabilities"]),
             serverInfo?["name"]?.GetValue<string>(),
-            serverInfo?["version"]?.GetValue<string>());
+            serverInfo?["version"]?.GetValue<string>(),
+            Revision);
     }
 
     private static IReadOnlyList<string> Strings(JsonNode? node) =>

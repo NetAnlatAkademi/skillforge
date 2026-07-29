@@ -57,7 +57,7 @@ number in front of it.
 | SF0010 | Semantic versioning | Consumers need to be able to compare two versions. A version is optional; only a malformed one is an error. |
 | SF1001 | 40 characters | An agent choosing between skills has only the description. "Reviews APIs." does not distinguish this one from ten others. |
 | SF1002 | Mentions *when, whenever, while, during, before, after, if* | A deliberate heuristic. A description can state its trigger without those words, which is why this is a warning the author may ignore. |
-| SF1003 | 500 lines | A long entry point means reference material should live in its own file that the agent reads only when needed. |
+| SF1003 | 1000 lines | A long entry point means reference material should live in its own file that the agent reads only when needed. Raised from 500 on 2026-07-29 — see the measurement below. |
 | SF1005 | Only when a declaration contradicts the content | "A URL is present" fires on 60 of 203 real skills and says nothing; `inspect` reports URLs as an observation instead. A skill that declares `network.allowed: false` and then names a host has one of the two wrong. |
 | SF1006 | Any script, unless shell permission is declared | Measured: 7 of 203 real skills ship a script, so this speaks up about a few percent rather than everything. |
 | SF1007 | Seven literal shell patterns, one finding per pattern per file | Deliberately literal. A pattern that guesses at intent misses the obfuscated case and cries wolf about the ordinary one. |
@@ -83,7 +83,7 @@ number in front of it.
 |---|---|---|
 | SF1001 | Description is too short | **Implemented** |
 | SF1002 | Description does not state an activation context | **Implemented** |
-| SF1003 | `SKILL.md` is longer than 500 lines | **Implemented** |
+| SF1003 | `SKILL.md` is longer than 1000 lines | **Implemented** |
 | SF1004 | An unused file is present | Planned |
 | SF1005 | The skill points at a host but declares `network.allowed: false` | **Implemented** |
 | SF1006 | A script ships but no shell permission is declared | **Implemented** |
@@ -327,6 +327,19 @@ read none. Shipping the rule with no data behind it would mean shipping a rule t
 filling the gap with a guess and reporting a constraint that may not exist. The profile type has room for it; the
 code will be added when a measurement justifies one.
 
+### SF1003's threshold moved from 500 to 1000
+
+Measured on the 229-skill corpus, before and after: **33 findings at 500, 0 at 1000.** The longest `SKILL.md` in the
+corpus is 734 lines.
+
+Inspecting the longest of those 33 showed instructions that are long because the job is long, not because reference
+material sat in the wrong file — and a warning that speaks about a seventh of real input is the SF1009 shape: true,
+unactionable, and teaching people to skim past warnings.
+
+The honest cost is stated rather than buried: at 1000 the rule now fires on **nothing** in the corpus, so its value rests
+entirely on entry points that are genuinely unusual rather than merely long. A test pins 734 as passing, so any future
+tightening has to face the fact that it would start speaking about a real skill again.
+
 ## MCP servers
 
 | Code | Rule | Status |
@@ -336,6 +349,10 @@ code will be added when a measurement justifies one.
 | SF8003 | An MCP server's command resolves a package at launch without a pinned version | **Implemented** (`migrate inspect`) |
 | SF8004 | A probed server does not implement `server/discover`, so it is a handshake-based revision | **Implemented** (`migrate inspect --probe-mcp`) |
 | SF8005 | A probed server declares a capability the specification has deprecated | **Implemented** (`migrate inspect --probe-mcp`) |
+| SF8006 | A server requires authorization but its challenge names no Protected Resource Metadata | **Implemented** (`migrate inspect --probe-mcp`) |
+| SF8007 | A tool's `inputSchema` is absent or is not a JSON object | **Implemented** (`migrate inspect --probe-mcp`) |
+| SF8008 | A tool's `x-mcp-header` annotation breaks a constraint a client must reject the tool over | **Implemented** (`migrate inspect --probe-mcp`) |
+| SF8009 | A tool name falls outside the specification's naming guidance | **Implemented** (`migrate inspect --probe-mcp`) |
 
 **The whole band is `Info`, and that is a decision.** `migrate inspect` describes and does not judge (ADR-006) and always
 exits `0`, so nothing here is a gate. It also solves a real measurement problem: SF8003 fires on **three of the four** MCP
@@ -350,7 +367,7 @@ observation in an inventory it is neither.
 |---|---|
 | SF8003 | **3** — `npx -y @azure-devops/mcp`, and `npx -y obsidian-mcp` twice |
 | SF8001, SF8002 | **0** — no HTTP server is declared on this machine at all |
-| SF8004, SF8005 | **0** — nothing was probed, because probing is opt-in and there is nothing HTTP to probe |
+| SF8004–SF8009 | **0** — nothing was probed, because probing is opt-in and there is nothing HTTP to probe |
 
 Those zeros prove nothing on their own, and the same honesty applies as with SF7xxx: the checks did not run rather than
 ran clean. Each was verified against a fixture instead — a `/sse` endpoint, a plaintext remote URL, a stub server that
@@ -364,6 +381,46 @@ Two exclusions came out of that fixture work, and both are load-bearing:
   file on disk does not change underneath you, which is the opposite of the property the check is about. Nor is a pinned
   package reported, including a scoped one — `@scope/pkg@1.4.2` pins, `@scope/pkg` does not, and the leading `@` is not a
   version separator.
+
+### Authorization, and the rule that is only about the gap
+
+A probe reports how to authorise against a server, because a `401` answers that without credentials: the scheme, the
+`resource_metadata` URL a client must follow to find the authorization server, and the `scope` when the server names one.
+That is reported in the probe section, **not** as a finding — a server challenging correctly is behaving correctly.
+
+**SF8006 fires only on the gap**: a server that requires authorization and names no `resource_metadata`. MCP servers
+**MUST** implement OAuth 2.0 Protected Resource Metadata (RFC 9728) and clients **MUST** use it for discovery, so a
+challenge without it leaves a conforming client with nowhere to look. One code, one meaning.
+
+SkillForge does not fetch the metadata document, nor the authorization server's own metadata. Those are further requests
+to further hosts, reporting configuration that belongs to neither the skill nor the MCP server, and "one request per
+server, plus one for tools" is a property worth keeping.
+
+### Tool conformance — and the rule that was deliberately not written
+
+**There is no "must be JSON Schema 2020-12" rule.** A secondhand summary said `2026-07-28` requires it. The specification
+says `inputSchema` "defaults to 2020-12 if no `$schema` field is present" and then shows an explicit **`draft-07`** schema
+as a valid example. That rule would have failed conforming servers. The declared dialect is reported and never judged —
+there is a test named for it.
+
+What the specification does state at MUST level, and what is therefore checked:
+
+| Code | The requirement it comes from |
+|---|---|
+| SF8007 | `inputSchema` **MUST** be a valid JSON Schema object, not `null`. Checked structurally — a schema that is present and is an object is taken at its word, because a full validator is a different tool. |
+| SF8008 | An `x-mcp-header` value **MUST** be non-empty, a valid HTTP field name, free of CR/LF, case-insensitively unique within the schema, and applied only to `integer`, `string` or `boolean` — `number` is named in the specification as **not** permitted. |
+| SF8009 | Tool names **SHOULD** be 1–128 characters, use only letters, digits, `_`, `-` and `.`, and be unique within a server. SHOULD-level, so it is the mildest observation of the set. |
+
+SF8008 is the one worth explaining. The obligation lands on the **client**: a Streamable HTTP client **MUST** reject a
+tool definition that breaks these constraints, excluding that tool from `tools/list`. A server shipping one has a tool
+that will simply not appear, with nothing in its own logs to say why. Nothing SkillForge does is affected by it, which is
+exactly why somebody should be told.
+
+`x-mcp-header` annotations are read from the schema's **top-level properties only**. The specification restricts the
+annotation to properties *statically reachable* from the schema root, and deciding reachability through `$ref`s and
+composition keywords is a schema resolver's job. Reading nested properties without that resolution would report
+annotations that are not actually reachable — a false positive about a constraint whose whole consequence is a client
+silently dropping a tool.
 
 ### What a probe can and cannot say
 
@@ -390,7 +447,7 @@ Run over 32 skills installed on a working machine (2026-07-27), the rules behave
 | SF1010 — no compatibility declared | 32 of 32 |
 | SF1009 — no license declared | 30 of 32 |
 | SF1002 — description states no activation context | 3 |
-| SF1003 — `SKILL.md` over 500 lines | 1 |
+| SF1003 — `SKILL.md` over 1000 lines | 0 |
 
 No errors, and nothing crashed — the loader and the error rules hold up on real input.
 

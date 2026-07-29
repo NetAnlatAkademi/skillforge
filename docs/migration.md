@@ -97,9 +97,30 @@ capabilities and identity together, so a whole inspection costs a single POST an
 That is `SF8004`; the `initialize` handshake those revisions need is a separate adapter that does not exist yet, and its
 absence is stated instead of guessed around.
 
-The protocol version lives in an adapter, never in the core — roadmap §30.6. `IMcpProtocolAdapter` has one
-implementation today, `2026-07-28`. A revision that changes the handshake gets its own beside it and nothing above them
-moves.
+The protocol version lives in an adapter, never in the core — roadmap §30.6. There are two: `2026-07-28`, which asks
+`server/discover`, and `2025-11-25`, which sends `initialize`. They are tried newest first, and only a "no discovery"
+answer falls back — an unreachable host or a `401` says the same thing whichever revision asks, so retrying it would
+double the requests to say nothing new. A server answered by the older adapter still gets its SF8004 note: it really does
+not implement a method the newer revision makes mandatory, and now the report also says which revision it does speak.
+
+The `2025-11-25` adapter sends `initialize` and stops. The specification has a client follow a successful initialize with
+`notifications/initialized` before normal operations; SkillForge has no normal operations to begin, so sending it would
+announce a session it will not use. It declares **no** client capabilities, because claiming `roots` or `sampling` it does
+not implement in order to get a richer answer would be a lie told to a server.
+
+### Authorization and tools
+
+A `401` is an answer, not a failure: the challenge is how a client learns to authorise, so the probe reports the scheme,
+the `resource_metadata` URL and any `scope`. Only the **gap** is a finding — SF8006, a server that requires authorization
+and points nowhere, when MCP servers must implement RFC 9728 and clients must use it for discovery. SkillForge does not
+fetch that metadata document, nor the authorization server's.
+
+When a server declares the `tools` capability, the probe makes one more request — `tools/list` — and checks what comes
+back: SF8007 an `inputSchema` that is not an object, SF8008 an `x-mcp-header` breaking a constraint a client **must**
+reject the whole tool over, SF8009 a name outside the naming guidance. Only the first page is read; paging a large
+catalogue to inspect it is not proportionate. **There is deliberately no "must be JSON Schema 2020-12" rule** — the
+specification shows `draft-07` as valid — and `x-mcp-header` is read from top-level properties only. Both limits, and
+their reasons, are in [validation-rules.md](validation-rules.md#tool-conformance--and-the-rule-that-was-deliberately-not-written).
 
 ### Where the facts came from
 

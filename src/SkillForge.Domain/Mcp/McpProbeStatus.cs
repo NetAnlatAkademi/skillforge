@@ -21,6 +21,12 @@ public enum McpProbeStatus
     /// </summary>
     NoDiscovery,
 
+    /// <summary>
+    /// Reachable, and told SkillForge to authorise first. Not a fault, and not a failure to answer: the challenge itself
+    /// is the answer to "how does one authorise against this server?".
+    /// </summary>
+    RequiresAuthorization,
+
     /// <summary>Could not be reached, or answered in a shape no adapter understands.</summary>
     Unreachable,
 }

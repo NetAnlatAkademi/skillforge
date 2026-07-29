@@ -69,6 +69,8 @@ internal static class CompositionRoot
         services.AddSingleton<McpDeclarationInspector>();
         services.AddSingleton<IMcpProtocolAdapter>(_ => new Mcp20260728ProtocolAdapter(
             new HttpClient { Timeout = TimeSpan.FromSeconds(20) }));
+        services.AddSingleton<IMcpProtocolAdapter>(_ => new Mcp20251125ProtocolAdapter(
+            new HttpClient { Timeout = TimeSpan.FromSeconds(20) }));
         services.AddSingleton<McpProber>();
 
         services.AddSingleton<IMigrationInspector, MigrationInspector>();
