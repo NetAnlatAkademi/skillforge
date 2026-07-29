@@ -1,3 +1,4 @@
+using SkillForge.Application.Mcp;
 using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Migration;
 
@@ -13,19 +14,33 @@ namespace SkillForge.Application.Migration;
 public sealed class MigrationInspector : IMigrationInspector
 {
     private readonly IReadOnlyList<IAgentToolAdapter> _adapters;
+    private readonly McpDeclarationInspector _declarations;
+    private readonly McpProber _prober;
 
     /// <summary>Initialises the inspector.</summary>
     /// <param name="adapters">One adapter per provider.</param>
-    public MigrationInspector(IEnumerable<IAgentToolAdapter> adapters)
+    /// <param name="declarations">
+    /// Reads what an MCP declaration says on its own. Always run: it costs nothing and touches nothing.
+    /// </param>
+    /// <param name="prober">Asks HTTP MCP servers about themselves, when the caller opts in.</param>
+    public MigrationInspector(
+        IEnumerable<IAgentToolAdapter> adapters,
+        McpDeclarationInspector declarations,
+        McpProber prober)
     {
         ArgumentNullException.ThrowIfNull(adapters);
+        ArgumentNullException.ThrowIfNull(declarations);
+        ArgumentNullException.ThrowIfNull(prober);
 
         _adapters = [.. adapters.OrderBy(adapter => adapter.ProviderId, StringComparer.Ordinal)];
+        _declarations = declarations;
+        _prober = prober;
     }
 
     /// <inheritdoc />
     public async Task<MigrationInspection> InspectAsync(
         AgentToolScanRequest request,
+        bool probeMcpServers = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -51,6 +66,18 @@ public sealed class MigrationInspector : IMigrationInspector
             diagnostics.AddRange(scan.Diagnostics);
         }
 
+        // What each declaration says on its own, always — no connection, no cost.
+        foreach (var server in mcpServers)
+        {
+            diagnostics.AddRange(_declarations.Inspect(server));
+        }
+
+        var probed = probeMcpServers
+            ? await _prober.ProbeAsync(mcpServers, cancellationToken).ConfigureAwait(false)
+            : McpProbeOutcome.None;
+
+        diagnostics.AddRange(probed.Diagnostics);
+
         return new MigrationInspection(
             request.UserDirectory,
             request.ProjectDirectory,
@@ -58,7 +85,8 @@ public sealed class MigrationInspector : IMigrationInspector
             skills,
             mcpServers,
             instructionFiles,
-            DiagnosticOrderingByCode(diagnostics));
+            DiagnosticOrderingByCode(diagnostics),
+            probed.Probes);
     }
 
     /// <summary>

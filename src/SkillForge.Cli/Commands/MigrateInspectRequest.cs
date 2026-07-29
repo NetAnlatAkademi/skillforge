@@ -15,9 +15,14 @@ namespace SkillForge.Cli.Commands;
 /// <param name="Format">One of <see cref="OutputFormat"/>. SARIF is not offered: an inventory is not a finding.</param>
 /// <param name="OutputPath">File to write to, or <see langword="null"/> for stdout.</param>
 /// <param name="RenderOptions">How to present console output.</param>
+/// <param name="ProbeMcpServers">
+/// When set, ask each HTTP MCP server about itself with one <c>server/discover</c> request. Opt-in, because it is the
+/// only part of this command that leaves the machine. stdio servers are never launched, whatever this says.
+/// </param>
 internal sealed record MigrateInspectRequest(
     string? ProjectPath,
     string? UserDirectory,
     string Format,
     string? OutputPath,
-    ReportRenderOptions RenderOptions);
+    ReportRenderOptions RenderOptions,
+    bool ProbeMcpServers = false);

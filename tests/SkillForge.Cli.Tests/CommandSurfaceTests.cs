@@ -33,6 +33,8 @@ public sealed class CommandSurfaceTests
     [InlineData("migrate inspect .")]
     [InlineData("migrate inspect . --format json")]
     [InlineData("migrate inspect --user-directory /exported/profile")]
+    [InlineData("migrate inspect . --probe-mcp")]
+    [InlineData("migrate inspect --probe-mcp --format json")]
     [InlineData("eval ./samples/dotnet-api-review")]
     [InlineData("eval ./samples/dotnet-api-review --model qwen3:8b --model-endpoint http://localhost:11434/v1")]
     [InlineData("eval . --model gpt-5 --model-endpoint https://api.openai.com/v1 --model-api-key-env OPENAI_API_KEY")]

@@ -128,6 +128,7 @@ public sealed class MigrateInspectCommandRunnerTests
                 "/home/stub/.claude/CLAUDE.md",
                 InstructionScope.User,
                 120)],
+            [],
             []);
 
     private static MigrateInspectRequest Request(
@@ -154,11 +155,15 @@ public sealed class MigrateInspectCommandRunnerTests
     {
         internal AgentToolScanRequest? LastRequest { get; private set; }
 
+        internal bool LastProbeMcpServers { get; private set; }
+
         public Task<MigrationInspection> InspectAsync(
             AgentToolScanRequest request,
+            bool probeMcpServers = false,
             CancellationToken cancellationToken = default)
         {
             LastRequest = request;
+            LastProbeMcpServers = probeMcpServers;
             return Task.FromResult(inspection);
         }
     }

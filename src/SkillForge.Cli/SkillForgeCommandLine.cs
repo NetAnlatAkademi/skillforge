@@ -267,6 +267,14 @@ internal static partial class SkillForgeCommandLine
             Description = "Read this directory instead of the current user's home directory.",
         };
 
+        // The only part of this command that leaves the machine, so it is a flag rather than a default. stdio servers
+        // are never launched even with it: inspecting a server by running it would argue with the whole product.
+        var probeMcp = new Option<bool>("--probe-mcp")
+        {
+            Description = "Ask each HTTP MCP server about itself with one server/discover request. Local stdio "
+                + "servers are never launched.",
+        };
+
         var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
         var output = CreateOutputOption();
 
@@ -276,6 +284,7 @@ internal static partial class SkillForgeCommandLine
         {
             project,
             userDirectory,
+            probeMcp,
             format,
             output,
         };
@@ -290,7 +299,8 @@ internal static partial class SkillForgeCommandLine
                     parseResult.GetValue(userDirectory),
                     parseResult.GetValue(format) ?? OutputFormat.Console,
                     parseResult.GetValue(output),
-                    globals.Read(parseResult)),
+                    globals.Read(parseResult),
+                    parseResult.GetValue(probeMcp)),
                 cancellationToken).ConfigureAwait(false);
         });
 
@@ -541,7 +551,7 @@ internal static partial class SkillForgeCommandLine
     private static string[] ReadProviders(string[]? tokens) =>
         tokens is null ? [] : [.. tokens.SelectMany(SplitCodes)];
 
-    [GeneratedRegex("^SF[0-7][0-9]{3}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex("^SF[0-8][0-9]{3}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DiagnosticCodePattern();
 
     private static Option<string?> CreateOutputOption() =>

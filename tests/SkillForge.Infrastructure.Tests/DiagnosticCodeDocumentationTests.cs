@@ -39,7 +39,7 @@ public sealed class DiagnosticCodeDocumentationTests
     {
         // Catches the other direction: a code renamed in the source but left behind in the docs.
         var documented = System.Text.RegularExpressions.Regex
-            .Matches(RulesDocument, @"\bSF[0-7]\d{3}\b")
+            .Matches(RulesDocument, @"\bSF[0-8]\d{3}\b")
             .Select(match => match.Value)
             .Distinct(StringComparer.Ordinal)
             .ToArray();

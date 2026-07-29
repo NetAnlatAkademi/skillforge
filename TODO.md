@@ -418,10 +418,18 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
   cannot say "not on this PATH" without implying "broken". Provider incompatibilities are answered by
   `validate --provider`, which is sharper than an inventory line.
   Also found by looking: `~/.copilot/config.json` is JSON **with `//` comments**, so the JSON reader tolerates them.
-- [ ] MCP protocol inspection, behind version adapters rather than in the CLI core: protocol version in use,
-  deprecated capability use, stateful transport dependency, authorization method, tool schema conformance
-- [ ] MCP 2025-11-25 and 2026-07-28 adapters
-- [ ] Deprecated capability detection
+- [~] MCP protocol inspection, behind version adapters rather than in the CLI core. Shipped: protocol versions in use and
+  deprecated capability use (`SF8004`, `SF8005`, via one `server/discover` request), plus what a declaration says on its
+  own (`SF8001`–`SF8003`). `IMcpProtocolAdapter` keeps the core unbound to a revision.
+  **HTTP only, opt-in with `--probe-mcp`.** A stdio server is never launched — inspecting a local server by running it is
+  the act SkillForge exists to let somebody defer. It is reported as "not asked", with the reason.
+  Measured on 4 real declarations: SF8003 3 findings, everything else 0 because no HTTP server is declared here; each
+  check verified against a fixture instead. Whole band is Info (D-52).
+  Still open: authorization method and tool schema conformance. Both need `tools/list` and a JSON Schema 2020-12 check,
+  which is a second request and a validator — worth its own pass.
+- [~] MCP 2025-11-25 and 2026-07-28 adapters — `2026-07-28` shipped. `2025-11-25` needs the `initialize` handshake, so a
+  server that only speaks it is reported as SF8004 rather than probed; the adapter is the next step.
+- [x] Deprecated capability detection — `SF8005`, `logging` only, verified against the registry
 
 ### New diagnostic bands — and the stance this changes
 
@@ -432,9 +440,11 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 | `SF5xxx` | Supply-chain and provenance risks | SF5001 shipped; provenance deferred |
 | `SF6xxx` | Version and evolution risks | SF6001 shipped (`diff`); "no version declared" deferred at 91% firing |
 | `SF7xxx` | Provider compatibility | SF7001–SF7003 shipped; a capability rule dropped for want of data |
+| `SF8xxx` | MCP servers and protocol | SF8001–SF8005 shipped, all Info; reported by `migrate inspect` |
 
-`migrate inspect` reports SF1015 rather than opening an `SF8xxx` band: "a file I could not read" is the same kind of
-finding as SF1012 and SF1014, and a new band for it would say something new about a problem that is not new.
+"A file I could not read" stays `SF1015`, beside SF1012 and SF1014, even though `migrate inspect` now also owns an
+`SF8xxx` band. The two answer different questions: SF1015 says the inventory above is incomplete, while an SF8xxx finding
+is something the inventory noticed. A band is a scope, not a command.
 
 Through v0.1.0 the code set was deliberately fixed at 24 — an unreadable `SKILL.md` widened SF0001's meaning
 rather than inventing a 25th code. These bands lift that constraint **on purpose**: the code set is open,

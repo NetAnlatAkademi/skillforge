@@ -1,4 +1,5 @@
 using SkillForge.Domain.Diagnostics;
+using SkillForge.Domain.Mcp;
 
 namespace SkillForge.Domain.Migration;
 
@@ -17,6 +18,10 @@ namespace SkillForge.Domain.Migration;
 /// <param name="Skills">Skills found across all providers.</param>
 /// <param name="McpServers">MCP servers declared across all providers.</param>
 /// <param name="InstructionFiles">Instruction files in play across all providers.</param>
+/// <param name="McpProbes">
+/// What each MCP server said about itself, when the run asked. Empty when it did not: probing is opt-in, and a stdio
+/// server is never launched to be inspected.
+/// </param>
 /// <param name="Diagnostics">
 /// What SkillForge could not read, and why. A configuration it failed to parse is reported rather than skipped
 /// silently, because a missing server in an inventory is worse than a stated gap.
@@ -28,7 +33,8 @@ public sealed record MigrationInspection(
     IReadOnlyList<SkillInventoryEntry> Skills,
     IReadOnlyList<McpServerDeclaration> McpServers,
     IReadOnlyList<InstructionFileReference> InstructionFiles,
-    IReadOnlyList<Diagnostic> Diagnostics)
+    IReadOnlyList<Diagnostic> Diagnostics,
+    IReadOnlyList<McpServerProbe> McpProbes)
 {
     /// <summary>Gets the providers that were actually found.</summary>
     public IEnumerable<AgentToolPresence> PresentProviders =>

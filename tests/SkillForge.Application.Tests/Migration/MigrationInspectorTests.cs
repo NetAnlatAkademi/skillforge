@@ -1,3 +1,4 @@
+using SkillForge.Application.Mcp;
 using SkillForge.Application.Migration;
 using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Migration;
@@ -13,7 +14,7 @@ public sealed class MigrationInspectorTests
     [Fact]
     public async Task RunsEveryAdapterAndKeepsProvidersInIdentifierOrder()
     {
-        var inspector = new MigrationInspector(
+        var inspector = Inspector(
         [
             new StubAdapter("github-copilot"),
             new StubAdapter("claude-code"),
@@ -30,7 +31,7 @@ public sealed class MigrationInspectorTests
     public async Task ReportsAProviderThatWasNotFoundRatherThanLeavingItOut()
     {
         // The absence is the answer to "can I move to it?", and omitting it would look like it was not looked for.
-        var inspector = new MigrationInspector([new StubAdapter("cursor", present: false)]);
+        var inspector = Inspector([new StubAdapter("cursor", present: false)]);
 
         var inspection = await inspector.InspectAsync(new AgentToolScanRequest("/home/dev", null));
 
@@ -41,7 +42,7 @@ public sealed class MigrationInspectorTests
     [Fact]
     public async Task MergesSkillsServersInstructionsAndDiagnostics()
     {
-        var inspector = new MigrationInspector(
+        var inspector = Inspector(
         [
             new StubAdapter("claude-code", skillName: "one", serverName: "server-one"),
             new StubAdapter("codex", skillName: "two", unreadablePath: "/home/dev/.codex/config.toml"),
@@ -62,12 +63,19 @@ public sealed class MigrationInspectorTests
     {
         // Same stance as the validator: a throwing adapter is a bug, and swallowing it would hand the user a
         // quietly incomplete inventory. A file it merely cannot parse is SF1015 instead.
-        var inspector = new MigrationInspector([new ThrowingAdapter()]);
+        var inspector = Inspector([new ThrowingAdapter()]);
 
         var act = async () => await inspector.InspectAsync(new AgentToolScanRequest("/home/dev", null));
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
+
+    /// <summary>
+    /// The declaration inspector and the prober are real: both are pure until something is probed, and a probe needs an
+    /// HTTP server, which none of these stubs declare.
+    /// </summary>
+    private static MigrationInspector Inspector(IEnumerable<IAgentToolAdapter> adapters) =>
+        new(adapters, new McpDeclarationInspector(), new McpProber([]));
 
     private sealed class StubAdapter(
         string providerId,

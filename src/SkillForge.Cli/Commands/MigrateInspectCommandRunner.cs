@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Migration;
+using SkillForge.Domain.Mcp;
 using SkillForge.Domain.Migration;
 
 namespace SkillForge.Cli.Commands;
@@ -59,6 +60,7 @@ internal sealed class MigrateInspectCommandRunner
                     request.ProjectPath is { Length: > 0 } project
                         ? _fileSystem.GetFullPath(project)
                         : null),
+                request.ProbeMcpServers,
                 cancellationToken)
             .ConfigureAwait(false);
 
@@ -97,6 +99,7 @@ internal sealed class MigrateInspectCommandRunner
         AppendSkills(builder, inspection);
         AppendMcpServers(builder, inspection);
         AppendInstructionFiles(builder, inspection);
+        AppendMcpProbes(builder, inspection);
         AppendDiagnostics(builder, inspection);
 
         builder.AppendLine();
@@ -211,17 +214,88 @@ internal sealed class MigrateInspectCommandRunner
         }
     }
 
-    private static void AppendDiagnostics(StringBuilder builder, MigrationInspection inspection)
+    /// <summary>
+    /// Writes what each probed server said about itself.
+    /// </summary>
+    /// <remarks>
+    /// The self-reported name and version are labelled as such every time they appear. The specification is explicit
+    /// that <c>serverInfo</c> is not verified by the protocol and that clients should not use it for security
+    /// decisions, so presenting it as plain fact would be repeating a claim as if SkillForge had checked it.
+    /// </remarks>
+    private static void AppendMcpProbes(StringBuilder builder, MigrationInspection inspection)
     {
-        if (inspection.Diagnostics.Count == 0)
+        if (inspection.McpProbes.Count == 0)
         {
             return;
         }
 
         builder.AppendLine();
-        builder.AppendLine("Could not read:");
+        builder.AppendLine("MCP protocol probe:");
 
-        foreach (var diagnostic in inspection.Diagnostics)
+        foreach (var probe in inspection.McpProbes)
+        {
+            switch (probe.Status)
+            {
+                case McpProbeStatus.Answered:
+                    builder.AppendLine($"  {probe.ServerName} — answered server/discover");
+                    builder.AppendLine($"      supports:     {Join(probe.SupportedVersions)}");
+                    builder.AppendLine($"      capabilities: {Join(probe.Capabilities)}");
+                    builder.AppendLine(
+                        $"      identity:     {probe.SelfReportedName ?? "(none)"} "
+                        + $"{probe.SelfReportedVersion ?? string.Empty}".TrimEnd()
+                        + " (self-reported, not verified by the protocol)");
+                    break;
+
+                case McpProbeStatus.NoDiscovery:
+                    builder.AppendLine(
+                        $"  {probe.ServerName} — no server/discover, so a handshake-based revision "
+                        + $"(2025-11-25 or earlier): {probe.Detail}");
+                    break;
+
+                case McpProbeStatus.NotProbed:
+                    builder.AppendLine($"  {probe.ServerName} — not asked: {probe.Detail}");
+                    break;
+
+                default:
+                    builder.AppendLine($"  {probe.ServerName} — could not be asked: {probe.Detail}");
+                    break;
+            }
+        }
+    }
+
+    private static string Join(IReadOnlyList<string> values) =>
+        values.Count == 0 ? "(none reported)" : string.Join(", ", values);
+
+    /// <summary>
+    /// Writes the findings under two headings, because they answer different questions.
+    /// </summary>
+    /// <remarks>
+    /// SF1015 means "SkillForge could not read this file, so the inventory above is incomplete". An SF8xxx finding means
+    /// "here is something the inventory noticed". Printing both under "Could not read" said the second thing was the
+    /// first, which was simply false — found by running the command against a fixture with both.
+    /// </remarks>
+    private static void AppendDiagnostics(StringBuilder builder, MigrationInspection inspection)
+    {
+        Append(builder, "Could not read:", inspection.Diagnostics
+            .Where(diagnostic => !diagnostic.Code.StartsWith("SF8", StringComparison.Ordinal)));
+
+        Append(builder, "MCP observations:", inspection.Diagnostics
+            .Where(diagnostic => diagnostic.Code.StartsWith("SF8", StringComparison.Ordinal)));
+    }
+
+    private static void Append(StringBuilder builder, string heading, IEnumerable<Domain.Diagnostics.Diagnostic> findings)
+    {
+        var listed = findings.ToArray();
+
+        if (listed.Length == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine(heading);
+
+        foreach (var diagnostic in listed)
         {
             builder.AppendLine($"  ! {diagnostic.Code} {diagnostic.Message}");
         }
@@ -270,6 +344,19 @@ internal sealed class MigrateInspectCommandRunner
                     ["path"] = file.Path,
                     ["scope"] = file.Scope.ToString().ToLowerInvariant(),
                     ["sizeInBytes"] = file.SizeInBytes,
+                })]),
+            ["mcpProbes"] = new JsonArray(
+                [.. inspection.McpProbes.Select(probe => (JsonNode)new JsonObject
+                {
+                    ["server"] = probe.ServerName,
+                    ["status"] = probe.Status.ToString().ToLowerInvariant(),
+                    ["supportedVersions"] = ToArray(probe.SupportedVersions),
+                    ["capabilities"] = ToArray(probe.Capabilities),
+
+                    // Named self-reported here too: a JSON consumer is the likeliest to treat it as verified.
+                    ["selfReportedName"] = probe.SelfReportedName,
+                    ["selfReportedVersion"] = probe.SelfReportedVersion,
+                    ["detail"] = probe.Detail,
                 })]),
             ["diagnostics"] = new JsonArray(
                 [.. inspection.Diagnostics.Select(diagnostic => (JsonNode)new JsonObject
