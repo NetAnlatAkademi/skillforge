@@ -5,7 +5,7 @@ mirrored into the Obsidian vault under `SkillForge/` for cross-session context.
 
 Legend: `[ ]` open · `[x]` done · `[~]` in progress · `[-]` deliberately deferred
 
-Last updated: 2026-07-28
+Last updated: 2026-08-03
 
 ---
 
@@ -462,6 +462,56 @@ Not built on "it ran in a container, so it is safe". Agents have been shown to r
 extension components through repository content. So a sandbox run also watches: repository diff before and
 after, Git config changes, IDE/agent config changes, hook creation, symlink creation, writes outside the
 workspace, and files that persist to affect the next run.
+
+## v0.5 — Change control, provenance and policy (from SKILLFORGE_UPDATED_WORK_PLAN.md)
+
+Done in one pass on 2026-08-03, against the updated work plan.
+
+- [x] `diff --format sarif` — deferred through v0.2 because "a diff is not a set of findings", which was right about
+  most of a diff and wrong about the part a reviewer wants blocked. `SF6002` a new permission, `SF6003` a new script,
+  `SF6004` a new host, `SF6005` everything given up (Info, one result for all of it). A changed description or a new
+  reference file stays out of SARIF, so the format is not carrying a summary.
+- [x] Provenance in the package manifest — repository, commit, repository-relative path, dirty flag, generated
+  timestamp, tool version. Four read-only `git` questions through an `IProcessRunner` seam, so the application layer
+  never sees git and a machine without it still packages. Verified against all three cases on real input: a clean
+  checkout, a dirty one, and a directory that is not a repository.
+  **`workingTreeIsDirty` is the field that earns its place**: a commit SHA next to a modified working copy names a
+  commit whose contents are not what was packaged, and a status that could not be obtained reads as dirty.
+  No `SF5xxx` rule was written for missing provenance — that was measured and rejected once already; policy is what
+  makes provenance a requirement, and only where somebody asked for it.
+- [x] `skillforge policy check` and `.skillforge/policy.yaml` — `SF9001`–`SF9009`. Permissions, host allow-list,
+  provenance, license, `SKILL.md` length. Console, JSON and SARIF.
+  **`SF9xxx`, not the `SF8xxx` the plan asked for**: `SF8xxx` already meant MCP in nine published codes.
+  Measured both directions on 230 real skills: the strictest policy the schema can express gives 229/214/101/39/34
+  findings, and an **empty policy gives zero**. The second number is the one that matters — it is what makes the
+  command safe to add to a pipeline before the rules exist.
+  A suppression with no reason is refused and reported (`SF9008`) rather than applied or dropped.
+- [x] `SF9009`, for the rules this command cannot observe: a path-list write rule, `requirePackageHash`, the whole
+  `mcp` section. A rule that never runs looks exactly like a rule that passed.
+- [x] `skillforge scan` — `validate`'s rules, filtered to the risk signals by an explicit code list rather than a band
+  prefix, because `SF1xxx` holds both "no license" and "this script runs sudo". No second engine.
+- [x] `skillforge inventory` — `migrate inspect` under the name the plan uses. One runner, two entry points.
+- [x] `skillforge mcp inspect|validate|diff` — the MCP checks against a file the caller names rather than the files a
+  provider owns, which is the question a pull request asks. `validate` gates on any finding where `inspect` reports and
+  exits 0; the **severity of a published `SF8xxx` code is unchanged** either way. `mcp diff` compares by what would be
+  connected to, and compares environment variables by name only.
+
+### Found while doing it
+
+- System.CommandLine's tokenizer keys command names globally, so a second subcommand named `inspect` under a different
+  parent throws at startup rather than at parse time. `inventory` is therefore its own command name, not a renamed
+  instance of the same object.
+- `ReportRenderOptions` had no title, so `policy check` printed "SkillForge Validate" over its findings. A shared
+  report shape is fine; a shared heading tells the reader the wrong thing about what ran.
+
+### Still not done, and deliberately
+
+- [-] `skillforge diff origin/main...HEAD` — the plan's headline invocation still takes two paths. Resolving a
+  revision range means materialising a tree, which is a worktree or a `git archive` and a set of failure modes worth
+  its own pass. `docs/ci.md` documents the `git worktree` recipe that does the same thing today.
+- [-] MCP policy rules (`allowedProtocolVersions`, `denyDeprecatedCapabilities`) enforced by `policy check` — they
+  describe a running server, and `policy check` reads files. Reported as `SF9009` rather than silently accepted.
+- [-] `pack` provenance signing — recorded provenance is not a signature and the docs say so in those words.
 
 ## Out of scope for v0.1.0
 

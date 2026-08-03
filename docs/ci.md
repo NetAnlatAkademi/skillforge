@@ -94,6 +94,63 @@ through.
 copy and lets the JSON run decide the build. Add `--fail-on-change` if any surface change should block the merge —
 that is a policy choice, which is why it is not the default.
 
+### Annotating the change instead of commenting it
+
+`diff --format sarif` uploads like `validate` does, so a permission the pull request adds is annotated on the file
+that adds it rather than buried in a comment:
+
+```yaml
+      - name: Diff the skill's behaviour surface
+        run: |
+          skillforge diff ../base/skills/my-skill ./skills/my-skill             --format sarif --output artifacts/diff.sarif
+
+      - name: Upload the diff
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: artifacts/diff.sarif
+          category: skillforge-diff
+```
+
+Use a distinct `category` so the diff's results do not replace `validate`'s in code scanning.
+
+Only the part of a diff that is a **finding** is uploaded: `SF6002` a new permission, `SF6003` a new script, `SF6004`
+a new host, `SF6005` what was given up, `SF6001` growth under an unchanged version, plus any validation finding the
+later revision introduced. A changed description or a new reference file stays in the console and JSON reports.
+
+## Enforcing an organisation's policy
+
+```yaml
+      - name: Check policies
+        run: |
+          skillforge policy check ./skills             --policy .skillforge/policy.yaml             --format sarif --output artifacts/policy.sarif
+
+      - name: Upload policy violations
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: artifacts/policy.sarif
+          category: skillforge-policy
+```
+
+Exits 1 on a violation, on a skill that will not load, and on a policy file that cannot be read — that last one
+matters in CI, because a run that checked nothing must not report success. An empty policy produces no findings, so
+the step is safe to add before the rules are written. See
+[cli-reference.md](cli-reference.md#skillforge-policy-check).
+
+## Checking an MCP configuration a pull request changes
+
+```yaml
+      - name: Validate the MCP configuration
+        run: skillforge mcp validate ./.mcp.json
+
+      - name: Show what it would now connect to
+        run: skillforge mcp diff ../base/.mcp.json ./.mcp.json
+```
+
+`mcp validate` gates on any finding; `mcp inspect` reports the same thing and exits 0. Neither launches a local stdio
+server, and `--probe-mcp` — the only part that leaves the runner — is off unless asked for.
+
 Taking a git range directly (`diff origin/main...HEAD`) is not implemented; the worktree above is the supported
 way, and is what built-in support would do underneath.
 

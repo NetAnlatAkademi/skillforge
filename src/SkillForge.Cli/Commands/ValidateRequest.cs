@@ -1,4 +1,5 @@
 using SkillForge.Application.Abstractions;
+using SkillForge.Application.Validation;
 
 namespace SkillForge.Cli.Commands;
 
@@ -27,6 +28,15 @@ internal sealed record ValidateRequest(
     IReadOnlyList<string> SuppressedCodes,
     IReadOnlyList<string> Providers)
 {
+    /// <summary>
+    /// Gets a value indicating whether to report only the risk signals, which is what <c>scan</c> asks for.
+    /// </summary>
+    /// <remarks>
+    /// The same rules run either way. This filters the report, so a prompt-injection signal is not buried under a
+    /// dozen quality warnings — see <see cref="RiskSignalCodes"/>.
+    /// </remarks>
+    internal bool RiskSignalsOnly { get; init; }
+
     /// <summary>Suppressing nothing, which is what every command other than <c>validate</c> wants.</summary>
     internal ValidateRequest(
         string path,

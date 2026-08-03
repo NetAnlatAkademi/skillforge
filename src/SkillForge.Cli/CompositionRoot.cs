@@ -82,6 +82,7 @@ internal static class CompositionRoot
         services.AddSingleton<IMcpProtocolAdapter>(_ => new Mcp20251125ProtocolAdapter(
             new HttpClient { Timeout = TimeSpan.FromSeconds(20) }));
         services.AddSingleton<McpProber>();
+        services.AddSingleton<McpFileInspector>();
 
         services.AddSingleton<IMigrationInspector, MigrationInspector>();
 
@@ -120,6 +121,7 @@ internal static class CompositionRoot
         services.AddSingleton<PackCommandRunner>();
         services.AddSingleton<MigrateInspectCommandRunner>();
         services.AddSingleton<PolicyCheckCommandRunner>();
+        services.AddSingleton<McpCommandRunner>();
 
         // ValidateOnBuild turns a missing or unresolvable registration into a failure here rather than when
         // the user runs a command. It is what makes the composition smoke test meaningful.

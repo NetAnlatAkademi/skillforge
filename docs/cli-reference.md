@@ -525,6 +525,100 @@ Real activation testing needs a model runner. That is a separate thing to build,
 
 ---
 
+## `skillforge scan`
+
+Reports a skill's **risk signals** and nothing else: what it runs, what it reaches, and what its text asks an agent
+to do.
+
+```bash
+skillforge scan ./my-skill
+skillforge scan ./skills --format sarif --output artifacts/scan.sarif
+skillforge scan ./skills --strict
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `path` | `.` | A skill, or a directory of skills |
+| `--strict` | off | Treat warnings as failures |
+| `--format`, `-f` | `console` | `console`, `json` or `sarif` |
+| `--output`, `-o` | stdout | Write to a file |
+| `--suppress` | none | Codes not to report |
+
+**There is no separate scanner.** `scan` runs the rules `validate` runs — a second engine would be a second set of
+bugs and a second set of measurements. What it changes is the report: a missing license or a short description is a
+quality finding, and burying a prompt-injection signal underneath a dozen of those is how a signal gets ignored.
+
+Reported: the loader's failures (SF0001–SF0003, SF0009), references that leave the skill (SF0008, SF1011), what the
+skill talks to and runs (SF1005–SF1007), activation and instruction risks (SF3xxx, SF4xxx), a mutable remote
+reference (SF5001), and a `skillforge.yaml` that had to be ignored (SF1012) — that last one may be the file that
+would have suppressed a finding.
+
+Not reported: everything else, including SF1009 and SF1010. The list is explicit rather than a band prefix, because
+`SF1xxx` holds both "no license" and "this script runs `sudo`" and only one of them is a risk signal.
+
+A skill that **could not be read** is still reported, and still fails. It is the one answer a scan must never present
+as "nothing found".
+
+**Nothing here concludes a skill is safe.** The findings are signals; every construct they recognise has legitimate
+uses. `docs/validation-rules.md` states the bar each one applies.
+
+## `skillforge inventory`
+
+The same command as `migrate inspect`, under the name it deserves on its own: reading what is installed is useful
+whether or not anybody is moving between tools.
+
+```bash
+skillforge inventory
+skillforge inventory . --probe-mcp --format json
+```
+
+Every option and every guarantee is `migrate inspect`'s, documented below — including that environment variable
+values are never read.
+
+## `skillforge mcp`
+
+The MCP checks, against a **file the caller names** rather than the files a provider owns. That is the difference
+between "what is installed on this machine" and "what does this pull request declare", and the second question is the
+one a CI step asks.
+
+```bash
+skillforge mcp inspect ./.mcp.json
+skillforge mcp inspect ./.mcp.json --probe-mcp
+skillforge mcp validate ./.mcp.json --format json
+skillforge mcp diff ./old/.mcp.json ./new/.mcp.json
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `path` | — | MCP configuration file: `.json` or `.toml` |
+| `--probe-mcp` | off | Ask each **HTTP** server about itself. A local stdio server is never launched |
+| `--format`, `-f` | `console` | `console` or `json` |
+| `--output`, `-o` | stdout | Write to a file |
+| `--fail-on-change` | off | `diff` only: fail on any change |
+
+`inspect` and `validate` run the same checks and differ only in what they do with the result: `inspect` reports and
+exits `0`, `validate` treats any finding as a gate and exits `1`. **The severity of an `SF8xxx` finding does not
+change between them** — what a command does with a finding is the command's decision, and a published code's meaning
+is not. Both exit `1` when the file could not be read: "no servers" and "no answer" are different facts and only one
+of them is reassuring.
+
+A file whose extension no reader claims is reported as such rather than parsed hopefully as JSON. Guessing the format
+of a file the user named is how a parse error ends up describing the wrong problem.
+
+Declarations are attributed to the provider `file`, not to a guess. Which agent wrote a file the caller named is not
+knowable from its contents.
+
+### `mcp diff`
+
+Compares by **what would be connected to**, matching what `diff` does for a skill. Servers are matched by name, so a
+server renamed in place reads as one removed and one added — which is the honest answer, because a consumer referring
+to the old name no longer has it.
+
+It says an agent's reach grew when a server was **added** or an existing one **repointed**, since either means a
+request could now leave for a destination nobody reviewed. A removed server or a dropped environment variable cannot.
+
+Environment variables are compared **by name**. Values are never read, so a rotated token cannot appear in a diff.
+
 ## `skillforge migrate inspect`
 
 Reports the agent tooling installed on this machine, per provider: skills, MCP servers and instruction files.

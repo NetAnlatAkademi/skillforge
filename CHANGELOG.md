@@ -8,6 +8,67 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
+## [26.215.1] — 2026-08-03
+
+### Added — `policy check`, provenance, `diff --format sarif`, and three renamed entry points
+
+**`skillforge policy check`** applies `.skillforge/policy.yaml`: shell, filesystem write, a host allow-list,
+provenance, license, `SKILL.md` length. `SF9001`–`SF9009`, console, JSON and SARIF. It is the one command that judges
+rather than describes, and it judges only what somebody wrote down.
+
+`SF9xxx` rather than the `SF8xxx` the work plan specified: `SF8xxx` already meant MCP in nine published codes, and a
+published code's meaning does not move.
+
+Three properties are load-bearing. **No rule has a default that forbids anything** — measured, an empty policy over
+230 real skills produces zero findings, so the command is safe to add to a pipeline before the rules exist. **A policy
+that cannot be read fails the run and checks nothing**, unlike `skillforge.yaml`, which is advisory and is ignored
+with SF1012: a green build because the rules failed to load is the worst outcome available here. And **a rule this
+command cannot observe reports itself as `SF9009`** rather than passing quietly — a path-list write rule, a package
+hash, the `mcp` section. A rule that never runs looks exactly like a rule that passed.
+
+A suppression must carry a `reason`; one without is refused and reported as `SF9008` rather than applied or silently
+dropped.
+
+**`pack` records where a skill came from.** The manifest gains `source` — repository, commit, repository-relative
+path, `workingTreeIsDirty`, `generatedAt` — and `tool`. Four read-only `git` questions asked through a process
+abstraction, so the application layer never sees git; a directory that is not a checkout still packages, with every
+source field `null` and the keys still written, because a key that disappears cannot be told apart from a manifest
+written before provenance existed. `workingTreeIsDirty` exists because a commit SHA beside a modified working copy
+names a commit whose contents are not what was packaged, and a status that could not be obtained reads as dirty. **It
+is not a signature**, and the docs say so in those words.
+
+**`diff --format sarif`**, deferred through v0.2 on the grounds that a diff is not a set of findings. That was right
+about most of a diff and wrong about the part a reviewer wants blocked, so only that part is emitted: `SF6002` a new
+permission, `SF6003` a new script, `SF6004` a new host, `SF6005` everything given up as one Info result, `SF6001`
+growth under an unchanged version. A changed description or a new reference file stays in the console and JSON
+reports. Exit behaviour is unchanged.
+
+**`skillforge scan`** runs `validate`'s rules and reports only the risk signals — there is no second engine, because a
+second engine is a second set of bugs. The list is explicit rather than a band prefix, since `SF1xxx` holds both "no
+license" and "this script runs `sudo`". A skill that could not be read is still reported: it is the one answer a scan
+must never present as "nothing found".
+
+**`skillforge inventory`** is `migrate inspect` under the name the work plan uses; one runner, two entry points.
+
+**`skillforge mcp inspect|validate|diff`** runs the MCP checks against a file the caller names, rather than the files
+a provider owns — "what does this pull request declare" instead of "what is on this machine". `validate` gates on any
+finding where `inspect` reports and exits 0; the severity of a published `SF8xxx` code is unchanged either way, because
+what a command does with a finding is the command's decision. `mcp diff` compares by what would be connected to, and
+compares environment variables **by name only** — values are never read, so a rotated token cannot appear in a diff.
+
+### Changed
+
+- `ReportRenderOptions` carries a `Title`. A shared report shape is fine; a shared heading printed "SkillForge
+  Validate" over a policy run.
+- The inventory's console heading is "SkillForge Inventory", so it reads correctly under both of its names.
+
+### Not done, deliberately
+
+- `diff origin/main...HEAD` still takes two paths. Resolving a revision range means materialising a tree, and
+  `docs/ci.md` documents the `git worktree` recipe that does the same thing today.
+- The `mcp` section of a policy is not enforced by `policy check`: protocol versions and deprecated capabilities are
+  properties of a running server. `migrate inspect --probe-mcp` asks one, and reports `SF8004` and `SF8005`.
+
 ## [26.210.1] — 2026-07-29
 
 ### Added — `SF8xxx`, MCP protocol inspection

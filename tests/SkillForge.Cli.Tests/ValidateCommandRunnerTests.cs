@@ -369,14 +369,51 @@ public sealed class ValidateCommandRunnerTests
         act.Should().Throw<ArgumentNullException>();
     }
 
+    [Fact]
+    public async Task ScanReportsTheRiskSignalsAndDropsTheQualityFindings()
+    {
+        // Same rules, different report. Burying a prompt-injection signal under a dozen quality warnings is how a
+        // signal gets ignored.
+        var runner = Build(out var renderer, validationFindings:
+        [
+            Diagnostic.Warning(DiagnosticCodes.LicenseMissing, "no license"),
+            Diagnostic.Warning(DiagnosticCodes.CompatibilityMissing, "no compatibility"),
+            Diagnostic.Warning(DiagnosticCodes.BodyInstructionOverride, "ignore your instructions"),
+        ]);
+
+        await runner.RunAsync(Request(riskSignalsOnly: true), CancellationToken.None);
+
+        renderer.Rendered!.Diagnostics.Select(finding => finding.Code)
+            .Should().Equal(DiagnosticCodes.BodyInstructionOverride);
+    }
+
+    [Fact]
+    public async Task ScanStillReportsASkillItCouldNotRead()
+    {
+        // The one answer a scan must never present as "nothing found".
+        var runner = Build(
+            out var renderer,
+            loadFailure: Diagnostic.Error(DiagnosticCodes.SkillFileNotFound, "no SKILL.md"));
+
+        var exitCode = await runner.RunAsync(Request(riskSignalsOnly: true), CancellationToken.None);
+
+        exitCode.Should().Be(1);
+        renderer.Rendered!.Diagnostics.Should().ContainSingle()
+            .Which.Code.Should().Be(DiagnosticCodes.SkillFileNotFound);
+    }
+
     private static ValidateRequest Request(
         string path = "/skills/demo",
         bool strict = false,
         string format = OutputFormat.Console,
         string? outputPath = null,
         IReadOnlyList<string>? suppressed = null,
-        IReadOnlyList<string>? providers = null) =>
-        new(path, strict, format, outputPath, new ReportRenderOptions(), suppressed ?? [], providers ?? []);
+        IReadOnlyList<string>? providers = null,
+        bool riskSignalsOnly = false) =>
+        new(path, strict, format, outputPath, new ReportRenderOptions(), suppressed ?? [], providers ?? [])
+        {
+            RiskSignalsOnly = riskSignalsOnly,
+        };
 
     private static ValidateCommandRunner Build(
         out RecordingRenderer renderer,

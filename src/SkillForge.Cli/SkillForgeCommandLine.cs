@@ -66,6 +66,9 @@ internal static partial class SkillForgeCommandLine
         root.Subcommands.Add(BuildPackCommand(services, globals));
         root.Subcommands.Add(BuildMigrateCommand(services, globals));
         root.Subcommands.Add(BuildPolicyCommand(services, globals));
+        root.Subcommands.Add(BuildScanCommand(services, globals));
+        root.Subcommands.Add(BuildInventoryCommand(services, globals));
+        root.Subcommands.Add(BuildMcpCommand(services, globals));
 
         return root;
     }
@@ -255,7 +258,193 @@ internal static partial class SkillForgeCommandLine
     /// later <c>migrate apply</c> must not be reachable by a typo in a flag. Naming the read explicitly keeps the
     /// write in its own place.
     /// </remarks>
-    private static Command BuildMigrateCommand(IServiceProvider services, GlobalOptions globals)
+    /// <summary>
+    /// Builds <c>scan</c>: <c>validate</c>'s rules, reported down to the risk signals.
+    /// </summary>
+    /// <remarks>
+    /// Not a second engine. There is one rule pipeline, and a scanner with its own would be a second set of bugs and
+    /// a second set of measurements. What <c>scan</c> changes is the report — see <c>RiskSignalCodes</c> for the list
+    /// and the reason a missing license is not on it.
+    /// </remarks>
+    private static Command BuildScanCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var path = CreateSkillPathArgument();
+        var format = CreateFormatOption();
+        var output = CreateOutputOption();
+
+        var strict = new Option<bool>("--strict")
+        {
+            Description = "Treat warnings as failures.",
+        };
+
+        var suppress = new Option<string[]>("--suppress")
+        {
+            Description = "Diagnostic codes not to report, comma-separated or repeated.",
+            AllowMultipleArgumentsPerToken = true,
+        };
+
+        var command = new Command(
+            "scan",
+            "Report a skill's risk signals: what it runs, what it reaches, and what its text asks an agent to do.")
+        {
+            path,
+            strict,
+            format,
+            output,
+            suppress,
+        };
+
+        command.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<ValidateCommandRunner>();
+
+            return await runner.RunAsync(
+                new ValidateRequest(
+                    parseResult.GetValue(path) ?? DefaultPath,
+                    parseResult.GetValue(strict),
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult),
+                    ReadSuppressedCodes(parseResult.GetValue(suppress)),
+                    [])
+                {
+                    RiskSignalsOnly = true,
+                },
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// Builds <c>inventory</c>, which is <c>migrate inspect</c> under the name the work plan uses for it. One runner,
+    /// two entry points: the inventory is useful on its own, and not only to somebody moving between tools.
+    /// </summary>
+    private static Command BuildInventoryCommand(IServiceProvider services, GlobalOptions globals) =>
+        BuildMigrateInspectCommand(services, globals, "inventory");
+
+    /// <summary>
+    /// Builds the <c>mcp</c> group: the same checks <c>migrate inspect</c> makes, against a file the caller names
+    /// rather than the files a provider owns. That is the difference between "what is on this machine" and "what
+    /// does this pull request declare".
+    /// </summary>
+    private static Command BuildMcpCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        return new Command("mcp", "Inspect, validate and compare MCP configuration files.")
+        {
+            BuildMcpInspectionCommand(
+                services,
+                globals,
+                "inspect",
+                "Report what an MCP configuration file declares.",
+                gate: false),
+            BuildMcpInspectionCommand(
+                services,
+                globals,
+                "validate",
+                "Report what an MCP configuration file declares, and fail when there is anything to report.",
+                gate: true),
+            BuildMcpDiffCommand(services, globals),
+        };
+    }
+
+    private static Command BuildMcpInspectionCommand(
+        IServiceProvider services,
+        GlobalOptions globals,
+        string name,
+        string description,
+        bool gate)
+    {
+        var path = new Argument<string>("path")
+        {
+            Description = "MCP configuration file: .json or .toml.",
+        };
+
+        var probeMcp = new Option<bool>("--probe-mcp")
+        {
+            Description = "Ask each HTTP server about itself with one server/discover request. Local stdio "
+                + "servers are never launched.",
+        };
+
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var output = CreateOutputOption();
+
+        var command = new Command(name, description) { path, probeMcp, format, output };
+
+        command.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<McpCommandRunner>();
+
+            return await runner.InspectAsync(
+                new McpRequest(
+                    parseResult.GetValue(path) ?? DefaultPath,
+                    parseResult.GetValue(probeMcp),
+                    gate,
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return command;
+    }
+
+    private static Command BuildMcpDiffCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var before = new Argument<string>("before") { Description = "The earlier configuration file." };
+        var after = new Argument<string>("after") { Description = "The later configuration file." };
+
+        var failOnChange = new Option<bool>("--fail-on-change")
+        {
+            Description = "Fail on any change, not only on a file that could not be read.",
+        };
+
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var output = CreateOutputOption();
+
+        var command = new Command(
+            "diff",
+            "Compare two MCP configuration files by what they would connect to.")
+        {
+            before,
+            after,
+            failOnChange,
+            format,
+            output,
+        };
+
+        command.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<McpCommandRunner>();
+
+            return await runner.DiffAsync(
+                new McpDiffRequest(
+                    parseResult.GetValue(before) ?? DefaultPath,
+                    parseResult.GetValue(after) ?? DefaultPath,
+                    parseResult.GetValue(failOnChange),
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return command;
+    }
+
+    private static Command BuildMigrateCommand(IServiceProvider services, GlobalOptions globals) =>
+        new("migrate", "Inspect agent tooling across providers, ahead of moving between them.")
+        {
+            BuildMigrateInspectCommand(services, globals, "inspect"),
+        };
+
+    /// <summary>
+    /// Builds the inventory command. Called twice — once as <c>migrate inspect</c>, once as <c>inventory</c> — and it
+    /// builds a fresh instance each time, because a command belongs to one parent.
+    /// </summary>
+    private static Command BuildMigrateInspectCommand(
+        IServiceProvider services,
+        GlobalOptions globals,
+        string name)
     {
         var project = new Argument<string?>("project")
         {
@@ -281,7 +470,7 @@ internal static partial class SkillForgeCommandLine
         var output = CreateOutputOption();
 
         var inspect = new Command(
-            "inspect",
+            name,
             "Report the installed agent tooling: skills, MCP servers and instruction files, per provider.")
         {
             project,
@@ -306,10 +495,7 @@ internal static partial class SkillForgeCommandLine
                 cancellationToken).ConfigureAwait(false);
         });
 
-        return new Command("migrate", "Inspect agent tooling across providers, ahead of moving between them.")
-        {
-            inspect,
-        };
+        return inspect;
     }
 
     /// <summary>

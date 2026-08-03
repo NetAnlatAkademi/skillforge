@@ -54,14 +54,45 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 |---|---|
 | `skillforge init <name>` | Scaffold a skill that already passes validation |
 | `skillforge validate <path>` | Validate structure, frontmatter, quality rules and provider compatibility |
+| `skillforge scan <path>` | The same rules, reported down to the risk signals: what it runs, reaches and asks an agent to do |
 | `skillforge inspect <path>` | Summarise files, links, scripts and inferred capabilities |
 | `skillforge diff <before> <after>` | Compare two versions by what they can do, not which bytes changed |
 | `skillforge eval <path>` | Check a skill against the expectations declared under `evals/`, optionally by asking a model |
 | `skillforge pack <path>` | Produce a deterministic `.skill.zip` with a SHA-256 hash and manifest |
-| `skillforge migrate inspect` | Report the agent tooling installed here: skills, MCP servers and instruction files, per provider |
+| `skillforge policy check <path>` | Judge skills against `.skillforge/policy.yaml` — the one command that judges rather than describes |
+| `skillforge mcp inspect\|validate\|diff <file>` | Inspect, gate or compare an MCP configuration file |
+| `skillforge inventory` | Report the agent tooling installed here: skills, MCP servers and instruction files, per provider |
+| `skillforge migrate inspect` | The same inventory, under the migration group |
 
 Full options are in [docs/cli-reference.md](docs/cli-reference.md); CI usage, including SARIF upload, is in
 [docs/ci.md](docs/ci.md).
+
+### Applying an organisation's policy
+
+Everything else describes. `policy check` judges — and only what somebody wrote down:
+
+```yaml
+# .skillforge/policy.yaml
+rules:
+  permissions:
+    shell:
+      allowed: false
+    network:
+      allowedDomains: ["api.github.com", "learn.microsoft.com"]
+  provenance:
+    requireCommitSha: true
+  skills:
+    requireLicense: true
+```
+
+```bash
+skillforge policy check ./skills --format sarif --output artifacts/policy.sarif
+```
+
+No rule has a default that forbids anything, so an empty policy over 230 real skills produces zero findings — adopting
+the command cannot start failing a build over a decision nobody made. A policy that cannot be read **fails** the run
+and checks nothing, and a rule this command cannot observe says so rather than passing quietly. A suppression must
+carry a reason.
 
 ### Checking a skill against an agent provider
 

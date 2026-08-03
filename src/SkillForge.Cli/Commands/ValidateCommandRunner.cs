@@ -175,7 +175,8 @@ internal sealed class ValidateCommandRunner
                 Finish(
                     ValidationReport.ForUnloadableSkill(skillPath, load.Diagnostics),
                     load.Diagnostics,
-                    suppressed),
+                    suppressed,
+                    request.RiskSignalsOnly),
                 strict);
         }
 
@@ -188,7 +189,11 @@ internal sealed class ValidateCommandRunner
         // Loader diagnostics belong in the report too — a duplicated frontmatter field, or a skillforge.yaml that
         // had to be ignored, is not something the rules can see.
         return new SkillResult(
-            Finish(report, [.. load.Diagnostics, .. report.Diagnostics, .. providerFindings], suppressed),
+            Finish(
+                report,
+                [.. load.Diagnostics, .. report.Diagnostics, .. providerFindings],
+                suppressed,
+                request.RiskSignalsOnly),
             strict);
     }
 
@@ -198,9 +203,16 @@ internal sealed class ValidateCommandRunner
     private static ValidationReport Finish(
         ValidationReport report,
         IReadOnlyList<Diagnostic> allDiagnostics,
-        IReadOnlyCollection<string> suppressedCodes)
+        IReadOnlyCollection<string> suppressedCodes,
+        bool riskSignalsOnly = false)
     {
-        var suppression = DiagnosticSuppression.Apply(allDiagnostics, suppressedCodes);
+        // Filtering before suppression, so the suppressed count reports what a scan actually dropped by request
+        // rather than counting every quality finding the run was not asking about.
+        var considered = riskSignalsOnly
+            ? allDiagnostics.Where(diagnostic => RiskSignalCodes.Includes(diagnostic.Code)).ToArray()
+            : allDiagnostics;
+
+        var suppression = DiagnosticSuppression.Apply(considered, suppressedCodes);
         var ordered = DiagnosticOrdering.Sort(suppression.Kept);
 
         return report with

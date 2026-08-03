@@ -90,7 +90,7 @@ internal sealed class MigrateInspectCommandRunner
     {
         var builder = new StringBuilder();
 
-        builder.AppendLine("SkillForge Migrate Inspect");
+        builder.AppendLine("SkillForge Inventory");
         builder.AppendLine();
         builder.AppendLine($"User:    {inspection.UserDirectory}");
         builder.AppendLine($"Project: {inspection.ProjectDirectory ?? "(not inspected)"}");
