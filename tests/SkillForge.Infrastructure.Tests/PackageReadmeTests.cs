@@ -55,7 +55,11 @@ public sealed partial class PackageReadmeTests
     public void ItNamesEveryCommandTheCliActuallyHas()
     {
         // A page that lists five of seven commands is worse than one that lists none, because a reader believes it.
-        foreach (var command in new[] { "init", "validate", "inspect", "diff", "eval", "pack", "migrate inspect" })
+        foreach (var command in new[]
+        {
+            "init", "validate", "scan", "inspect", "diff", "eval", "pack",
+            "policy check", "mcp inspect", "inventory", "migrate inspect",
+        })
         {
             PackageReadme.Should().Contain($"skillforge {command}", $"'{command}' is a shipped command");
         }

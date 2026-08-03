@@ -20,11 +20,15 @@ Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download) or newer.
 |---|---|
 | `skillforge init <name>` | Scaffold a skill that already passes validation |
 | `skillforge validate <path>` | Validate structure, frontmatter, quality rules and provider compatibility |
+| `skillforge scan <path>` | The same rules, reported down to the risk signals |
 | `skillforge inspect <path>` | Summarise files, links, scripts and inferred capabilities |
 | `skillforge diff <before> <after>` | Compare two versions by what they can do, not which bytes changed |
 | `skillforge eval <path>` | Check a skill against the expectations declared under `evals/` |
 | `skillforge pack <path>` | Produce a deterministic `.skill.zip` with a SHA-256 hash and manifest |
-| `skillforge migrate inspect` | Report the agent tooling installed here: skills, MCP servers, instruction files |
+| `skillforge policy check <path>` | Judge skills against `.skillforge/policy.yaml` |
+| `skillforge mcp inspect\|validate\|diff <file>` | Inspect, gate or compare an MCP configuration file |
+| `skillforge inventory` | Report the agent tooling installed here: skills, MCP servers, instruction files |
+| `skillforge migrate inspect` | The same inventory, under the migration group |
 
 ## Validate one skill, or a whole repository
 
@@ -125,7 +129,7 @@ There is a GitHub Action that runs `validate`, writes SARIF and uploads it to co
 inline on the pull request:
 
 ```yaml
-- uses: NetAnlatAkademi/skillforge@v26.210.1
+- uses: NetAnlatAkademi/skillforge@v26.215.1
   with:
     path: ./skills
     suppress: SF1009,SF1010
@@ -134,6 +138,17 @@ inline on the pull request:
 Exit codes: `0` clean · `1` validation failure, or a warning under `--strict` · `2` usage error · `3` unexpected
 failure. Options `--strict`, `--quiet`, `--verbose`, `--no-color` apply everywhere, and the `NO_COLOR`
 environment variable is honoured without a flag.
+
+## Apply an organisation's policy
+
+Everything else describes. `policy check` judges — and only what somebody wrote down in `.skillforge/policy.yaml`:
+
+```bash
+skillforge policy check ./skills --format sarif --output artifacts/policy.sarif
+```
+
+No rule has a default that forbids anything, so an empty policy produces no findings. A policy that cannot be read
+fails the run and checks nothing, and a rule the command cannot observe says so rather than passing quietly.
 
 ## What it deliberately does not do
 
