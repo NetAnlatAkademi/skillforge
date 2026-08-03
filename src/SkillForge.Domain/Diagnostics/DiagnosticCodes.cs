@@ -151,6 +151,25 @@ public static class DiagnosticCodes
     public const string VersionSilentAboutGrowth = "SF6001";
 
     /// <summary>
+    /// The later revision declares a permission the earlier one did not. Reported by <c>diff</c>, which is the only
+    /// command that can see it.
+    /// </summary>
+    public const string PermissionAdded = "SF6002";
+
+    /// <summary>The later revision ships a script the earlier one did not.</summary>
+    public const string ScriptAdded = "SF6003";
+
+    /// <summary>The later revision points at a host the earlier one did not.</summary>
+    public const string ExternalDomainAdded = "SF6004";
+
+    /// <summary>
+    /// The later revision gave something up: a permission, a script or a host the earlier one had. Information
+    /// rather than a warning — a skill that reaches less far than it did is not a risk, but a consumer relying on
+    /// what was removed still needs to see it.
+    /// </summary>
+    public const string ReachNarrowed = "SF6005";
+
+    /// <summary>
     /// The skill declares compatibility with a provider SkillForge does not recognise, so nothing was checked
     /// against it. Usually a spelling of a known identifier; sometimes a provider SkillForge has not learned yet.
     /// </summary>

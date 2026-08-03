@@ -200,6 +200,7 @@ Compares two versions of a skill by **what they can do**, not by which bytes cha
 ```bash
 skillforge diff ./before ./after
 skillforge diff ./before ./after --format json --output artifacts/diff.json
+skillforge diff ./before ./after --format sarif --output artifacts/diff.sarif
 skillforge diff ./before ./after --fail-on-change
 ```
 
@@ -230,7 +231,7 @@ Description changed:
 |---|---|---|
 | `before` | — | The earlier version: a skill directory or a `SKILL.md` path |
 | `after` | — | The later version |
-| `--format`, `-f` | `console` | `console` or `json` |
+| `--format`, `-f` | `console` | `console`, `json` or `sarif` |
 | `--output`, `-o` | stdout | Write to a file |
 | `--fail-on-change` | off | Fail on any surface change, not only on a new error |
 
@@ -251,6 +252,18 @@ skill talks to, which is the question a reviewer is actually asking.
 something that can be done honestly — a shorter description can match more, a longer one can match more, and which
 words matter depends on the agent. The description change is shown in full so a human can judge it. Actually
 testing activation is what evals are for (v0.3).
+
+### SARIF, and what it leaves out
+
+`--format sarif` uploads to code scanning like `validate` does, so a permission a pull request adds is annotated on
+the file that adds it. Only the part of a diff that is a **finding** goes in: `SF6002` a new permission, `SF6003` a
+new script, `SF6004` a new host, `SF6005` everything given up (Info, one result for all of it), `SF6001` growth
+under an unchanged version, and any validation finding the later revision introduced. A changed description, a new
+reference file or a compatibility declaration appear in the console and JSON reports and stop there — carrying them
+as SARIF results would use a findings format for a summary.
+
+A diff with nothing to report still writes a valid run with zero results, which is what clears previously uploaded
+findings that have since been resolved.
 
 ### Comparing two git revisions
 

@@ -249,6 +249,10 @@ a reason to exist beyond being true.
 | Code | Rule | Status |
 |---|---|---|
 | SF6001 | The reach grew while the declared version stayed the same | **Implemented** (`diff`) |
+| SF6002 | A permission the earlier revision did not declare | **Implemented** (`diff`) |
+| SF6003 | A script the earlier revision did not ship | **Implemented** (`diff`) |
+| SF6004 | A host the earlier revision did not point at | **Implemented** (`diff`) |
+| SF6005 | Something the earlier revision reached is gone | **Implemented** (`diff`) |
 
 The only evolution risk that can be computed honestly, and it needs **two** revisions rather than one — which is
 why it belongs to `diff` and not to `validate`. A consumer pinned to `1.0.0` who now receives a skill that can run
@@ -262,6 +266,25 @@ version. It is a true observation and a useless warning, the same shape as SF100
 already make `--strict` unusable by default. It was also the reason to reject provenance as an SF5xxx rule, so
 letting it in here through the back door would be inconsistent as well as noisy. That is what the both-sides
 requirement is protecting.
+
+### SF6002 to SF6005 exist so a diff can be uploaded, not so it can be listed
+
+`diff --format sarif` needed an answer to "which part of a diff is a finding". Most of a diff is not: a changed
+description, a new reference file, a compatibility declaration. Those are shown in the console and JSON reports and
+stop there, because putting them in SARIF would use a findings format to carry a summary.
+
+What is left is the three ways a skill's reach grows — SF6002, SF6003, SF6004 — each one anchored on a file so the
+annotation lands somewhere, each naming the thing that was added. SF6005 is their opposite and is deliberately
+**Info**: a skill that reaches less far than it did is not a risk, but a consumer relying on what was removed still
+needs to see it. Everything given up becomes one SF6005 rather than one each, so a revision that dropped six
+permissions does not bury the one it added.
+
+`diff` still exits on the same rule it always did: a new **validation error** fails it, and a surface change alone
+does not unless `--fail-on-change` says so. The SARIF results are what a reviewer reads; they are not a verdict.
+
+Whether a changed description broadened the activation scope is still not claimed, in any format. A shorter
+description can match more, a longer one can match more, and the words that matter depend on the agent. `diff`
+reports that it changed and shows both.
 
 ## Provider compatibility
 

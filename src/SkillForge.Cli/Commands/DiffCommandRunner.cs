@@ -34,6 +34,7 @@ internal sealed class DiffCommandRunner
     private readonly ISkillValidator _validator;
     private readonly IFileSystem _fileSystem;
     private readonly IValidationReportRenderer _renderer;
+    private readonly IReadOnlyList<IValidationReportSerializer> _serializers;
 
     /// <summary>Initialises the runner.</summary>
     /// <param name="loader">Loads each side.</param>
@@ -41,24 +42,31 @@ internal sealed class DiffCommandRunner
     /// <param name="validator">Validates each side, so findings can be compared.</param>
     /// <param name="fileSystem">Writes machine-readable output when asked.</param>
     /// <param name="renderer">Reports a side that could not be loaded.</param>
+    /// <param name="serializers">
+    /// Report serialisers, used for <c>--format sarif</c>. A diff is not a report, so only the part of it that is
+    /// a finding is serialised — see <see cref="SurfaceChangeDiagnostics"/>.
+    /// </param>
     public DiffCommandRunner(
         ISkillLoader loader,
         ISkillInspector inspector,
         ISkillValidator validator,
         IFileSystem fileSystem,
-        IValidationReportRenderer renderer)
+        IValidationReportRenderer renderer,
+        IEnumerable<IValidationReportSerializer> serializers)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(inspector);
         ArgumentNullException.ThrowIfNull(validator);
         ArgumentNullException.ThrowIfNull(fileSystem);
         ArgumentNullException.ThrowIfNull(renderer);
+        ArgumentNullException.ThrowIfNull(serializers);
 
         _loader = loader;
         _inspector = inspector;
         _validator = validator;
         _fileSystem = fileSystem;
         _renderer = renderer;
+        _serializers = [.. serializers];
     }
 
     /// <summary>Compares two versions of a skill.</summary>
@@ -83,9 +91,14 @@ internal sealed class DiffCommandRunner
 
         var diff = SkillSurfaceDiffer.Compare(before, after);
 
-        var text = string.Equals(request.Format, OutputFormat.Json, StringComparison.OrdinalIgnoreCase)
-            ? ToJson(diff)
-            : ToText(diff);
+        var text = request.Format switch
+        {
+            _ when string.Equals(request.Format, OutputFormat.Json, StringComparison.OrdinalIgnoreCase) =>
+                ToJson(diff),
+            _ when string.Equals(request.Format, OutputFormat.Sarif, StringComparison.OrdinalIgnoreCase) =>
+                ToSarif(diff),
+            _ => ToText(diff),
+        };
 
         if (request.OutputPath is { Length: > 0 } outputPath)
         {
@@ -133,6 +146,30 @@ internal sealed class DiffCommandRunner
         var report = await _validator.ValidateAsync(load.Value, cancellationToken).ConfigureAwait(false);
 
         return new SkillSnapshot(path, load.Value, inspection, report);
+    }
+
+    /// <summary>
+    /// Serialises the part of the diff that is a finding, as SARIF.
+    /// </summary>
+    /// <remarks>
+    /// The results are anchored on the later revision, because that is the version being proposed and the one whose
+    /// files exist in the pull request. A diff with nothing to report still produces a valid SARIF run with no
+    /// results, which is what a code-scanning upload needs in order to clear findings that were resolved.
+    /// </remarks>
+    private string ToSarif(SkillSurfaceDiff diff)
+    {
+        var diagnostics = SurfaceChangeDiagnostics.From(diff);
+
+        var report = new ValidationReport(
+            string.Empty,
+            diff.AfterPath,
+            diagnostics,
+            ValidationSummary.FromDiagnostics(diagnostics));
+
+        var serializer = _serializers.Single(candidate =>
+            string.Equals(candidate.Format, OutputFormat.Sarif, StringComparison.OrdinalIgnoreCase));
+
+        return serializer.Serialize(report);
     }
 
     private static string ToText(SkillSurfaceDiff diff)

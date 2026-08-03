@@ -397,7 +397,7 @@ internal static partial class SkillForgeCommandLine
             Description = "The later version.",
         };
 
-        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json, OutputFormat.Sarif);
         var output = CreateOutputOption();
 
         var failOnChange = new Option<bool>("--fail-on-change")
