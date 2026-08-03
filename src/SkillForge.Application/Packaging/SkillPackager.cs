@@ -2,9 +2,11 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using SkillForge.Application.Abstractions;
+using SkillForge.Application.Provenance;
 using SkillForge.Domain;
 using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Packaging;
+using SkillForge.Domain.Provenance;
 using SkillForge.Domain.Skills;
 
 namespace SkillForge.Application.Packaging;
@@ -44,27 +46,32 @@ public sealed class SkillPackager : ISkillPackager
     private readonly IArchiveWriter _archiveWriter;
     private readonly IHashCalculator _hashCalculator;
     private readonly TimeProvider _timeProvider;
+    private readonly IProvenanceReader _provenanceReader;
 
     /// <summary>Initialises the packager.</summary>
     /// <param name="fileSystem">Reads the skill and writes the artefacts.</param>
     /// <param name="archiveWriter">Builds the archive.</param>
     /// <param name="hashCalculator">Hashes contents.</param>
     /// <param name="timeProvider">Supplies the manifest timestamp. Injected so tests can pin it.</param>
+    /// <param name="provenanceReader">Records where the skill came from.</param>
     public SkillPackager(
         IFileSystem fileSystem,
         IArchiveWriter archiveWriter,
         IHashCalculator hashCalculator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IProvenanceReader provenanceReader)
     {
         ArgumentNullException.ThrowIfNull(fileSystem);
         ArgumentNullException.ThrowIfNull(archiveWriter);
         ArgumentNullException.ThrowIfNull(hashCalculator);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(provenanceReader);
 
         _fileSystem = fileSystem;
         _archiveWriter = archiveWriter;
         _hashCalculator = hashCalculator;
         _timeProvider = timeProvider;
+        _provenanceReader = provenanceReader;
     }
 
     /// <inheritdoc />
@@ -130,6 +137,10 @@ public sealed class SkillPackager : ISkillPackager
         var hashPath = archivePath + HashSuffix;
         var manifestPath = Path.Combine(output, $"{baseName}{ManifestSuffix}");
 
+        var provenance = await _provenanceReader
+            .ReadAsync(skill.DirectoryPath, cancellationToken)
+            .ConfigureAwait(false);
+
         var package = new SkillPackage(
             skill.Name,
             version,
@@ -138,7 +149,8 @@ public sealed class SkillPackager : ISkillPackager
             manifestPath,
             archiveHash,
             packagedFiles,
-            _timeProvider.GetUtcNow());
+            _timeProvider.GetUtcNow(),
+            provenance);
 
         await _fileSystem.WriteAllBytesAsync(archivePath, archive, cancellationToken).ConfigureAwait(false);
 
@@ -197,11 +209,35 @@ public sealed class SkillPackager : ISkillPackager
                     .ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
                 ["fileCount"] = package.Files.Count,
             },
+            ["source"] = BuildSource(package.Provenance),
+            ["tool"] = new JsonObject
+            {
+                ["name"] = "SkillForge",
+                ["version"] = package.Provenance.ToolVersion,
+            },
             ["files"] = files,
         };
 
         return manifest.ToJsonString(ManifestOptions) + Environment.NewLine;
     }
+
+    /// <summary>
+    /// Writes what could be observed about the skill's origin.
+    /// </summary>
+    /// <remarks>
+    /// The keys are always present and their values are <c>null</c> when nothing was observed, so a consumer reads
+    /// "SkillForge looked and found no repository" rather than "this manifest predates provenance". A field that
+    /// disappears cannot be told apart from a field that was never written.
+    /// </remarks>
+    private static JsonObject BuildSource(SkillProvenance provenance) => new()
+    {
+        ["repository"] = provenance.Repository,
+        ["commit"] = provenance.Commit,
+        ["path"] = provenance.Path,
+        ["workingTreeIsDirty"] = provenance.WorkingTreeIsDirty,
+        ["generatedAt"] = provenance.GeneratedAtUtc.ToUniversalTime()
+            .ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
+    };
 
     private static bool IsExcluded(string relativePath)
     {

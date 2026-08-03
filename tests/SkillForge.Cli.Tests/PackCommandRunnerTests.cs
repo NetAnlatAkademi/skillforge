@@ -5,6 +5,7 @@ using SkillForge.Cli.Commands;
 using SkillForge.Domain;
 using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Packaging;
+using SkillForge.Domain.Provenance;
 using SkillForge.Domain.Skills;
 using SkillForge.Domain.Validation;
 
@@ -175,7 +176,8 @@ public sealed class PackCommandRunnerTests
                 $"{outputDirectory}/demo.manifest.json",
                 "deadbeef",
                 [],
-                DateTimeOffset.UnixEpoch)));
+                DateTimeOffset.UnixEpoch,
+                new SkillProvenance(null, null, null, false, "0.0.0", DateTimeOffset.UnixEpoch))));
         }
     }
 }

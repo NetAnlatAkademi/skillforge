@@ -1,3 +1,5 @@
+using SkillForge.Domain.Provenance;
+
 namespace SkillForge.Domain.Packaging;
 
 /// <summary>
@@ -11,6 +13,7 @@ namespace SkillForge.Domain.Packaging;
 /// <param name="ArchiveSha256">Hash of the archive, lowercase hexadecimal.</param>
 /// <param name="Files">Files included, ordered by path.</param>
 /// <param name="CreatedAtUtc">When the package was built, in UTC.</param>
+/// <param name="Provenance">Where the packaged skill came from, as far as it could be observed.</param>
 public sealed record SkillPackage(
     string SkillName,
     string Version,
@@ -19,4 +22,5 @@ public sealed record SkillPackage(
     string ManifestPath,
     string ArchiveSha256,
     IReadOnlyList<PackagedFile> Files,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    SkillProvenance Provenance);

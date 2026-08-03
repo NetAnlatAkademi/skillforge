@@ -6,6 +6,7 @@ using SkillForge.Application.Migration;
 using SkillForge.Application.Migration.Adapters;
 using SkillForge.Application.Modeling;
 using SkillForge.Application.Packaging;
+using SkillForge.Application.Provenance;
 using SkillForge.Application.Providers;
 using SkillForge.Application.Skills;
 using SkillForge.Application.Validation;
@@ -48,6 +49,14 @@ internal static class CompositionRoot
         services.AddSingleton<IProviderCompatibilityChecker, ProviderCompatibilityChecker>();
 
         services.AddSingleton<IUserEnvironment, UserEnvironment>();
+
+        // Provenance shells out to git for three read-only questions. The tool version is passed in here so one
+        // place in the process decides what version SkillForge claims to be.
+        services.AddSingleton<IProcessRunner, ProcessRunner>();
+        services.AddSingleton<IProvenanceReader>(provider => new GitProvenanceReader(
+            provider.GetRequiredService<IProcessRunner>(),
+            provider.GetRequiredService<TimeProvider>(),
+            SkillForgeTool.Version));
 
         // One reader per format, one adapter per provider — the seam the roadmap asks for, so a provider that moves
         // a file or a protocol that changes touches one class rather than the inspector.

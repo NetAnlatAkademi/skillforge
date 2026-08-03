@@ -311,6 +311,35 @@ Validation is a gate. A skill with errors is not packaged unless `--skip-validat
 is, the CLI says so rather than doing it silently. Tooling directories (`bin`, `obj`, `.git`, `node_modules`,
 `artifacts`, …) are never included.
 
+### What the manifest records about where the skill came from
+
+```json
+{
+  "source": {
+    "repository": "https://github.com/example/skills.git",
+    "commit": "abc123def4567890abc123def4567890abc123de",
+    "path": "skills/dotnet-api-review",
+    "workingTreeIsDirty": false,
+    "generatedAt": "2026-08-03T07:03:28Z"
+  },
+  "tool": { "name": "SkillForge", "version": "26.215.1" }
+}
+```
+
+Four read-only `git` questions, asked in the skill's directory: the repository root, `HEAD`, the `origin` URL, and
+`status --porcelain` **scoped to the skill** — a repository with unrelated work in progress must not make every
+skill packaged from it look modified.
+
+Outside a repository, or with no git installed, every source field is `null` and packaging still succeeds. The keys
+are always written: a key that disappears cannot be told apart from a manifest produced before provenance existed.
+
+`workingTreeIsDirty` exists because a commit SHA beside a modified working copy names a commit whose contents are
+**not** what was packaged. A consumer reading only the SHA would never know. If the status question itself cannot be
+answered, the answer is `true` — not knowing is not the same as being clean, and this is the direction to fail in.
+
+**This is not a signature.** It records what the working copy said, and nothing here proves the archive was not
+altered afterwards. Signing is a later concern; calling this "verified" would be a claim SkillForge cannot support.
+
 ## What a report tells you
 
 A finding whose resolution is a single known edit prints that edit, and prints it **without** `--verbose`:

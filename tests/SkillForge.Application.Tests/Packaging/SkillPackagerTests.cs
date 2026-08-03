@@ -1,11 +1,13 @@
 using System.Text.Json;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Packaging;
+using SkillForge.Application.Provenance;
 using SkillForge.Application.Tests.Fakes;
 using SkillForge.Application.Tests.Validation;
 using SkillForge.Domain;
 using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Packaging;
+using SkillForge.Domain.Provenance;
 using SkillForge.Domain.Skills;
 
 namespace SkillForge.Application.Tests.Packaging;
@@ -98,6 +100,61 @@ public sealed class SkillPackagerTests
     }
 
     [Fact]
+    public async Task TheManifestRecordsWhereTheSkillCameFrom()
+    {
+        var fileSystem = Files();
+
+        var result = await Create(fileSystem, new SkillProvenance(
+            "https://github.com/example/skills.git",
+            "abc123def4567890abc123def4567890abc123de",
+            "skills/demo",
+            false,
+            "26.215.1",
+            FixedNow)).PackAsync(
+                new SkillBuilder().WithResources("SKILL.md", "references/notes.md").Build(),
+                "/out",
+                null,
+                CancellationToken.None);
+
+        var source = JsonDocument.Parse(fileSystem.ReadText(result.Value!.ManifestPath))
+            .RootElement.GetProperty("source");
+
+        source.GetProperty("repository").GetString().Should().Be("https://github.com/example/skills.git");
+        source.GetProperty("commit").GetString().Should().Be("abc123def4567890abc123def4567890abc123de");
+        source.GetProperty("path").GetString().Should().Be("skills/demo");
+        source.GetProperty("workingTreeIsDirty").GetBoolean().Should().BeFalse();
+        source.GetProperty("generatedAt").GetString().Should().Be("2026-07-26T12:00:00Z");
+    }
+
+    [Fact]
+    public async Task AnUnknownSourceIsWrittenAsNullRatherThanOmitted()
+    {
+        // A key that disappears cannot be told apart from a manifest written before provenance existed.
+        var fileSystem = Files();
+        var result = await Pack(fileSystem);
+
+        var source = JsonDocument.Parse(fileSystem.ReadText(result.Value!.ManifestPath))
+            .RootElement.GetProperty("source");
+
+        source.GetProperty("repository").ValueKind.Should().Be(JsonValueKind.Null);
+        source.GetProperty("commit").ValueKind.Should().Be(JsonValueKind.Null);
+        source.GetProperty("path").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task TheManifestNamesTheToolVersionThatProducedIt()
+    {
+        var fileSystem = Files();
+        var result = await Pack(fileSystem);
+
+        var tool = JsonDocument.Parse(fileSystem.ReadText(result.Value!.ManifestPath))
+            .RootElement.GetProperty("tool");
+
+        tool.GetProperty("name").GetString().Should().Be("SkillForge");
+        tool.GetProperty("version").GetString().Should().Be("26.215.1");
+    }
+
+    [Fact]
     public async Task TheHashFileMatchesTheFormatSha256sumExpects()
     {
         var fileSystem = Files();
@@ -175,12 +232,25 @@ public sealed class SkillPackagerTests
         return fileSystem;
     }
 
-    private static SkillPackager Create(FakeFileSystem fileSystem) =>
+    private static SkillPackager Create(FakeFileSystem fileSystem, SkillProvenance? provenance = null) =>
         new(
             fileSystem,
             new InMemoryArchiveWriter(),
             new FakeHashCalculator(),
-            new FakeTimeProvider(FixedNow));
+            new FakeTimeProvider(FixedNow),
+            new StubProvenanceReader(provenance ?? UnknownSource));
+
+    /// <summary>What a skill packaged from a plain directory has: a tool version, a time, and nothing else.</summary>
+    private static SkillProvenance UnknownSource { get; } =
+        new(null, null, null, false, "26.215.1", FixedNow);
+
+    private sealed class StubProvenanceReader(SkillProvenance provenance) : IProvenanceReader
+    {
+        public ValueTask<SkillProvenance> ReadAsync(
+            string skillDirectory,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(provenance);
+    }
 
     private static Task<OperationResult<SkillPackage>> Pack(
         FakeFileSystem fileSystem,
