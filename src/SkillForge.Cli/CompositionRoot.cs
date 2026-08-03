@@ -6,6 +6,7 @@ using SkillForge.Application.Migration;
 using SkillForge.Application.Migration.Adapters;
 using SkillForge.Application.Modeling;
 using SkillForge.Application.Packaging;
+using SkillForge.Application.Policy;
 using SkillForge.Application.Provenance;
 using SkillForge.Application.Providers;
 using SkillForge.Application.Skills;
@@ -95,6 +96,8 @@ internal static class CompositionRoot
         services.AddSingleton<ISkillInspector, SkillInspector>();
         services.AddSingleton<ISkillPackager, SkillPackager>();
 
+        services.AddSingleton<IPolicyReader, YamlPolicyReader>();
+
         services.AddSingleton<IValidationReportRenderer, ConsoleReportRenderer>();
         services.AddSingleton<IValidationReportSerializer, JsonReportSerializer>();
         services.AddSingleton<IValidationReportSerializer, SarifReportSerializer>();
@@ -116,6 +119,7 @@ internal static class CompositionRoot
         services.AddSingleton<DiffCommandRunner>();
         services.AddSingleton<PackCommandRunner>();
         services.AddSingleton<MigrateInspectCommandRunner>();
+        services.AddSingleton<PolicyCheckCommandRunner>();
 
         // ValidateOnBuild turns a missing or unresolvable registration into a failure here rather than when
         // the user runs a command. It is what makes the composition smoke test meaningful.

@@ -64,7 +64,7 @@ public sealed class ConsoleReportRenderer : IValidationReportRenderer
 
         if (!options.Quiet)
         {
-            _console.MarkupLine(Style("SkillForge Validate", "bold", options));
+            _console.MarkupLine(Style(options.Title, "bold", options));
             _console.WriteLine();
             _console.MarkupLine($"Root:   {Escape(run.RootPath)}");
             _console.MarkupLine($"Skills: {run.SkillCount}");
@@ -135,7 +135,7 @@ public sealed class ConsoleReportRenderer : IValidationReportRenderer
     {
         var name = report.SkillName.Length == 0 ? "(unnamed)" : report.SkillName;
 
-        _console.MarkupLine(Style("SkillForge Validate", "bold", options));
+        _console.MarkupLine(Style(options.Title, "bold", options));
         _console.WriteLine();
         _console.MarkupLine($"Skill: {Escape(name)}");
         _console.MarkupLine($"Path:  {Escape(report.SkillPath)}");

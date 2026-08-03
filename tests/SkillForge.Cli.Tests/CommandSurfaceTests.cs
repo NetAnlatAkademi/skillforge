@@ -35,6 +35,11 @@ public sealed class CommandSurfaceTests
     [InlineData("migrate inspect --user-directory /exported/profile")]
     [InlineData("migrate inspect . --probe-mcp")]
     [InlineData("migrate inspect --probe-mcp --format json")]
+    [InlineData("policy check")]
+    [InlineData("policy check ./samples")]
+    [InlineData("policy check ./samples --policy .skillforge/policy.yaml")]
+    [InlineData("policy check ./samples --format sarif --output artifacts/policy.sarif")]
+    [InlineData("diff ./before ./after --format sarif")]
     [InlineData("eval ./samples/dotnet-api-review")]
     [InlineData("eval ./samples/dotnet-api-review --model qwen3:8b --model-endpoint http://localhost:11434/v1")]
     [InlineData("eval . --model gpt-5 --model-endpoint https://api.openai.com/v1 --model-api-key-env OPENAI_API_KEY")]
@@ -50,6 +55,7 @@ public sealed class CommandSurfaceTests
     [InlineData("validate --nonsense")]
     [InlineData("frobnicate")]
     [InlineData("migrate apply")]
+    [InlineData("policy apply")]
     [InlineData("migrate inspect --format sarif")]
 
     // A model named with nowhere to send it, or an endpoint with no model, would quietly probe nothing.

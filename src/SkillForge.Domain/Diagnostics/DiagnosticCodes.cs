@@ -236,4 +236,43 @@ public static class DiagnosticCodes
     /// A tool's name falls outside the specification's naming guidance on length, characters or uniqueness.
     /// </summary>
     public const string McpToolNameOutsideGuidance = "SF8009";
+
+    /// <summary>
+    /// The policy file exists but could not be read or parsed, so no policy was applied. An error rather than a
+    /// warning, unlike SF1012: a run that was asked to check policies and checked none has not done its job, and a
+    /// build that passes because the rules failed to load is the worst possible outcome.
+    /// </summary>
+    public const string PolicyNotParsable = "SF9001";
+
+    /// <summary>The skill can run shell commands and the organisation's policy does not allow it.</summary>
+    public const string PolicyShellForbidden = "SF9002";
+
+    /// <summary>The skill can write to the file system and the organisation's policy does not allow it.</summary>
+    public const string PolicyFilesystemWriteForbidden = "SF9003";
+
+    /// <summary>The skill points at a host the organisation's policy does not list.</summary>
+    public const string PolicyDomainNotAllowed = "SF9004";
+
+    /// <summary>
+    /// The organisation's policy requires a skill's origin to be identifiable and it is not.
+    /// </summary>
+    public const string PolicyProvenanceMissing = "SF9005";
+
+    /// <summary>The organisation's policy requires a license and the skill declares none.</summary>
+    public const string PolicyLicenseMissing = "SF9006";
+
+    /// <summary><c>SKILL.md</c> is longer than the organisation's policy allows.</summary>
+    public const string PolicySkillFileTooLong = "SF9007";
+
+    /// <summary>
+    /// A suppression in the policy file gives no reason, so it was not applied. A policy that can silence a rule
+    /// without saying why is a policy that stops recording decisions.
+    /// </summary>
+    public const string PolicySuppressionWithoutReason = "SF9008";
+
+    /// <summary>
+    /// A policy rule was read but not evaluated, because this command cannot observe what it asks about. Reported
+    /// so a rule that never runs cannot be mistaken for a rule that passed.
+    /// </summary>
+    public const string PolicyRuleNotEvaluated = "SF9009";
 }

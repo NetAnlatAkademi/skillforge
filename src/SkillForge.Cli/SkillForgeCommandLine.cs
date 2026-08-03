@@ -19,6 +19,7 @@ internal static partial class SkillForgeCommandLine
     private const string DefaultPath = ".";
     private const string DefaultLicense = "MIT";
     private const string DefaultOutputDirectory = "artifacts";
+    private const string DefaultPolicyPath = ".skillforge/policy.yaml";
 
     /// <summary>Builds the root command with every subcommand attached.</summary>
     /// <param name="services">Provider used to resolve command runners.</param>
@@ -64,6 +65,7 @@ internal static partial class SkillForgeCommandLine
         root.Subcommands.Add(BuildDiffCommand(services, globals));
         root.Subcommands.Add(BuildPackCommand(services, globals));
         root.Subcommands.Add(BuildMigrateCommand(services, globals));
+        root.Subcommands.Add(BuildPolicyCommand(services, globals));
 
         return root;
     }
@@ -307,6 +309,51 @@ internal static partial class SkillForgeCommandLine
         return new Command("migrate", "Inspect agent tooling across providers, ahead of moving between them.")
         {
             inspect,
+        };
+    }
+
+    /// <summary>
+    /// Builds <c>policy check</c>. A subcommand from the start, because a policy is a thing an organisation will
+    /// want to explain and list as well as enforce, and <c>policy check</c> leaves room for that.
+    /// </summary>
+    private static Command BuildPolicyCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var path = CreateSkillPathArgument();
+
+        var policy = new Option<string>("--policy")
+        {
+            Description = "Policy file to judge the skills against.",
+            DefaultValueFactory = _ => DefaultPolicyPath,
+        };
+
+        var format = CreateFormatOption();
+        var output = CreateOutputOption();
+
+        var check = new Command("check", "Judge skills against the organisation's policy.")
+        {
+            path,
+            policy,
+            format,
+            output,
+        };
+
+        check.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<PolicyCheckCommandRunner>();
+
+            return await runner.RunAsync(
+                new PolicyCheckRequest(
+                    parseResult.GetValue(path) ?? DefaultPath,
+                    parseResult.GetValue(policy) ?? DefaultPolicyPath,
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return new Command("policy", "Apply an organisation's policy to its skills.")
+        {
+            check,
         };
     }
 

@@ -340,6 +340,80 @@ answered, the answer is `true` — not knowing is not the same as being clean, a
 **This is not a signature.** It records what the working copy said, and nothing here proves the archive was not
 altered afterwards. Signing is a later concern; calling this "verified" would be a claim SkillForge cannot support.
 
+## `skillforge policy check`
+
+Judges skills against the rules an organisation wrote down. The only command that judges rather than describes.
+
+```bash
+skillforge policy check
+skillforge policy check ./skills --policy .skillforge/policy.yaml
+skillforge policy check ./skills --format sarif --output artifacts/policy.sarif
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `path` | `.` | A skill, or a directory of skills |
+| `--policy` | `.skillforge/policy.yaml` | The policy to judge them against |
+| `--format`, `-f` | `console` | `console`, `json` or `sarif` |
+| `--output`, `-o` | stdout | Write to a file |
+
+Exit codes: `1` when a skill violates the policy, when a skill cannot be loaded, or when the **policy itself** cannot
+be read. That last one matters: a run that checked nothing must not report success.
+
+### The policy file
+
+```yaml
+schemaVersion: 1
+
+rules:
+  permissions:
+    shell:
+      allowed: false
+
+    filesystem:
+      write:
+        allowed: false
+
+    network:
+      allowedDomains:
+        - "api.github.com"
+        - "learn.microsoft.com"
+
+  provenance:
+    requireCommitSha: true
+
+  skills:
+    requireLicense: true
+    maxSkillFileLines: 500
+
+suppress:
+  - code: SF9002
+    skill: dotnet-api-review
+    reason: "approved in TICKET-123"
+```
+
+Everything is opt-in. A policy that says nothing produces no findings, so adopting this command cannot start failing
+builds over a decision nobody made. The `rules:` wrapper is optional; a file that omits it says the same thing.
+
+A suppression must carry a `reason`. One without is refused and reported as `SF9008` rather than applied or silently
+dropped — a policy that can silence a rule without recording why has stopped being a record of decisions. A suppression
+with no `skill:` applies to every skill.
+
+Violations are `SF9002`–`SF9007`, all errors, each naming the evidence: the script, the host, the tool, the line count.
+`docs/validation-rules.md` explains what each one is judged on and why.
+
+### What it does not check, and says so
+
+Three things in the schema above cannot be answered by looking at a skill, and each produces an `SF9009` **Info** naming
+itself:
+
+- `filesystem.write.allowed` written as a **list of paths** — a skill declares that it writes, never where.
+- `provenance.requirePackageHash` — every package `pack` produces has one, so the rule cannot fail here.
+- the whole `mcp` section — protocol versions and deprecated capabilities belong to a running server;
+  `migrate inspect --probe-mcp` is what asks one.
+
+A rule that never runs looks exactly like a rule that passed. `allowed: false` **is** checked; only the path list is not.
+
 ## What a report tells you
 
 A finding whose resolution is a single known edit prints that edit, and prints it **without** `--verbose`:

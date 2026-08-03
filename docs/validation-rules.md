@@ -6,9 +6,12 @@ Every rule owns a stable diagnostic code. Codes are never reused or renumbered o
 - `SF1xxx` — **Warning**. The skill works but quality or risk deserves attention.
 - `SF2xxx` — **Info**. A neutral observation about the skill's surface.
 
-Four further bands cover the risk work after v0.1.0 (roadmap §30): `SF3xxx` activation and retrieval risks,
-`SF4xxx` instruction injection, `SF5xxx` supply chain and provenance, `SF6xxx` version and evolution. `SF3xxx`
-and `SF4xxx` have rules; `SF5xxx` and `SF6xxx` are still reserved.
+Six further bands cover the work after v0.1.0: `SF3xxx` activation and retrieval risks, `SF4xxx` instruction
+injection, `SF5xxx` supply chain and provenance, `SF6xxx` version and evolution, `SF7xxx` provider compatibility,
+`SF8xxx` MCP servers and protocol, `SF9xxx` organisation policy. Every one of them has rules.
+
+A band is a **scope**, not a command: `SF6xxx` is reported by `diff`, `SF8xxx` by `migrate inspect`, `SF9xxx` by
+`policy check`, and "a file I could not read" stays `SF1xxx` wherever it happens.
 
 **Signals, not verdicts.** The permission and shell rules point things out; they never conclude that a skill is
 unsafe (ADR-006). Every construct SF1007 recognises has legitimate uses — a build script may well need `sudo`, and
@@ -460,6 +463,96 @@ SF8005 looks for **`logging` only**. Roots and Sampling were deprecated by the s
 everywhere, but they are *client* capabilities — a server cannot declare them, so looking for them here would be a check
 that can never fire. That correction came from the specification's own deprecated-features registry, against a secondhand
 summary that grouped all three as server-side.
+
+## Organisation policy
+
+| Code | Rule | Status |
+|---|---|---|
+| SF9001 | The policy file could not be read or parsed, so nothing was checked | **Implemented** (`policy check`) |
+| SF9002 | Shell access, where the policy forbids it | **Implemented** (`policy check`) |
+| SF9003 | A declared filesystem write, where the policy forbids it | **Implemented** (`policy check`) |
+| SF9004 | A host the policy's allow-list does not name | **Implemented** (`policy check`) |
+| SF9005 | The origin cannot be identified, where the policy requires it | **Implemented** (`policy check`) |
+| SF9006 | No license, where the policy requires one | **Implemented** (`policy check`) |
+| SF9007 | `SKILL.md` longer than the policy allows | **Implemented** (`policy check`) |
+| SF9008 | A suppression in the policy gives no reason, so it was not applied | **Implemented** (`policy check`) |
+| SF9009 | A policy rule was read but could not be checked | **Implemented** (`policy check`) |
+
+**`SF9xxx`, not `SF8xxx`.** The work plan put organisation policy in the `SF8xxx` band, which by then already meant MCP
+in nine published codes. A published code's meaning never changes, so the band moved rather than the codes.
+
+**Every rule here is opt-in and there is no default that forbids anything.** A policy that says nothing produces
+nothing, which is what makes adopting `policy check` safe: it cannot start failing a build over a decision nobody made.
+That is also why these rules were not measured against a corpus the way SF1xxx and SF3xxx were — they fire exactly as
+often as an organisation asks them to, and a rule nobody has written cannot be noisy.
+
+`Error` rather than `Warning`, for the same reason. A policy is a decision somebody wrote down; a violation of it is not
+advice. The escape hatch is a suppression, which must carry a reason:
+
+```yaml
+suppress:
+  - code: SF9002
+    skill: dotnet-api-review
+    reason: "approved in TICKET-123"
+```
+
+A suppression with no `reason` is **refused and reported as SF9008**, rather than applied or silently dropped. A policy
+that can silence a rule without recording why has stopped being a record of decisions; an author whose suppression was
+quietly ignored would believe it worked.
+
+### What each rule is judged on
+
+SF9002 is judged on two independent signals — the commands the skill declares under `permissions.shell` in its own
+`skillforge.yaml`, and any script it ships. A skill that ships a script has shell reach whether or not it admitted to
+it. SF9003 is judged on the **declaration alone**: nothing in a skill's contents proves it writes, and inferring a write
+from the presence of a script would fire on every skill that has one.
+
+SF9004 compares **hosts**, matching what `diff` compares. An allow-list is a list of who a skill may talk to, not of
+which pages it may link. An `allowedDomains` key that is absent is silence and checks nothing; an *empty* list is a
+decision that no host is allowed, and the two do not collapse into each other.
+
+SF9005 requires a repository, a commit, a path within it, **and** a clean working tree. A dirty tree fails it on
+purpose: the commit is named, but it is not what would be published.
+
+### SF9009 — the rule that says a rule did not run
+
+Three things in the documented schema cannot be answered by looking at a skill, and each produces an `Info` naming
+itself rather than passing quietly:
+
+| Rule | Why it cannot be checked here |
+|---|---|
+| `permissions.filesystem.write.allowed` as a **list of paths** | A skill declares that it writes, never where. Confining it to `./reports/**` can only be verified by watching it run. |
+| `provenance.requirePackageHash` | Every package `pack` produces carries a SHA-256, so the rule cannot fail. It belongs against a package's manifest. |
+| the `mcp` section | Protocol versions and deprecated capabilities are properties of a running server. `migrate inspect --probe-mcp` is what asks one, and it reports SF8004 and SF8005. |
+
+A rule that never runs looks exactly like a rule that passed, and the difference is the entire value of having written
+the rule down. `allowed: false` **is** checkable and is checked; only the path list is not.
+
+A policy that cannot be parsed fails the run with SF9001 and checks nothing — unlike `skillforge.yaml`, which is
+advisory and is ignored with SF1012. A build that goes green because the rules failed to load is the worst outcome
+available to this command.
+
+### Measured, with the strictest policy the schema can express
+
+230 real skills, judged against a policy that forbids shell, forbids writes, allows two hosts, requires a commit SHA,
+requires a license and caps `SKILL.md` at 500 lines:
+
+| Code | Skills affected |
+|---|---|
+| SF9005 — origin not identifiable | 229 |
+| SF9006 — no license | 214 |
+| SF9004 — host not on the allow-list | 101 |
+| SF9002 — shell access | 39 |
+| SF9007 — `SKILL.md` too long | 34 |
+
+Those numbers would be damning for a validation rule and mean nothing here: the policy was written to fire. SF9005 at
+229 is a directory of skills that is not a checkout, which is exactly what the rule is for. The measurement worth having
+is the opposite one — **an empty policy over the same 230 skills produces 0 policy findings**. The only thing it
+reports is one skill whose frontmatter will not parse, which is SF0003 and would be reported by anything that opened
+it. That zero is the property that makes the command safe to add to a pipeline before the rules are written.
+
+Each finding names its evidence, and that was checked rather than assumed: `scripts/helper.js` for SF9002,
+`google.github.io` for SF9004, "allows 500 lines and this skill has 524" for SF9007.
 
 ## Measured against real skills
 
