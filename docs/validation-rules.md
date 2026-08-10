@@ -8,7 +8,7 @@ Every rule owns a stable diagnostic code. Codes are never reused or renumbered o
 
 Six further bands cover the work after v0.1.0: `SF3xxx` activation and retrieval risks, `SF4xxx` instruction
 injection, `SF5xxx` supply chain and provenance, `SF6xxx` version and evolution, `SF7xxx` provider compatibility,
-`SF8xxx` MCP servers and protocol, `SF9xxx` organisation policy. Every one of them has rules.
+`SF8xxx` MCP servers, protocol and policy, `SF9xxx` organisation policy. Every one of them has rules.
 
 A band is a **scope**, not a command: `SF6xxx` is reported by `diff`, `SF8xxx` by `migrate inspect`, `SF9xxx` by
 `policy check`, and "a file I could not read" stays `SF1xxx` wherever it happens.
@@ -464,6 +464,101 @@ everywhere, but they are *client* capabilities — a server cannot declare them,
 that can never fire. That correction came from the specification's own deprecated-features registry, against a secondhand
 summary that grouped all three as server-side.
 
+## MCP policy
+
+| Code | Severity | Rule | Reported by |
+|---|---|---|---|
+| SF8101 | Error | An MCP server the policy does not permit is declared | `policy check --mcp` |
+| SF8102 | Warning | An allow rule now covers everything an earlier one did, and more | `policy diff` |
+| SF8103 | Error | An entry in the policy's `mcp` section could not be interpreted | `policy check`, `policy diff` |
+| SF8104 | Error | The policy governs MCP servers without denying by default | `policy check`, `policy diff` |
+| SF8105 | Warning | A server is permitted by its display name alone | `policy check --mcp`, `policy diff` |
+| SF8106 | Warning | A local MCP command is permitted that was not before | `policy diff` |
+| SF8107 | Warning | A remote MCP endpoint is permitted that was not before | `policy diff` |
+
+These extend the `SF8xxx` band into a second block. `SF8001`–`SF8009` are what a **declaration says** — informational
+by design, reported by `mcp inspect` and `migrate inspect`. `SF8101` onwards are what an **organisation decided**, so
+they carry the severities policy findings carry everywhere else in the tool. Both are MCP, which is why they share a
+band; the numeric gap is what lets a reader tell a fact from a verdict in one report.
+
+### The policy this reads
+
+```yaml
+schemaVersion: 1
+
+rules:
+  mcp:
+    default: deny
+
+    allow:
+      - serverUrl: "https://mcp.company.com/*"
+      - serverCommand:
+          command: npx
+          args:
+            - "@company/internal-mcp"
+      - serverName: "internal-notes"
+
+    deny:
+      - serverUrl: "http://*"
+```
+
+`serverCommand` also accepts the short form `serverCommand: npx`, which matches on the executable alone. It is the
+executable **only**: `serverCommand: "npx @vendor/mcp"` matches a declaration whose command is that whole string,
+which is not how a configuration file writes one. Use the mapping form to constrain arguments. The `rules:` wrapper
+is optional, as it is everywhere else in the file.
+
+### How a rule is matched
+
+**Deny is checked before allow.** A rule written to block something cannot be undone by a broader allow beside it.
+
+**A rule only matches the transport it is about.** A `serverUrl` rule never matches a local command and a
+`serverCommand` rule never matches a URL, so a policy cannot accidentally permit a process launch by naming a web
+address. A `serverCommand` rule with `args` requires each of them to appear among the declared arguments — by
+containment rather than by position, because a `-y` in front of a package name is noise, not an identity.
+
+**URLs are canonicalised before comparison**: scheme and host lower-cased, a default port dropped, a trailing slash
+dropped. `HTTPS://MCP.Company.com:443/github/` and `https://mcp.company.com/github` are one endpoint, and a policy
+that blocked one while permitting the other would be evaded by whoever wrote the configuration.
+
+**`*` is the only wildcard**, and it matches any run of characters. Everything else in a pattern is literal — a `.`
+in a hostname is a dot, not "any character".
+
+**Matching ignores case throughout**, including URL paths, which the standard treats as case-sensitive. That is
+deliberate and it cuts one way: an allow rule matches slightly more than it strictly should, and a **deny** rule
+matches everything it should. A deny that misses is worse than an allow that is generous.
+
+### The default, and what happens when it is missing
+
+`SF8104` fires when the section governs servers and does not say `default: deny` — whether it says `allow` or says
+nothing at all. It is an error either way, but the two are not treated the same:
+
+- `default: allow` — a server no rule names is permitted, as the policy says.
+- **no default at all** — SkillForge applies **no default**. It checks the explicit rules, blocks nothing else, and
+  reports `SF8104`. Guessing "deny" here would be fail-closed in the letter and useless in practice: a policy with a
+  deny list and no allow list would produce one `SF8101` for every server on the machine, burying the actual problem
+  — that nobody wrote the decision down — under findings the tool invented. The run still fails, because `SF8104` is
+  an error. Fail-closed in outcome, not in noise.
+
+An entry that cannot be interpreted is dropped and reported as `SF8103`, never guessed at. Applying a rule nobody can
+read would enforce something nobody wrote; dropping it quietly would leave a deny list weaker than its author
+believes.
+
+### What `policy check` still cannot see
+
+`allowedProtocolVersions` and `denyDeprecatedCapabilities` describe a **running server**, not a declaration, so they
+remain `SF9009`. `mcp inspect --probe-mcp` is what asks a server, and it reports SF8004 and SF8005.
+
+Allow and deny rules with no `--mcp` argument also report `SF9009`: the rules had nothing to be applied to, and a
+rule that never ran must not look like a rule that passed.
+
+### Measured before published
+
+On this machine's real MCP configurations — three servers under `~/.claude.json`, one under `~/.codex/config.toml` —
+an **empty policy produces zero findings**, and a policy of `default: deny` with no allow list produces one `SF8101`
+per server plus one `SF8104`, which is the arithmetic the rule promises. The number that matters is the first: a
+policy that has not decided anything about MCP is silent, so the command is safe to put in a pipeline before the
+rules exist.
+
 ## Organisation policy
 
 | Code | Rule | Status |
@@ -477,6 +572,21 @@ summary that grouped all three as server-side.
 | SF9007 | `SKILL.md` longer than the policy allows | **Implemented** (`policy check`) |
 | SF9008 | A suppression in the policy gives no reason, so it was not applied | **Implemented** (`policy check`) |
 | SF9009 | A policy rule was read but could not be checked | **Implemented** (`policy check`) |
+| SF9010 | A policy rule outside the `mcp` section was relaxed between two snapshots | **Implemented** (`policy diff`) |
+
+**SF9010 is one code for every non-MCP relaxation**, not one per rule. Each finding names the rule and both values,
+so nothing is lost; what a code per rule would add is the ability to suppress them separately, and nobody has asked
+for that. The MCP relaxations have their own codes because the review that asked for `policy diff` asked for those by
+number.
+
+It is a `Warning` where the rest of the band is `Error`: relaxing a policy is a decision an organisation is entitled
+to make, and `policy diff` describes the change rather than refusing it. `--fail-on-weakening` is how a pipeline
+turns it into a gate.
+
+**A change is only coded when some command enforces the rule it changes.** `filesystem.write.allowed` path lists,
+`requirePackageHash` and `allowedProtocolVersions` are all `SF9009` in `policy check` — unobservable — so a change to
+them is shown in the diff and carries no code. Warning about a widened guarantee that nothing checks would be a
+warning about nothing.
 
 **`SF9xxx`, not `SF8xxx`.** The work plan put organisation policy in the `SF8xxx` band, which by then already meant MCP
 in nine published codes. A published code's meaning never changes, so the band moved rather than the codes.

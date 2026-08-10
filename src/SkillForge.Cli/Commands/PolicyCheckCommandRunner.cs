@@ -1,5 +1,6 @@
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Inspection;
+using SkillForge.Application.Mcp;
 using SkillForge.Application.Policy;
 using SkillForge.Application.Provenance;
 using SkillForge.Application.Validation;
@@ -32,6 +33,7 @@ internal sealed class PolicyCheckCommandRunner
     private readonly ISkillInspector _inspector;
     private readonly ISkillDiscovery _discovery;
     private readonly IProvenanceReader _provenanceReader;
+    private readonly McpFileInspector _mcpInspector;
     private readonly IFileSystem _fileSystem;
     private readonly IValidationReportRenderer _renderer;
     private readonly ReportOutput _output;
@@ -42,6 +44,10 @@ internal sealed class PolicyCheckCommandRunner
     /// <param name="inspector">Computes what each skill's contents imply it can do.</param>
     /// <param name="discovery">Finds the skills when the path holds several of them.</param>
     /// <param name="provenanceReader">Records where each skill came from.</param>
+    /// <param name="mcpInspector">
+    /// Reads the MCP configurations named with <c>--mcp</c>. The same reader <c>mcp inspect</c> uses, never
+    /// probing and never launching a local server: this asks what a file declares.
+    /// </param>
     /// <param name="fileSystem">Used to tell one skill from a directory of skills.</param>
     /// <param name="renderer">Reports a policy that could not be read.</param>
     /// <param name="output">Writes the report where the user asked for it.</param>
@@ -55,6 +61,7 @@ internal sealed class PolicyCheckCommandRunner
         ISkillInspector inspector,
         ISkillDiscovery discovery,
         IProvenanceReader provenanceReader,
+        McpFileInspector mcpInspector,
         IFileSystem fileSystem,
         IValidationReportRenderer renderer,
         ReportOutput output)
@@ -64,6 +71,7 @@ internal sealed class PolicyCheckCommandRunner
         ArgumentNullException.ThrowIfNull(inspector);
         ArgumentNullException.ThrowIfNull(discovery);
         ArgumentNullException.ThrowIfNull(provenanceReader);
+        ArgumentNullException.ThrowIfNull(mcpInspector);
         ArgumentNullException.ThrowIfNull(fileSystem);
         ArgumentNullException.ThrowIfNull(renderer);
         ArgumentNullException.ThrowIfNull(output);
@@ -73,6 +81,7 @@ internal sealed class PolicyCheckCommandRunner
         _inspector = inspector;
         _discovery = discovery;
         _provenanceReader = provenanceReader;
+        _mcpInspector = mcpInspector;
         _fileSystem = fileSystem;
         _renderer = renderer;
         _output = output;
@@ -106,17 +115,40 @@ internal sealed class PolicyCheckCommandRunner
         var policy = policyResult.Value;
 
         var reports = new List<ValidationReport>();
-        foreach (var skillPath in SkillPaths(request.Path))
+
+        var unreadableConfiguration = false;
+        foreach (var mcpPath in request.McpPaths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var report = await CheckMcpAsync(mcpPath, policy, cancellationToken).ConfigureAwait(false);
+
+            // A configuration that could not be read is reported as a warning by the reader, because an inventory
+            // with a gap in it is still worth having. A policy gate is the one caller for which that is not true:
+            // "I could not look" must never leave through the same door as "I looked and it was fine".
+            unreadableConfiguration |= report.Diagnostics.Any(finding =>
+                finding.Code == DiagnosticCodes.ProviderConfigurationNotParsable);
+
+            reports.Add(report);
+        }
+
+        var skillPaths = SkillPaths(request.Path);
+        foreach (var skillPath in skillPaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             reports.Add(await CheckAsync(skillPath, policy, cancellationToken).ConfigureAwait(false));
         }
 
-        // The policy's own findings — a suppression with no reason, a rule this command cannot check — belong to
-        // the policy file, not to any skill, so they are reported against the policy itself.
+        // The policy's own findings — a suppression with no reason, an MCP section that does not deny by default,
+        // a rule this command cannot check — belong to the policy file, not to any skill, so they are reported
+        // against the policy itself.
         var policyFindings = DiagnosticOrdering.Sort(
-            [.. policyResult.Diagnostics, .. PolicyEvaluator.DescribeUnevaluatedRules(policy)]);
+            [
+                .. policyResult.Diagnostics,
+                .. policy.Mcp is { } mcp ? McpPolicyEvaluator.DescribePolicy(mcp, request.PolicyPath) : [],
+                .. PolicyEvaluator.DescribeUnevaluatedRules(policy, request.McpPaths.Count > 0),
+            ]);
 
         if (policyFindings.Count > 0)
         {
@@ -129,14 +161,20 @@ internal sealed class PolicyCheckCommandRunner
 
         var run = ValidationRun.From(_fileSystem.GetFullPath(request.Path), reports);
 
+        // Once the run holds the policy file or an MCP configuration, "Skills: 3" is a false statement about what
+        // was read. The heading was fixed for this reason already; this is the same sentence one line down.
+        var renderOptions = reports.Count > skillPaths.Count
+            ? request.RenderOptions with { SubjectPlural = "Entries" }
+            : request.RenderOptions;
+
         await _output.WriteRunAsync(
             run,
             request.Format,
             request.OutputPath,
-            request.RenderOptions,
+            renderOptions,
             cancellationToken).ConfigureAwait(false);
 
-        return reports.Exists(report => report.HasFailed(strict: false))
+        return unreadableConfiguration || reports.Exists(report => report.HasFailed(strict: false))
             ? ExitCodes.ValidationFailed
             : ExitCodes.Success;
     }
@@ -158,6 +196,42 @@ internal sealed class PolicyCheckCommandRunner
         var discovered = _discovery.FindSkillDirectories(path);
 
         return discovered.Count > 0 ? discovered : [path];
+    }
+
+    /// <summary>
+    /// Judges one MCP configuration against the policy's allow and deny rules.
+    /// </summary>
+    /// <remarks>
+    /// The file's own <c>SF8xxx</c> observations are deliberately left out: they are what <c>mcp inspect</c> is
+    /// for, they are informational by design, and mixing them into a policy report would blur the line between
+    /// "this is how the server is declared" and "this breaks a decision the organisation wrote down". A file that
+    /// could not be read is the exception, because a policy gate that saw nothing must not read as one that
+    /// found nothing.
+    /// </remarks>
+    private async Task<ValidationReport> CheckMcpAsync(
+        string mcpPath,
+        PolicyDocument policy,
+        CancellationToken cancellationToken)
+    {
+        var inspection = await _mcpInspector
+            .InspectAsync(mcpPath, probe: false, cancellationToken)
+            .ConfigureAwait(false);
+
+        var unreadable = inspection.Diagnostics
+            .Where(finding => finding.Code == DiagnosticCodes.ProviderConfigurationNotParsable);
+
+        var findings = policy.Mcp is { } mcp
+            ? McpPolicyEvaluator.Evaluate(mcp, inspection)
+            : [];
+
+        var reported = DiagnosticOrdering.Sort(
+            [.. unreadable, .. findings.Where(finding => !policy.Suppresses(finding.Code, mcpPath))]);
+
+        return new ValidationReport(
+            string.Empty,
+            mcpPath,
+            reported,
+            ValidationSummary.FromDiagnostics(reported));
     }
 
     private async Task<ValidationReport> CheckAsync(

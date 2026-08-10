@@ -1539,3 +1539,186 @@ Bu projenin ilk hedefi büyük bir platform kurmak değildir.
 Ürün büyüdükçe platform özellikleri eklenecektir.
 
 İlk aşamada kalite, sadelik ve geliştirici deneyimi; özellik sayısından daha önemlidir.
+
+
+---
+
+## 32. Ekosistem Girdileri ve Revize Öncelik (2026-08-10)
+
+Kaynak: `SKILLFORGE_WEEKLY_UPDATE_2026-08-10.md`, arşiv kopyası
+[docs/inputs-2026-08-10-weekly-update.md](docs/inputs-2026-08-10-weekly-update.md).
+
+> **Doğrulama notu.** Bu bölümdeki dış dünya iddiaları — GitHub'ın 6 Ağustos 2026'da Enterprise
+> Copilot müşterileri için MCP sunucu allow/deny politikalarını GA'ya aldığı, politikanın remote URL,
+> local command, server name, allow/deny list ve fail-closed davranışı desteklediği, VS Code / CLI /
+> Copilot app ortamlarında uygulandığı — **ikinci eldendir ve bu repoda doğrulanmamıştır.** Yön
+> tayini için kullanılabilirler; bir yatırımı veya bir kural şiddetini gerekçelendirmek için
+> kullanılacaklarsa önce birincil kaynaklara bakılmalıdır.
+
+### 32.1 Bu haftanın gelişmesi
+
+GitHub, kurumsal müşterilere yönelik MCP sunucu allow/deny politika yönetimini genel kullanıma açtı.
+Desteklenen politika kontrolleri:
+
+- Remote MCP server URL
+- Local command
+- Server name
+- Allow/deny list
+- Canonicalized URL matching
+- Policy doğrulanamadığında fail-closed davranış
+
+Etkilenen ortamlar: GitHub Copilot app, GitHub Copilot CLI, VS Code.
+
+### 32.2 SkillForge açısından anlamı
+
+Bu gelişme, kurumsal pazarda asıl ihtiyacın "MCP server keşfetmek veya kurmak" olmadığını netleştiriyor.
+
+> Hangi MCP sunucusunun, hangi agent tarafından, hangi koşullarda kullanılabileceğini merkezi olarak
+> tanımlamak, doğrulamak ve değişikliklerini izlemek.
+
+`SF9xxx` bandının `mcp` bölümü şu an `SF9009` olarak raporlanıp geçilmektedir; bu gelişme onu
+gözlemlenebilir kılmayı ve `policy diff` komutunu önceliklendirmeyi haklı kılıyor.
+
+### 32.3 MCP policy modeli
+
+`.skillforge/policy.yaml` için önerilen şema:
+
+```yaml
+schemaVersion: 1
+
+mcp:
+  default: deny
+
+  allow:
+    - serverUrl: "https://mcp.company.com/*"
+
+    - serverCommand:
+        command: "npx"
+        args:
+          - "@company/internal-mcp"
+
+  deny:
+    - serverUrl: "http://*"
+```
+
+Tasarım ilkeleri:
+
+- Varsayılan davranış `deny` olmalı.
+- Policy parse edilemezse fail-closed davranılmalı.
+- URL ve local command ayrı kurallarla ele alınmalı.
+- Display name güvenlik açısından tek başına yeterli kimlik sayılmamalı.
+- Wildcard genişlemeleri risk olarak gösterilmeli.
+- Policy değişiklikleri diff edilebilmeli.
+
+### 32.4 Yeni `skillforge policy diff` komutu
+
+```bash
+skillforge policy diff origin/main...HEAD
+```
+
+Amaç: agent ve MCP policy değişikliklerinin kod değişiklikleri kadar görünür ve denetlenebilir olması.
+
+Rapor kapsamı:
+
+- Allow list genişledi mi?
+- Deny list daraldı mı?
+- Wildcard genişledi mi?
+- Yeni external domain eklendi mi?
+- Yeni local executable izni verildi mi?
+- Fail-closed davranışı zayıflatıldı mı?
+
+Örnek çıktı:
+
+```text
+MCP Policy Diff
+
++ Allowed:
+  https://mcp.company.com/github
+
+- Removed:
+  local command: npx unknown-server
+
+! Policy weakened:
+  wildcard changed
+  api.company.com
+  →
+  *.company.com
+```
+
+Not: `skillforge diff origin/main...HEAD` (skill diff) ile aynı git revision range kısıtı geçerlidir.
+Git worktree veya git archive desteği gerektirir; `docs/ci.md`'deki git worktree tarifi bugün için
+aynı işi görür.
+
+### 32.5 Yeni MCP policy diagnostic kodları
+
+| Kod | Seviye | Açıklama |
+|---|---|---|
+| SF8101 | Error | MCP server policy tarafından engellendi |
+| SF8102 | Warning | MCP wildcard kapsamı genişledi |
+| SF8103 | Error | Policy parse edilemedi |
+| SF8104 | Error | Policy fail-open davranıyor |
+| SF8105 | Warning | MCP server display name ile eşleşiyor |
+| SF8106 | Warning | Yeni local MCP command eklendi |
+| SF8107 | Warning | Yeni remote MCP domain eklendi |
+
+`SF8001`–`SF8009` protokol ve araç uyumu; `SF8101`–`SF8107` policy yaptırımı anlamına gelir. Bu
+sayısal ayırım, aynı raporda protokol bulgusunun policy bulgusundan görsel olarak ayrışmasını sağlar.
+
+### 32.6 Güncellenmiş milestone tablosu
+
+§30.8'deki tablo bu tabloyla değiştirilmiştir. v0.5 tamamlandı; v0.6 sıradaki.
+
+| Sürüm | İçerik | Durum |
+|---|---|---|
+| **v0.1** | `init`, `validate`, `inspect`, `pack`, SARIF | tamamlandı |
+| **v0.2** | `diff`, activation-risk kuralları, GitHub Action, PR annotation'ları | tamamlandı |
+| **v0.3** | Local evals, model runner, sağlayıcı uyumluluğu | tamamlandı |
+| **v0.4** | Migration envanteri, MCP protokol incelemesi | tamamlandı (~) |
+| **v0.5** | `policy check`, `scan`, `inventory`, `mcp inspect/validate/diff`, provenance | tamamlandı |
+| **v0.6** | `policy diff`, MCP allow/deny kuralları (SF8101–SF8107) | tamamlandı |
+
+**v0.6 notu.** SF8101–SF8107 ve `policy diff` gerçeklendi. İki karar kayda değer:
+
+- **Beyan edilmemiş `default` için varsayılan uydurulmaz.** Fail-closed davranış `SF8104` ile run'ı düşürerek
+  sağlanır; ayrıca her sunucu için uydurma bir `SF8101` üretilmez. Aksi hâlde asıl sorun — kararın yazılmamış
+  olması — tool'un ürettiği bulguların altında kaybolurdu.
+- **`policy diff` yalnızca gevşemeleri raporlar.** Sıkılaşan bir policy yazdırılır ama uyarı üretmez. Ayrıca
+  hiçbir komutun uygulamadığı bir kuralın değişimi kodsuz gösterilir (`SF9009` olan kurallar): uygulanmayan bir
+  garantinin genişlemesi hakkında uyarmak, hiçbir şey hakkında uyarmaktır.
+
+Git revision range (`origin/main...HEAD`) desteği **bilinçli olarak yapılmadı**: `skillforge diff` ile aynı
+kısıt geçerli, `docs/ci.md`'deki `git worktree` tarifi bugün aynı işi görüyor.
+
+### 32.7 Güncellenmiş ürün tezi
+
+Bu haftaki gelişme SkillForge'un uzun vadeli rolünü netleştirdi:
+
+> Vendor-bağımsız Agent Configuration Policy Engine
+
+Kapsanabilecek kaynaklar:
+
+```text
+GitHub Copilot policy
+Codex configuration
+Claude configuration
+MCP configuration
+Agent Skills
+AGENTS.md / CLAUDE.md
+hooks
+tool permissions
+```
+
+İlk üç kritik ürün özelliği bu kaynaklar doğrulanmadan geliştirilmemelidir:
+
+```text
+skillforge diff
+skillforge policy check
+skillforge policy diff
+```
+
+### 32.8 Bu girdinin değiştirmediği şeyler
+
+- **ADR-006 aynen geçerli.** SF8101–SF8107 bir policy ihlali raporlar, güvenli/güvensiz kararı vermez.
+- **ADR-001 aynen geçerli.** Bu girdi CLI + Action eksenini güçlendiriyor; web paneli kapsamında değil.
+- **Ölçülmüş gerçeklik hâlâ üstün.** Yeni kodlar yayınlanmadan önce gerçek input üzerinde ateşlenme
+  oranı ölçülmelidir (bkz. §30.9).

@@ -121,6 +121,7 @@ internal static class CompositionRoot
         services.AddSingleton<PackCommandRunner>();
         services.AddSingleton<MigrateInspectCommandRunner>();
         services.AddSingleton<PolicyCheckCommandRunner>();
+        services.AddSingleton<PolicyDiffCommandRunner>();
         services.AddSingleton<McpCommandRunner>();
 
         // ValidateOnBuild turns a missing or unresolvable registration into a failure here rather than when

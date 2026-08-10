@@ -322,7 +322,7 @@ is, the CLI says so rather than doing it silently. Tooling directories (`bin`, `
     "workingTreeIsDirty": false,
     "generatedAt": "2026-08-03T07:03:28Z"
   },
-  "tool": { "name": "SkillForge", "version": "26.215.1" }
+  "tool": { "name": "SkillForge", "version": "26.222.1" }
 }
 ```
 
@@ -354,11 +354,13 @@ skillforge policy check ./skills --format sarif --output artifacts/policy.sarif
 |---|---|---|
 | `path` | `.` | A skill, or a directory of skills |
 | `--policy` | `.skillforge/policy.yaml` | The policy to judge them against |
+| `--mcp` | none | MCP configuration files to judge against the policy's `mcp` allow and deny rules |
 | `--format`, `-f` | `console` | `console`, `json` or `sarif` |
 | `--output`, `-o` | stdout | Write to a file |
 
-Exit codes: `1` when a skill violates the policy, when a skill cannot be loaded, or when the **policy itself** cannot
-be read. That last one matters: a run that checked nothing must not report success.
+Exit codes: `1` when a skill violates the policy, when a skill cannot be loaded, when a named MCP configuration cannot
+be read, or when the **policy itself** cannot be read. Those last two matter: a run that checked nothing must not
+report success.
 
 ### The policy file
 
@@ -402,17 +404,103 @@ with no `skill:` applies to every skill.
 Violations are `SF9002`–`SF9007`, all errors, each naming the evidence: the script, the host, the tool, the line count.
 `docs/validation-rules.md` explains what each one is judged on and why.
 
+### Which MCP servers may be connected to
+
+```yaml
+rules:
+  mcp:
+    default: deny
+
+    allow:
+      - serverUrl: "https://mcp.company.com/*"
+      - serverCommand:
+          command: npx
+          args:
+            - "@company/internal-mcp"
+
+    deny:
+      - serverUrl: "http://*"
+```
+
+```bash
+skillforge policy check ./skills --mcp .mcp.json
+skillforge policy check ./skills --mcp .mcp.json,.vscode/mcp.json
+```
+
+A server the policy does not permit is `SF8101`, an error. Deny is checked before allow, URLs are canonicalised
+before they are compared, and a `serverUrl` rule never matches a local command. A server permitted only because a
+`serverName` rule matched its display name is `SF8105`, a warning — the name is chosen by the file under review, so
+on its own it identifies nothing.
+
+`default: deny` must be explicit. Without it, `SF8104` fails the run and **no default is applied**: the explicit
+rules are checked, nothing else is blocked, and the report says the decision was not written down rather than
+inventing one finding per server. `docs/validation-rules.md` has the full matching rules.
+
 ### What it does not check, and says so
 
-Three things in the schema above cannot be answered by looking at a skill, and each produces an `SF9009` **Info** naming
-itself:
+Some rules cannot be answered by looking at a file, and each produces an `SF9009` **Info** naming itself:
 
 - `filesystem.write.allowed` written as a **list of paths** — a skill declares that it writes, never where.
 - `provenance.requirePackageHash` — every package `pack` produces has one, so the rule cannot fail here.
-- the whole `mcp` section — protocol versions and deprecated capabilities belong to a running server;
-  `migrate inspect --probe-mcp` is what asks one.
+- `mcp.allowedProtocolVersions` and `mcp.denyDeprecatedCapabilities` — both belong to a running server;
+  `mcp inspect --probe-mcp` is what asks one.
+- `mcp.allow` and `mcp.deny` when no `--mcp` file was named — the rules had nothing to be applied to.
 
 A rule that never runs looks exactly like a rule that passed. `allowed: false` **is** checked; only the path list is not.
+
+## `skillforge policy diff`
+
+Compares two policy files by what they decide, and reports what was **relaxed**.
+
+```bash
+skillforge policy diff before/policy.yaml .skillforge/policy.yaml
+skillforge policy diff base/policy.yaml head/policy.yaml --fail-on-weakening
+skillforge policy diff base/policy.yaml head/policy.yaml --format sarif -o artifacts/policy-diff.sarif
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `before` | — | The earlier policy file |
+| `after` | — | The later policy file |
+| `--fail-on-weakening` | off | Exit `1` when the later policy permits something the earlier one did not |
+| `--format`, `-f` | `console` | `console`, `json` or `sarif` |
+| `--output`, `-o` | stdout | Write to a file |
+
+```text
+SkillForge Policy Diff
+
+MCP newly permitted:
+  serverUrl: https://mcp.company.com/github
+  serverCommand: npx unknown-server
+
+MCP widened:
+  https://api.company.com/mcp -> https://*.company.com/mcp
+
+skills.requireLicense: required -> not required
+
+Relaxed:
+  SF8102 The MCP allow list widened: 'https://api.company.com/mcp' is now covered by 'https://*.company.com/mcp' …
+  SF8106 A local MCP command is permitted that was not before: npx unknown-server (a deny rule was removed).
+  SF9010 skills.requireLicense was relaxed: 'required' became 'not required'.
+```
+
+Two edits permit something new and read very differently in a patch: an entry added to `allow`, and an entry removed
+from `deny`. Both appear under **newly permitted**, and each finding says which happened — a reviewer is asking one
+question, not two.
+
+**Relaxations only.** A policy that got stricter is printed and warned about nowhere. A command that flagged every
+edit would teach people to skip its output, and then the edit that mattered gets skipped with the rest.
+
+**A change is only coded when some command enforces the rule it changes.** `filesystem.write.allowed` path lists,
+`requirePackageHash` and `allowedProtocolVersions` are `SF9009` in `policy check` — unobservable — so a change to them
+is shown in the diff and carries no code.
+
+Exit codes: `1` when either policy cannot be read, and `1` on any relaxation with `--fail-on-weakening`. Otherwise `0`:
+whether a widened policy is acceptable is the organisation's decision, and this command's job is to make it visible.
+
+Like `skillforge diff`, it takes two **paths** rather than a revision range. See
+[Comparing two git revisions](#comparing-two-git-revisions) for the `git worktree` recipe, which works the same way
+here.
 
 ## What a report tells you
 

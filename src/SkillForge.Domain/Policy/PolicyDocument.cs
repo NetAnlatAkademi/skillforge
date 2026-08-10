@@ -80,12 +80,35 @@ public sealed record PolicyProvenance(bool RequireCommitSha, bool RequirePackage
 /// </param>
 public sealed record PolicySkills(bool RequireLicense, int? MaxSkillFileLines);
 
-/// <summary>What MCP servers may be.</summary>
+/// <summary>What MCP servers may be, and which of them an agent may connect to at all.</summary>
 /// <param name="AllowedProtocolVersions">Protocol revisions the organisation accepts.</param>
 /// <param name="DenyDeprecatedCapabilities">Whether a deprecated capability is a violation.</param>
+/// <param name="Default">
+/// What happens to a server no rule names. <see cref="McpPolicyDefault.NotDeclared"/> is not resolved to either
+/// decision: an undeclared default is reported rather than guessed at.
+/// </param>
+/// <param name="Allow">Servers an agent may connect to.</param>
+/// <param name="Deny">
+/// Servers an agent may not connect to, whatever else the policy says. Deny is checked first, so an entry here
+/// cannot be undone by a broader allow written below it.
+/// </param>
 public sealed record PolicyMcp(
     IReadOnlyList<string> AllowedProtocolVersions,
-    bool DenyDeprecatedCapabilities);
+    bool DenyDeprecatedCapabilities,
+    McpPolicyDefault Default,
+    IReadOnlyList<McpPolicyRule> Allow,
+    IReadOnlyList<McpPolicyRule> Deny)
+{
+    /// <summary>
+    /// Gets a value indicating whether the section decides anything about which servers may be connected to.
+    /// </summary>
+    /// <remarks>
+    /// A section that only pins protocol versions governs no server, so it must not be told that its default is
+    /// undeclared — there is nothing for a default to apply to.
+    /// </remarks>
+    public bool GovernsServers =>
+        Allow.Count > 0 || Deny.Count > 0 || Default != McpPolicyDefault.NotDeclared;
+}
 
 /// <summary>A rule this organisation has decided not to hear about.</summary>
 /// <param name="Code">The diagnostic code being silenced.</param>

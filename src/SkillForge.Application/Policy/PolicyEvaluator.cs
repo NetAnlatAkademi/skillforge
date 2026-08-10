@@ -47,13 +47,19 @@ public static class PolicyEvaluator
     /// Names the rules that were read but could not be checked.
     /// </summary>
     /// <param name="policy">The organisation's policy.</param>
+    /// <param name="mcpConfigurationsRead">
+    /// Whether the caller named any MCP configuration with <c>--mcp</c>. Without one, the policy's allow and deny
+    /// rules had nothing to be applied to, which is a rule that did not run rather than a rule that passed.
+    /// </param>
     /// <returns>One <c>SF9009</c> per unobservable rule; empty when every rule in the policy was evaluated.</returns>
     /// <remarks>
     /// A rule that never runs looks exactly like a rule that passed, and the difference is the whole value of
     /// having written the rule down. These are Info rather than warnings: nothing is wrong with the policy, it
     /// asks about something this command cannot see.
     /// </remarks>
-    public static IReadOnlyList<Diagnostic> DescribeUnevaluatedRules(PolicyDocument policy)
+    public static IReadOnlyList<Diagnostic> DescribeUnevaluatedRules(
+        PolicyDocument policy,
+        bool mcpConfigurationsRead = false)
     {
         ArgumentNullException.ThrowIfNull(policy);
 
@@ -76,13 +82,24 @@ public static class PolicyEvaluator
                     + "against a package's manifest instead."));
         }
 
-        if (policy.Mcp is not null)
+        if (policy.Mcp is { } mcp)
         {
-            findings.Add(NotEvaluated(
-                "the mcp section",
-                "Protocol versions and deprecated capabilities are properties of a running server, not of a "
-                    + "declaration. 'migrate inspect --probe-mcp' is what asks a server, and it reports SF8004 "
-                    + "and SF8005."));
+            if (mcp.AllowedProtocolVersions.Count > 0 || mcp.DenyDeprecatedCapabilities)
+            {
+                findings.Add(NotEvaluated(
+                    "mcp.allowedProtocolVersions and mcp.denyDeprecatedCapabilities",
+                    "Protocol versions and deprecated capabilities are properties of a running server, not of a "
+                        + "declaration. 'mcp inspect --probe-mcp' is what asks a server, and it reports SF8004 "
+                        + "and SF8005."));
+            }
+
+            if (mcp.GovernsServers && !mcpConfigurationsRead)
+            {
+                findings.Add(NotEvaluated(
+                    "the mcp allow and deny rules",
+                    "No MCP configuration was named, so the rules had nothing to be applied to. Add "
+                        + "'--mcp <file>' to check a configuration against them."));
+            }
         }
 
         return findings;

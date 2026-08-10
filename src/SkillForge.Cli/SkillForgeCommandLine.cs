@@ -499,10 +499,19 @@ internal static partial class SkillForgeCommandLine
     }
 
     /// <summary>
-    /// Builds <c>policy check</c>. A subcommand from the start, because a policy is a thing an organisation will
-    /// want to explain and list as well as enforce, and <c>policy check</c> leaves room for that.
+    /// Builds <c>policy check</c> and <c>policy diff</c>. A subcommand from the start, because a policy is a thing
+    /// an organisation will want to explain and list as well as enforce.
     /// </summary>
     private static Command BuildPolicyCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        return new Command("policy", "Apply an organisation's policy, and see what changed in it.")
+        {
+            BuildPolicyCheckCommand(services, globals),
+            BuildPolicyDiffCommand(services, globals),
+        };
+    }
+
+    private static Command BuildPolicyCheckCommand(IServiceProvider services, GlobalOptions globals)
     {
         var path = CreateSkillPathArgument();
 
@@ -512,6 +521,13 @@ internal static partial class SkillForgeCommandLine
             DefaultValueFactory = _ => DefaultPolicyPath,
         };
 
+        var mcp = new Option<string[]>("--mcp")
+        {
+            Description = "MCP configuration files to judge against the policy's allow and deny rules, "
+                + "comma-separated or repeated. Without one, those rules report themselves as SF9009.",
+            AllowMultipleArgumentsPerToken = true,
+        };
+
         var format = CreateFormatOption();
         var output = CreateOutputOption();
 
@@ -519,6 +535,7 @@ internal static partial class SkillForgeCommandLine
         {
             path,
             policy,
+            mcp,
             format,
             output,
         };
@@ -531,16 +548,61 @@ internal static partial class SkillForgeCommandLine
                 new PolicyCheckRequest(
                     parseResult.GetValue(path) ?? DefaultPath,
                     parseResult.GetValue(policy) ?? DefaultPolicyPath,
+                    ReadPaths(parseResult.GetValue(mcp)),
                     parseResult.GetValue(format) ?? OutputFormat.Console,
                     parseResult.GetValue(output),
                     globals.Read(parseResult)),
                 cancellationToken).ConfigureAwait(false);
         });
 
-        return new Command("policy", "Apply an organisation's policy to its skills.")
+        return check;
+    }
+
+    private static Command BuildPolicyDiffCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var before = new Argument<string>("before")
         {
-            check,
+            Description = "The earlier policy file.",
         };
+
+        var after = new Argument<string>("after")
+        {
+            Description = "The later policy file.",
+        };
+
+        var format = CreateFormatOption();
+        var output = CreateOutputOption();
+
+        var failOnWeakening = new Option<bool>("--fail-on-weakening")
+        {
+            Description = "Fail when the later policy permits something the earlier one did not.",
+        };
+
+        var diff = new Command("diff", "Compare two policy files by what they decide, and report what was relaxed.")
+        {
+            before,
+            after,
+            format,
+            output,
+            failOnWeakening,
+        };
+
+        diff.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<PolicyDiffCommandRunner>();
+
+            return await runner.RunAsync(
+                new PolicyDiffRequest(
+                    parseResult.GetValue(before) ?? DefaultPolicyPath,
+                    parseResult.GetValue(after) ?? DefaultPolicyPath,
+                    parseResult.GetValue(failOnWeakening),
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return diff;
     }
 
     private static Command BuildEvalCommand(IServiceProvider services, GlobalOptions globals)
@@ -782,6 +844,13 @@ internal static partial class SkillForgeCommandLine
     /// error, because the identifier may be a real provider SkillForge has not learned yet.
     /// </summary>
     private static string[] ReadProviders(string[]? tokens) =>
+        tokens is null ? [] : [.. tokens.SelectMany(SplitCodes)];
+
+    /// <summary>
+    /// Reads a repeated path option. Split on commas like the others, which is safe here because a comma is not a
+    /// path separator on any platform SkillForge runs on.
+    /// </summary>
+    private static string[] ReadPaths(string[]? tokens) =>
         tokens is null ? [] : [.. tokens.SelectMany(SplitCodes)];
 
     [GeneratedRegex("^SF[0-8][0-9]{3}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

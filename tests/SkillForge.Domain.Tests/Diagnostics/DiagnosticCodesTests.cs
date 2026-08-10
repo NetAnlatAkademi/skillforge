@@ -46,20 +46,25 @@ public sealed class DiagnosticCodesTests
     }
 
     [Fact]
-    public void EachBandIsNumberedContiguouslyFromOne()
+    public void EachBlockIsNumberedContiguouslyFromOne()
     {
         // A gap means a code was deleted or renumbered — the one thing a published code must never do. Adding
-        // the next number in a band is always fine, which is why this does not count anything.
-        foreach (var band in AllCodes.GroupBy(code => code[..3]))
+        // the next number in a block is always fine, which is why this does not count anything.
+        //
+        // Blocks of a hundred rather than whole bands, because a band may hold more than one: SF8001-SF8009 are
+        // what an MCP server's declaration says, SF8101 onwards are an organisation's decisions about it. Both are
+        // MCP, so both are SF8xxx; the gap between them is the deliberate part, and grouping by band would read it
+        // as the accident this test exists to catch.
+        foreach (var block in AllCodes.GroupBy(code => code[..4]))
         {
-            var numbers = band
-                .Select(code => int.Parse(code[2..], CultureInfo.InvariantCulture) % 1000)
+            var numbers = block
+                .Select(code => int.Parse(code[2..], CultureInfo.InvariantCulture) % 100)
                 .Order()
                 .ToArray();
 
             numbers.Should().Equal(
                 Enumerable.Range(1, numbers.Length),
-                $"band {band.Key}xxx must run from 1 with no gaps, but is {string.Join(", ", numbers)}");
+                $"block {block.Key}xx must run from 1 with no gaps, but is {string.Join(", ", numbers)}");
         }
     }
 

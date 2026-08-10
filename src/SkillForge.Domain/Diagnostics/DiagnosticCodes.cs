@@ -238,6 +238,54 @@ public static class DiagnosticCodes
     public const string McpToolNameOutsideGuidance = "SF8009";
 
     /// <summary>
+    /// An MCP server the organisation's policy does not permit is declared: a deny rule names it, or no allow rule
+    /// does and the policy denies by default.
+    /// </summary>
+    /// <remarks>
+    /// <c>SF8001</c>–<c>SF8009</c> are protocol and tool conformance, reported by <c>mcp inspect</c> and
+    /// <c>migrate inspect</c>. <c>SF8101</c> onwards are policy enforcement, reported by <c>policy check</c> and
+    /// <c>policy diff</c>. Both blocks are MCP, which is why they share a band; the numeric gap is what lets a
+    /// reader tell a fact about a server from a decision about one in the same report.
+    /// </remarks>
+    public const string McpServerBlockedByPolicy = "SF8101";
+
+    /// <summary>
+    /// A policy rule now matches everything an earlier rule matched, and more — the <c>api.company.com</c> to
+    /// <c>*.company.com</c> edit, which is one character in a patch and a change of scope in effect.
+    /// </summary>
+    public const string McpPolicyWildcardExpanded = "SF8102";
+
+    /// <summary>
+    /// An entry in the policy's <c>mcp</c> section could not be interpreted, so it was not applied. An error rather
+    /// than a warning: a rule that failed to load is a rule that is not protecting anything.
+    /// </summary>
+    public const string McpPolicyNotParsable = "SF8103";
+
+    /// <summary>
+    /// The policy governs which MCP servers may be connected to but does not deny by default, so a server no rule
+    /// names is either permitted or undecided.
+    /// </summary>
+    public const string McpPolicyFailOpen = "SF8104";
+
+    /// <summary>
+    /// A server is permitted only because a rule matched the name its configuration gives it. The name is chosen by
+    /// the file under review, so on its own it identifies nothing.
+    /// </summary>
+    public const string McpPolicyMatchedByNameOnly = "SF8105";
+
+    /// <summary>
+    /// The later policy permits a local MCP command the earlier one did not — by adding an allow rule, or by
+    /// removing a deny rule.
+    /// </summary>
+    public const string McpPolicyLocalCommandPermitted = "SF8106";
+
+    /// <summary>
+    /// The later policy permits a remote MCP endpoint the earlier one did not — by adding an allow rule, or by
+    /// removing a deny rule.
+    /// </summary>
+    public const string McpPolicyRemoteDomainPermitted = "SF8107";
+
+    /// <summary>
     /// The policy file exists but could not be read or parsed, so no policy was applied. An error rather than a
     /// warning, unlike SF1012: a run that was asked to check policies and checked none has not done its job, and a
     /// build that passes because the rules failed to load is the worst possible outcome.
@@ -275,4 +323,16 @@ public static class DiagnosticCodes
     /// so a rule that never runs cannot be mistaken for a rule that passed.
     /// </summary>
     public const string PolicyRuleNotEvaluated = "SF9009";
+
+    /// <summary>
+    /// A policy rule outside the <c>mcp</c> section was relaxed between two snapshots. Reported by
+    /// <c>policy diff</c>, which is the only command that can see it.
+    /// </summary>
+    /// <remarks>
+    /// One code for every non-MCP relaxation rather than one per rule. Each finding names the rule and both values,
+    /// so nothing is lost; what would be gained by a code per rule is the ability to suppress them separately, and
+    /// no one has asked for that. The MCP relaxations have their own codes because the ecosystem review that asked
+    /// for this command asked for those by number.
+    /// </remarks>
+    public const string PolicyRelaxed = "SF9010";
 }

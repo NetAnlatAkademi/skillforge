@@ -5,7 +5,7 @@ mirrored into the Obsidian vault under `SkillForge/` for cross-session context.
 
 Legend: `[ ]` open · `[x]` done · `[~]` in progress · `[-]` deliberately deferred
 
-Last updated: 2026-08-03
+Last updated: 2026-08-10
 
 ---
 
@@ -441,7 +441,7 @@ behaviour surface, reports what changed and tests compatibility. Not another ins
 | `SF5xxx` | Supply-chain and provenance risks | SF5001 shipped; provenance deferred |
 | `SF6xxx` | Version and evolution risks | SF6001 shipped (`diff`); "no version declared" deferred at 91% firing |
 | `SF7xxx` | Provider compatibility | SF7001–SF7003 shipped; a capability rule dropped for want of data |
-| `SF8xxx` | MCP servers and protocol | SF8001–SF8009 shipped, all Info; reported by `migrate inspect` |
+| `SF8xxx` | MCP servers, protocol and policy | SF8001–SF8009 shipped, all Info; SF8101–SF8107 shipped, policy severities |
 
 "A file I could not read" stays `SF1015`, beside SF1012 and SF1014, even though `migrate inspect` now also owns an
 `SF8xxx` band. The two answer different questions: SF1015 says the inventory above is incomplete, while an SF8xxx finding
@@ -511,7 +511,57 @@ Done in one pass on 2026-08-03, against the updated work plan.
   its own pass. `docs/ci.md` documents the `git worktree` recipe that does the same thing today.
 - [-] MCP policy rules (`allowedProtocolVersions`, `denyDeprecatedCapabilities`) enforced by `policy check` — they
   describe a running server, and `policy check` reads files. Reported as `SF9009` rather than silently accepted.
+  **Still true after v0.6**, which added the allow/deny half of the section and left these two alone for the same
+  reason.
 - [-] `pack` provenance signing — recorded provenance is not a signature and the docs say so in those words.
+
+## v0.6 — MCP policy controls and policy diff (from SKILLFORGE_WEEKLY_UPDATE_2026-08-10.md)
+
+Done in one pass on 2026-08-10.
+
+Source: `SKILLFORGE_WEEKLY_UPDATE_2026-08-10.md`, 2026-08-10. GitHub GA'ed centralised MCP server
+allow/deny policies for Enterprise Copilot clients on 6 August 2026. The policy model supports
+remote URL, local command, server name, allow/deny list, and fail-closed on parse failure.
+This makes `policy diff` the highest-value next item after v0.5.
+
+The external claim (GitHub GA date, supported policy approaches, affected clients) is secondhand and
+unverified here — useful for direction, not as justification until checked against primary sources.
+
+- [x] MCP allow/deny rules in `policy check --mcp <file>` — `SF8101` a server the policy does not permit, `SF8105`
+  a server permitted only by its display name, `SF8103` an entry in the `mcp` section that could not be interpreted,
+  `SF8104` a policy that governs servers without denying by default.
+  Measured on this machine's four real declarations before publishing: an **empty policy gives zero findings**, and
+  `default: deny` with no allow list gives exactly one `SF8101` per server. The first number is the one that makes
+  the command safe to add to a pipeline before the rules exist.
+  Deny is checked before allow; a `serverUrl` rule never matches a local command; URLs are canonicalised before
+  comparison. Matching ignores case throughout, which makes an allow slightly generous and a deny exact — a deny that
+  misses is the worse failure.
+  **An undeclared default applies no default.** `SF8104` fails the run and the explicit rules still run, but nothing
+  else is blocked. Guessing "deny" would bury the real problem — nobody wrote the decision down — under one invented
+  finding per server. Fail-closed in outcome, not in noise.
+- [x] `skillforge policy diff <before> <after>` — `SF8102` an allow rule that now covers everything an earlier one
+  did and more, `SF8106` a local command permitted that was not before, `SF8107` a remote endpoint permitted that was
+  not before, `SF8104` a default that stopped denying, `SF9010` a relaxed rule outside the `mcp` section.
+  An allow added and a deny removed are the same answer to the reviewer's question, so both appear under "newly
+  permitted" with the message saying which happened. A rule that only narrows an existing scope is not reported —
+  replacing `*.company.com` with `api.company.com` adds a rule and permits nothing.
+  Relaxations only, and exit 0 unless `--fail-on-weakening` is given. Same two-paths limitation as
+  `skillforge diff origin/main...HEAD`; `docs/ci.md`'s `git worktree` recipe is the workaround today.
+
+### Decisions taken in this phase
+
+- **`SF9010`, one code for every non-MCP relaxation**, rather than one per rule. Each finding names the rule and both
+  values, so nothing is lost; a code per rule would only add separate suppression, which nobody has asked for. The
+  MCP relaxations have their own codes because the review that asked for this command asked for those by number.
+- **A change is only coded when some command enforces the rule it changes.** `filesystem.write.allowed` path lists,
+  `requirePackageHash` and `allowedProtocolVersions` are all `SF9009` in `policy check`, so a change to them is shown
+  in the diff and carries no code. Warning about a widened guarantee that nothing checks is a warning about nothing.
+- **`SF9009` was narrowed rather than deleted.** It no longer claims the whole `mcp` section is unobservable; it names
+  the two rules that still are, and separately reports allow/deny rules that had no `--mcp` file to apply to.
+- **The code-set guard now checks blocks of one hundred, not bands.** The gap between `SF8009` and `SF8101` is
+  deliberate, and a test that read it as an accidental renumbering would have to be argued with on every release.
+- **`ReportRenderOptions.SubjectPlural`**, because "Skills: 3" over a list containing an MCP configuration and the
+  policy file is untrue. The same sentence as the `Title` fix, one line down.
 
 ## Out of scope for v0.1.0
 

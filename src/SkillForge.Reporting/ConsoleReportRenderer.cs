@@ -67,7 +67,7 @@ public sealed class ConsoleReportRenderer : IValidationReportRenderer
             _console.MarkupLine(Style(options.Title, "bold", options));
             _console.WriteLine();
             _console.MarkupLine($"Root:   {Escape(run.RootPath)}");
-            _console.MarkupLine($"Skills: {run.SkillCount}");
+            _console.MarkupLine($"{options.SubjectPlural}: {run.SkillCount}");
         }
 
         foreach (var report in run.Skills)
@@ -104,7 +104,8 @@ public sealed class ConsoleReportRenderer : IValidationReportRenderer
         _console.WriteLine();
         _console.MarkupLine(run.IsValid
             ? $"Result: {Style(run.Summary.Warnings > 0 ? "VALID WITH WARNINGS" : "VALID", run.Summary.Warnings > 0 ? "yellow" : "green", options)}"
-            : $"Result: {Style("INVALID", "red", options)} — {run.InvalidSkillCount} of {run.SkillCount} skills have errors");
+            : $"Result: {Style("INVALID", "red", options)} — {run.InvalidSkillCount} of {run.SkillCount} "
+                + $"{options.SubjectPlural.ToLowerInvariant()} have errors");
 
         _console.MarkupLine(
             $"Errors: {run.Summary.Errors}  "

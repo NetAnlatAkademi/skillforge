@@ -31,6 +31,14 @@ public sealed class YamlPolicyReader : IPolicyReader
     private const string ProvenanceSection = "provenance";
     private const string SkillsSection = "skills";
     private const string McpSection = "mcp";
+    private const string AllowField = "allow";
+    private const string DenyField = "deny";
+    private const string DefaultField = "default";
+    private const string ServerUrlField = "serverUrl";
+    private const string ServerCommandField = "serverCommand";
+    private const string ServerNameField = "serverName";
+    private const string CommandField = "command";
+    private const string ArgumentsField = "args";
     private const string SuppressField = "suppress";
     private const string AllowedField = "allowed";
     private const string AllowedDomainsField = "allowedDomains";
@@ -106,6 +114,7 @@ public sealed class YamlPolicyReader : IPolicyReader
         var filesystemWrite = Section(Section(permissions, FilesystemSection), WriteSection);
 
         var (suppressions, suppressionFindings) = ReadSuppressions(root, path);
+        var (mcp, mcpFindings) = ReadMcp(Section(rules, McpSection), path);
 
         var policy = new PolicyDocument(
             new PolicyPermissions(
@@ -119,13 +128,13 @@ public sealed class YamlPolicyReader : IPolicyReader
             new PolicySkills(
                 ReadBoolean(Section(rules, SkillsSection), RequireLicenseField),
                 ReadInteger(Section(rules, SkillsSection), MaxSkillFileLinesField)),
-            ReadMcp(Section(rules, McpSection)),
+            mcp,
             suppressions)
         {
             SchemaVersion = ReadInteger(root, SchemaVersionField) ?? 1,
         };
 
-        return OperationResult<PolicyDocument>.Success(policy, suppressionFindings);
+        return OperationResult<PolicyDocument>.Success(policy, [.. suppressionFindings, .. mcpFindings]);
     }
 
     /// <summary>
@@ -158,17 +167,165 @@ public sealed class YamlPolicyReader : IPolicyReader
             ? Values(sequence)
             : [];
 
-    private static PolicyMcp? ReadMcp(YamlMappingNode? mcp)
+    /// <summary>
+    /// Reads the <c>mcp</c> section.
+    /// </summary>
+    /// <remarks>
+    /// An entry that cannot be interpreted is dropped and reported as <c>SF8103</c> rather than guessed at. Both
+    /// halves matter: applying a rule nobody can read would enforce something nobody wrote, and dropping it quietly
+    /// would leave an allow list shorter — or a deny list weaker — than its author believes.
+    /// </remarks>
+    private static (PolicyMcp? Mcp, IReadOnlyList<Diagnostic> Findings) ReadMcp(YamlMappingNode? mcp, string path)
     {
         if (mcp is null)
         {
-            return null;
+            return (null, []);
         }
 
-        return new PolicyMcp(
+        var findings = new List<Diagnostic>();
+
+        var (allow, allowFindings) = ReadRules(mcp, AllowField, path);
+        var (deny, denyFindings) = ReadRules(mcp, DenyField, path);
+
+        findings.AddRange(allowFindings);
+        findings.AddRange(denyFindings);
+
+        var section = new PolicyMcp(
             ReadStrings(mcp, AllowedProtocolVersionsField),
-            ReadBoolean(mcp, DenyDeprecatedCapabilitiesField));
+            ReadBoolean(mcp, DenyDeprecatedCapabilitiesField),
+            ReadDefault(mcp, path, findings),
+            allow,
+            deny);
+
+        return (section, findings);
     }
+
+    /// <summary>
+    /// Reads <c>default</c>. A value that is neither <c>allow</c> nor <c>deny</c> is refused rather than mapped to
+    /// the nearest one: an unreadable default reads as no default, which is reported as <c>SF8104</c>.
+    /// </summary>
+    private static McpPolicyDefault ReadDefault(YamlMappingNode mcp, string path, List<Diagnostic> findings)
+    {
+        var value = ReadScalar(mcp, DefaultField);
+        if (value is not { Length: > 0 })
+        {
+            return McpPolicyDefault.NotDeclared;
+        }
+
+        if (string.Equals(value, "deny", StringComparison.OrdinalIgnoreCase))
+        {
+            return McpPolicyDefault.Deny;
+        }
+
+        if (string.Equals(value, "allow", StringComparison.OrdinalIgnoreCase))
+        {
+            return McpPolicyDefault.Allow;
+        }
+
+        findings.Add(NotInterpretable(
+            path,
+            Line(mcp),
+            $"mcp.default is '{value}', which is neither 'allow' nor 'deny'"));
+
+        return McpPolicyDefault.NotDeclared;
+    }
+
+    /// <summary>Reads one rule list, keeping the order the file wrote.</summary>
+    private static (IReadOnlyList<McpPolicyRule> Rules, IReadOnlyList<Diagnostic> Findings) ReadRules(
+        YamlMappingNode mcp,
+        string field,
+        string path)
+    {
+        if (!mcp.Children.TryGetValue(new YamlScalarNode(field), out var node))
+        {
+            return ([], []);
+        }
+
+        if (node is not YamlSequenceNode entries)
+        {
+            return ([], [NotInterpretable(path, Line(node), $"mcp.{field} is not a list of rules")]);
+        }
+
+        var rules = new List<McpPolicyRule>();
+        var findings = new List<Diagnostic>();
+
+        foreach (var entry in entries)
+        {
+            if (ReadRule(entry, out var rule, out var reason))
+            {
+                rules.Add(rule!);
+                continue;
+            }
+
+            findings.Add(NotInterpretable(path, Line(entry), $"an entry under mcp.{field} {reason}"));
+        }
+
+        return (rules, findings);
+    }
+
+    /// <summary>
+    /// Reads one rule. <c>serverCommand</c> is accepted both as a bare command and as a mapping with arguments,
+    /// because both are how people write it and rejecting the short form would be a parser being right at a user's
+    /// expense.
+    /// </summary>
+    private static bool ReadRule(YamlNode entry, out McpPolicyRule? rule, out string reason)
+    {
+        rule = null;
+        reason = string.Empty;
+
+        if (entry is not YamlMappingNode mapping)
+        {
+            reason = "is not a mapping; write 'serverUrl:', 'serverCommand:' or 'serverName:'";
+            return false;
+        }
+
+        if (ReadScalar(mapping, ServerUrlField) is { Length: > 0 } url)
+        {
+            rule = McpPolicyRule.Url(url);
+            return true;
+        }
+
+        if (ReadScalar(mapping, ServerNameField) is { Length: > 0 } name)
+        {
+            rule = McpPolicyRule.Name(name);
+            return true;
+        }
+
+        if (!mapping.Children.TryGetValue(new YamlScalarNode(ServerCommandField), out var command))
+        {
+            reason = "names none of 'serverUrl', 'serverCommand' or 'serverName'";
+            return false;
+        }
+
+        switch (command)
+        {
+            case YamlScalarNode { Value: { Length: > 0 } single }:
+                rule = McpPolicyRule.Command(single.Trim());
+                return true;
+
+            case YamlMappingNode details when ReadScalar(details, CommandField) is { Length: > 0 } executable:
+                rule = new McpPolicyRule(
+                    McpPolicyRuleKind.ServerCommand,
+                    executable,
+                    ReadStrings(details, ArgumentsField));
+
+                return true;
+
+            default:
+                reason = "has a 'serverCommand' with no command in it";
+                return false;
+        }
+    }
+
+    private static Diagnostic NotInterpretable(string path, int? line, string reason) =>
+        Diagnostic.Error(
+            DiagnosticCodes.McpPolicyNotParsable,
+            $"The MCP policy was not fully applied: {reason}.",
+            path,
+            line,
+            suggestion: "Fix the entry. It was skipped, so it is protecting nothing as it stands.");
+
+    private static int? Line(YamlNode node) => node.Start.Line > 0 ? (int)node.Start.Line : null;
 
     /// <summary>
     /// Reads the suppression list. An entry with no reason is dropped and reported: applying it would let a policy

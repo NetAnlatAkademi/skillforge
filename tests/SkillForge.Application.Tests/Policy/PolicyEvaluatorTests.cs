@@ -253,7 +253,7 @@ public sealed class PolicyEvaluatorTests
         var notEvaluated = PolicyEvaluator.DescribeUnevaluatedRules(Policy(
             permissions: new PolicyPermissions(null, true, ["./reports/**"], null),
             provenance: new PolicyProvenance(false, true),
-            mcp: new PolicyMcp(["2026-07-28"], true)));
+            mcp: new PolicyMcp(["2026-07-28"], true, McpPolicyDefault.NotDeclared, [], [])));
 
         notEvaluated.Should().HaveCount(3);
         notEvaluated.Should().AllSatisfy(finding =>
@@ -261,6 +261,35 @@ public sealed class PolicyEvaluatorTests
             finding.Code.Should().Be(DiagnosticCodes.PolicyRuleNotEvaluated);
             finding.Severity.Should().Be(DiagnosticSeverity.Info);
         });
+    }
+
+    [Fact]
+    public void McpAllowAndDenyRulesReportThemselvesUncheckedWhenNoConfigurationWasNamed()
+    {
+        var policy = Policy(mcp: new PolicyMcp(
+            [],
+            false,
+            McpPolicyDefault.Deny,
+            [McpPolicyRule.Url("https://mcp.example.com/*")],
+            []));
+
+        var notEvaluated = PolicyEvaluator.DescribeUnevaluatedRules(policy, mcpConfigurationsRead: false);
+
+        notEvaluated.Should().ContainSingle()
+            .Which.Message.Should().Contain("--mcp");
+    }
+
+    [Fact]
+    public void McpAllowAndDenyRulesSayNothingOnceAConfigurationHasBeenRead()
+    {
+        var policy = Policy(mcp: new PolicyMcp(
+            [],
+            false,
+            McpPolicyDefault.Deny,
+            [McpPolicyRule.Url("https://mcp.example.com/*")],
+            []));
+
+        PolicyEvaluator.DescribeUnevaluatedRules(policy, mcpConfigurationsRead: true).Should().BeEmpty();
     }
 
     [Fact]

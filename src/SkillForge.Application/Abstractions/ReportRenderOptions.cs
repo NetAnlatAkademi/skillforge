@@ -15,4 +15,12 @@ public sealed record ReportRenderOptions(bool Quiet = false, bool Verbose = fals
     /// about what was checked.
     /// </remarks>
     public string Title { get; init; } = "SkillForge Validate";
+
+    /// <summary>What the entries in a batch report should be called.</summary>
+    /// <remarks>
+    /// Same reason as <see cref="Title"/>, one level down. A <c>policy check</c> run holds the policy file and any
+    /// MCP configurations beside the skills, and counting an MCP configuration as a skill states something untrue
+    /// about what was read. Commands that really do report on skills leave this alone.
+    /// </remarks>
+    public string SubjectPlural { get; init; } = "Skills";
 }

@@ -8,6 +8,82 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
+## [26.222.1] — 2026-08-10
+
+### Added — MCP allow/deny policy and `skillforge policy diff`
+
+Prompted by GitHub taking centralised MCP allow/deny policies for Enterprise Copilot clients to general availability
+on 6 August 2026. That claim is secondhand and unverified here; it moved the order of the roadmap, not the shape of
+the rules. Recorded in `SKILLFORGE_ROADMAP.md §32`.
+
+**A policy can now decide which MCP servers may be connected to**, and `policy check --mcp <file>` applies it to a
+configuration a pull request changes. `SF8101` a server the policy does not permit, `SF8105` a server permitted only
+by its display name, `SF8103` an entry in the `mcp` section that could not be interpreted, `SF8104` a policy that
+governs servers without denying by default.
+
+`SF8101` onwards rather than more `SF80xx`: `SF8001`–`SF8009` describe what a **declaration says** and are
+informational by design, while these report a **decision an organisation wrote down** being broken. Both are MCP, so
+both are `SF8xxx`; the numeric gap is what lets a reader tell a fact from a verdict in one report.
+
+Four things are load-bearing, and three of them are about not overreaching:
+
+- **Deny is checked before allow**, so a rule written to block something cannot be undone by a broader allow beside it.
+- **A rule only matches the transport it is about.** A `serverUrl` rule never matches a local command, so a policy
+  cannot permit a process launch by naming a web address. URLs are canonicalised — scheme and host lower-cased, a
+  default port and a trailing slash dropped — because otherwise a deny is evaded by whoever writes the configuration.
+- **An undeclared default applies no default.** `SF8104` fails the run and the explicit rules are still checked, but
+  nothing else is blocked. Guessing "deny" would be fail-closed in the letter and useless in practice: a deny-only
+  policy would produce one finding per server on the machine, burying the actual problem — that nobody wrote the
+  decision down — under findings the tool invented. Fail-closed in outcome, not in noise.
+- **A named configuration that could not be read fails the run.** The reader reports it as a warning, because an
+  inventory with a gap is still worth having; a policy gate is the one caller for which that is not true.
+
+Measured on this machine's real MCP configurations before publishing: an **empty policy produces zero findings**, and
+`default: deny` with no allow list produces exactly one `SF8101` per declared server. The first number is the one that
+matters — a policy that has decided nothing about MCP is silent, so the command is safe in a pipeline before the rules
+exist.
+
+**`skillforge policy diff <before> <after>`** compares two policy files by what they decide. `SF8102` an allow rule
+that now covers everything an earlier one did and more, `SF8106` a local command permitted that was not before,
+`SF8107` a remote endpoint permitted that was not before, `SF8104` a default that stopped denying, and `SF9010` for a
+relaxed rule outside the `mcp` section.
+
+Two edits permit something new and read very differently in a patch — an entry added to `allow`, and an entry removed
+from `deny` — so both appear under one heading, each saying which happened. A rule that merely narrows an existing
+scope is **not** reported: replacing `*.company.com` with `api.company.com` adds a rule and permits nothing.
+
+**Relaxations only.** A policy that got stricter is printed and warned about nowhere, and the command exits 0 by
+default; `--fail-on-weakening` is how a pipeline turns it into a gate. Whether a widened policy is acceptable is the
+organisation's decision.
+
+**A change is only coded when some command enforces the rule it changes.** `filesystem.write.allowed` path lists,
+`requirePackageHash` and `allowedProtocolVersions` are all `SF9009` in `policy check` — unobservable — so a change to
+them is shown in the diff and carries no code. Warning about a widened guarantee that nothing checks would be a
+warning about nothing.
+
+### Changed
+
+- `SF9009` no longer reports the whole `mcp` section as unobservable. It now names the two rules that still are —
+  `allowedProtocolVersions` and `denyDeprecatedCapabilities`, both properties of a running server — and, separately,
+  allow and deny rules that had no `--mcp` file to be applied to.
+- `ReportRenderOptions` carries a `SubjectPlural`. A `policy check` run holds the policy file and any MCP
+  configurations beside the skills, and "Skills: 3" over a list containing an MCP configuration states something
+  untrue about what was read. Same reasoning as `Title`, one line down.
+- The diagnostic-code test guards contiguity within a **block of one hundred** rather than a whole band, so a band
+  may hold more than one block. The gap between `SF8009` and `SF8101` is the deliberate part.
+
+### Fixed
+
+- Line continuations in `docs/ci.md` had been collapsed into runs of spaces, so two example commands ran together on
+  one line.
+
+### Not done, deliberately
+
+- `policy diff origin/main...HEAD` still takes two paths, exactly like `skillforge diff`. `docs/ci.md` documents the
+  `git worktree` recipe that does the same job today.
+- `allowedProtocolVersions` and `denyDeprecatedCapabilities` are still not enforced. They describe a running server,
+  and `policy check` reads files.
+
 ## [26.215.1] — 2026-08-03
 
 ### Added — `policy check`, provenance, `diff --format sarif`, and three renamed entry points

@@ -7,12 +7,17 @@ namespace SkillForge.Cli.Commands;
 /// </summary>
 /// <param name="Path">Skill, or directory of skills, to judge.</param>
 /// <param name="PolicyPath">The policy file to judge them against.</param>
+/// <param name="McpPaths">
+/// MCP configuration files to judge against the policy's <c>mcp</c> allow and deny rules. Empty when the caller
+/// named none, which is why those rules then report themselves as <c>SF9009</c>: they had nothing to apply to.
+/// </param>
 /// <param name="Format">Console, JSON or SARIF.</param>
 /// <param name="OutputPath">File to write to, or <see langword="null"/> for stdout.</param>
 /// <param name="RenderOptions">How to present console output.</param>
 internal sealed record PolicyCheckRequest(
     string Path,
     string PolicyPath,
+    IReadOnlyList<string> McpPaths,
     string Format,
     string? OutputPath,
     ReportRenderOptions RenderOptions);

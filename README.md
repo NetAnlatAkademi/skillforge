@@ -10,9 +10,9 @@
 A local, open source CLI for AI agent skills. SkillForge creates, validates, inspects and packages
 `SKILL.md`-based skills, and reports findings as human-readable console output, JSON or SARIF.
 
-> Status: **released as `26.215.1`** — v0.2 and v0.3 complete; v0.4's migration inventory and MCP inspection in,
-> plus change control, provenance and policy-as-code.
-> All seven commands work end to end. CI builds and tests on Linux and Windows, and runs the CLI over the sample
+> Status: **released as `26.222.1`** — v0.2 and v0.3 complete; v0.4's migration inventory and MCP inspection in,
+> plus change control, provenance, policy-as-code, and MCP allow/deny policy with `policy diff`.
+> Every command works end to end. CI builds and tests on Linux and Windows, and runs the CLI over the sample
 > skills.
 
 ## Try it
@@ -60,7 +60,8 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 | `skillforge diff <before> <after>` | Compare two versions by what they can do, not which bytes changed |
 | `skillforge eval <path>` | Check a skill against the expectations declared under `evals/`, optionally by asking a model |
 | `skillforge pack <path>` | Produce a deterministic `.skill.zip` with a SHA-256 hash and manifest |
-| `skillforge policy check <path>` | Judge skills against `.skillforge/policy.yaml` — the one command that judges rather than describes |
+| `skillforge policy check <path>` | Judge skills, and the MCP servers a configuration declares, against `.skillforge/policy.yaml` — the one command that judges rather than describes |
+| `skillforge policy diff <before> <after>` | Compare two policy files and report what the later one permits that the earlier did not |
 | `skillforge mcp inspect\|validate\|diff <file>` | Inspect, gate or compare an MCP configuration file |
 | `skillforge inventory` | Report the agent tooling installed here: skills, MCP servers and instruction files, per provider |
 | `skillforge migrate inspect` | The same inventory, under the migration group |
@@ -94,6 +95,27 @@ No rule has a default that forbids anything, so an empty policy over 230 real sk
 the command cannot start failing a build over a decision nobody made. A policy that cannot be read **fails** the run
 and checks nothing, and a rule this command cannot observe says so rather than passing quietly. A suppression must
 carry a reason.
+
+An `mcp` section decides which servers may be connected to, and `--mcp <file>` applies it to a configuration:
+
+```yaml
+rules:
+  mcp:
+    default: deny
+    allow:
+      - serverUrl: "https://mcp.company.com/*"
+    deny:
+      - serverUrl: "http://*"
+```
+
+Deny is checked before allow, URLs are canonicalised before comparison, and a server permitted only by its display
+name is reported — the name is chosen by the file under review. `default: deny` must be explicit; without it the run
+fails with `SF8104` and **no** default is applied, because guessing one would bury the real problem under findings the
+tool invented.
+
+`skillforge policy diff` then answers the question a pull request asks about the policy itself: what does the later
+version permit that the earlier one did not? An allow added and a deny removed are the same answer, and both are
+reported as one.
 
 ### Checking a skill against an agent provider
 
@@ -189,7 +211,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: NetAnlatAkademi/skillforge@v26.215.1
+      - uses: NetAnlatAkademi/skillforge@v26.222.1
         with:
           path: ./skills
           suppress: SF1009,SF1010

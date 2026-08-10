@@ -1,4 +1,5 @@
 using SkillForge.Domain.Diagnostics;
+using SkillForge.Domain.Policy;
 using SkillForge.Infrastructure.Yaml;
 
 namespace SkillForge.Infrastructure.Tests.Yaml;
@@ -182,6 +183,78 @@ public sealed class YamlPolicyReaderTests : IDisposable
         var policy = (await _reader.ReadAsync(path)).Value!;
 
         policy.Suppresses("SF9006", "anything-at-all").Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ReadsTheMcpAllowAndDenyRules()
+    {
+        var path = Write("""
+            rules:
+              mcp:
+                default: deny
+
+                allow:
+                  - serverUrl: "https://mcp.company.com/*"
+                  - serverCommand:
+                      command: npx
+                      args:
+                        - "@company/internal-mcp"
+                  - serverCommand: pwsh
+                  - serverName: "internal-notes"
+
+                deny:
+                  - serverUrl: "http://*"
+            """);
+
+        var result = await _reader.ReadAsync(path);
+        var mcp = result.Value!.Mcp!;
+
+        result.Diagnostics.Should().BeEmpty();
+        mcp.Default.Should().Be(McpPolicyDefault.Deny);
+        mcp.Deny.Should().ContainSingle().Which.Should().Be(McpPolicyRule.Url("http://*"));
+        mcp.Allow.Should().Equal(
+            McpPolicyRule.Url("https://mcp.company.com/*"),
+            McpPolicyRule.Command("npx", "@company/internal-mcp"),
+            McpPolicyRule.Command("pwsh"),
+            McpPolicyRule.Name("internal-notes"));
+    }
+
+    [Fact]
+    public async Task AnAbsentMcpSectionIsSilenceRatherThanAnEmptyOne()
+    {
+        var policy = (await _reader.ReadAsync(Write("rules:\n  skills:\n    requireLicense: true\n"))).Value!;
+
+        policy.Mcp.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AnUndeclaredDefaultIsNotResolvedToEither()
+    {
+        var path = Write("rules:\n  mcp:\n    allow:\n      - serverName: anything\n");
+
+        var mcp = (await _reader.ReadAsync(path)).Value!.Mcp!;
+
+        mcp.Default.Should().Be(McpPolicyDefault.NotDeclared);
+        mcp.GovernsServers.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A rule nobody can read must not be applied — that would enforce something nobody wrote — and must not be
+    /// dropped quietly, which would leave a deny list weaker than its author believes.
+    /// </summary>
+    [Theory]
+    [InlineData("rules:\n  mcp:\n    default: maybe\n    allow:\n      - serverName: x\n")]
+    [InlineData("rules:\n  mcp:\n    allow:\n      - somethingElse: x\n")]
+    [InlineData("rules:\n  mcp:\n    allow:\n      - just-a-string\n")]
+    [InlineData("rules:\n  mcp:\n    allow:\n      - serverCommand:\n          args:\n            - x\n")]
+    [InlineData("rules:\n  mcp:\n    deny: not-a-list\n")]
+    public async Task AnEntryThatCannotBeInterpretedIsSkippedAndReported(string content)
+    {
+        var result = await _reader.ReadAsync(Write(content));
+
+        result.IsSuccess.Should().BeTrue("the rest of the policy is still worth applying");
+        result.Diagnostics.Should().ContainSingle()
+            .Which.Code.Should().Be(DiagnosticCodes.McpPolicyNotParsable);
     }
 
     [Fact]

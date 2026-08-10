@@ -1,5 +1,6 @@
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Inspection;
+using SkillForge.Application.Mcp;
 using SkillForge.Application.Policy;
 using SkillForge.Application.Provenance;
 using SkillForge.Cli.Commands;
@@ -9,6 +10,7 @@ using SkillForge.Domain.Inspection;
 using SkillForge.Domain.Policy;
 using SkillForge.Domain.Provenance;
 using SkillForge.Domain.Skills;
+using SkillForge.Infrastructure.Migration;
 using SkillForge.Reporting;
 
 namespace SkillForge.Cli.Tests;
@@ -62,7 +64,10 @@ public sealed class PolicyCheckCommandRunnerTests
     [Fact]
     public async Task ARuleThatCouldNotBeCheckedIsReportedAgainstThePolicyFile()
     {
-        var policy = PolicyDocument.Empty with { Mcp = new PolicyMcp(["2026-07-28"], true) };
+        var policy = PolicyDocument.Empty with
+        {
+            Mcp = new PolicyMcp(["2026-07-28"], true, McpPolicyDefault.NotDeclared, [], []),
+        };
 
         var fileSystem = new FakeFileSystem();
         var runner = Build(policy, out _, fileSystem: fileSystem);
@@ -107,10 +112,94 @@ public sealed class PolicyCheckCommandRunnerTests
         fileSystem.ReadText("/out/policy.sarif").Should().Contain(DiagnosticCodes.PolicyLicenseMissing);
     }
 
+    [Fact]
+    public async Task AnMcpServerThePolicyDoesNotPermitFailsTheRun()
+    {
+        var policy = PolicyDocument.Empty with
+        {
+            Mcp = new PolicyMcp(
+                [],
+                false,
+                McpPolicyDefault.Deny,
+                [McpPolicyRule.Url("https://mcp.company.com/*")],
+                []),
+        };
+
+        var fileSystem = new FakeFileSystem();
+        fileSystem.WithFile(
+            "/repo/.mcp.json",
+            """{"mcpServers":{"outside":{"url":"https://mcp.elsewhere.com/sse"}}}""");
+
+        var runner = Build(policy, out _, fileSystem: fileSystem);
+
+        var exitCode = await runner.RunAsync(
+            Request(format: OutputFormat.Json, outputPath: "/out/policy.json", mcpPaths: ["/repo/.mcp.json"]),
+            CancellationToken.None);
+
+        exitCode.Should().Be(1);
+        fileSystem.ReadText("/out/policy.json").Should().Contain(DiagnosticCodes.McpServerBlockedByPolicy);
+    }
+
+    [Fact]
+    public async Task AnMcpServerThePolicyPermitsPassesAndTheUncheckedRuleIsNotReported()
+    {
+        var policy = PolicyDocument.Empty with
+        {
+            Mcp = new PolicyMcp(
+                [],
+                false,
+                McpPolicyDefault.Deny,
+                [McpPolicyRule.Url("https://mcp.company.com/*")],
+                []),
+        };
+
+        var fileSystem = new FakeFileSystem();
+        fileSystem.WithFile(
+            "/repo/.mcp.json",
+            """{"mcpServers":{"inside":{"url":"https://mcp.company.com/github"}}}""");
+
+        var runner = Build(policy, out _, fileSystem: fileSystem);
+
+        var exitCode = await runner.RunAsync(
+            Request(format: OutputFormat.Json, outputPath: "/out/policy.json", mcpPaths: ["/repo/.mcp.json"]),
+            CancellationToken.None);
+
+        exitCode.Should().Be(0);
+        fileSystem.ReadText("/out/policy.json").Should().NotContain(DiagnosticCodes.PolicyRuleNotEvaluated);
+    }
+
+    /// <summary>
+    /// The case a policy gate must never get wrong: a configuration that could not be read is not a configuration
+    /// that declares nothing.
+    /// </summary>
+    [Fact]
+    public async Task AnMcpConfigurationThatCouldNotBeReadFailsTheRun()
+    {
+        var policy = PolicyDocument.Empty with
+        {
+            Mcp = new PolicyMcp([], false, McpPolicyDefault.Deny, [], []),
+        };
+
+        var runner = Build(policy, out _);
+
+        var exitCode = await runner.RunAsync(
+            Request(mcpPaths: ["/repo/missing.json"]),
+            CancellationToken.None);
+
+        exitCode.Should().Be(1);
+    }
+
     private static PolicyCheckRequest Request(
         string format = OutputFormat.Console,
-        string? outputPath = null) =>
-        new("/skills/demo", ".skillforge/policy.yaml", format, outputPath, new ReportRenderOptions(Quiet: true));
+        string? outputPath = null,
+        IReadOnlyList<string>? mcpPaths = null) =>
+        new(
+            "/skills/demo",
+            ".skillforge/policy.yaml",
+            mcpPaths ?? [],
+            format,
+            outputPath,
+            new ReportRenderOptions(Quiet: true));
 
     private static PolicyCheckCommandRunner Build(
         PolicyDocument? policy,
@@ -129,6 +218,11 @@ public sealed class PolicyCheckCommandRunnerTests
             new StubInspector(),
             new StubDiscovery(),
             new StubProvenanceReader(),
+            new McpFileInspector(
+                [new JsonMcpConfigurationReader(files)],
+                new McpDeclarationInspector(),
+                new McpProber([]),
+                files),
             files,
             renderer,
             new ReportOutput(files, renderer, [new JsonReportSerializer(), new SarifReportSerializer()]));

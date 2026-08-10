@@ -102,7 +102,8 @@ that adds it rather than buried in a comment:
 ```yaml
       - name: Diff the skill's behaviour surface
         run: |
-          skillforge diff ../base/skills/my-skill ./skills/my-skill             --format sarif --output artifacts/diff.sarif
+          skillforge diff ../base/skills/my-skill ./skills/my-skill \
+            --format sarif --output artifacts/diff.sarif
 
       - name: Upload the diff
         if: always()
@@ -123,7 +124,9 @@ later revision introduced. A changed description or a new reference file stays i
 ```yaml
       - name: Check policies
         run: |
-          skillforge policy check ./skills             --policy .skillforge/policy.yaml             --format sarif --output artifacts/policy.sarif
+          skillforge policy check ./skills \
+            --policy .skillforge/policy.yaml \
+            --format sarif --output artifacts/policy.sarif
 
       - name: Upload policy violations
         if: always()
@@ -137,6 +140,49 @@ Exits 1 on a violation, on a skill that will not load, and on a policy file that
 matters in CI, because a run that checked nothing must not report success. An empty policy produces no findings, so
 the step is safe to add before the rules are written. See
 [cli-reference.md](cli-reference.md#skillforge-policy-check).
+
+Add `--mcp` to judge the repository's MCP configuration against the policy's allow and deny rules in the
+same step:
+
+```yaml
+      - name: Check policies
+        run: |
+          skillforge policy check ./skills \
+            --policy .skillforge/policy.yaml \
+            --mcp .mcp.json \
+            --format sarif --output artifacts/policy.sarif
+```
+
+A server the policy does not permit is `SF8101` and fails the step. `default: deny` must be written down: without
+it `SF8104` fails the run and no default is applied, so the report says the decision is missing rather than
+inventing one finding per server.
+
+## Reviewing a change to the policy itself
+
+A policy decides whether other code ships, and it arrives in pull requests like anything else — where turning
+`api.company.com` into `*.company.com` is a one-character diff. This reports the change of scope:
+
+```yaml
+      - name: Check out the base for comparison
+        run: git worktree add ../base origin/${{ github.base_ref }}
+
+      - name: Diff the policy
+        run: |
+          skillforge policy diff \
+            ../base/.skillforge/policy.yaml ./.skillforge/policy.yaml \
+            --format sarif --output artifacts/policy-diff.sarif
+
+      - name: Upload what the policy now permits
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: artifacts/policy-diff.sarif
+          category: skillforge-policy-diff
+```
+
+It reports **relaxations only** and exits 0 by default; add `--fail-on-weakening` to block the merge. Whether a
+widened policy is acceptable is the organisation's decision, which is why making it visible and blocking it are
+separate steps.
 
 ## Checking an MCP configuration a pull request changes
 
