@@ -198,7 +198,37 @@ separate steps.
 server, and `--probe-mcp` — the only part that leaves the runner — is off unless asked for.
 
 Taking a git range directly (`diff origin/main...HEAD`) is not implemented; the worktree above is the supported
-way, and is what built-in support would do underneath.
+way, and is what built-in support would do underneath. The same applies to `provenance diff` and `update analyze`.
+
+## Reporting what a pull request changes about where things come from
+
+```yaml
+      - name: Check out the base branch beside the workspace
+        run: git worktree add ../base origin/${{ github.base_ref }}
+
+      - name: Report distribution drift
+        run: |
+          skillforge provenance diff ../base ./ \
+            --format sarif --output artifacts/provenance-diff.sarif
+
+      - name: Report what an updated plugin would add
+        run: skillforge update analyze ../base/plugins/deploy ./plugins/deploy
+
+      - name: Upload the drift
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: artifacts/provenance-diff.sarif
+          category: skillforge-provenance-diff
+```
+
+Both exit `0` by default and report; `--fail-on-drift` and `--fail-on-expansion` turn them into gates. Whether a
+changed publisher blocks a merge is the organisation's decision, which is why making it visible and blocking it are
+separate steps.
+
+`update analyze` is the one to gate first if only one is gated: a publisher change under an auto-updating plugin is
+`CRITICAL`, and it is the case where the review that would have caught it is precisely the review that does not
+happen.
 
 ## Consuming the JSON report
 
