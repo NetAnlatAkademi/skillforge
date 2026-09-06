@@ -129,6 +129,44 @@ public sealed class GitProvenanceReaderTests
         provenance.Path.Should().Be(".");
     }
 
+    [Theory]
+    [InlineData("https://x-access-token:ghs_secret@github.com/example/skills.git")]
+    [InlineData("https://ghp_secret@github.com/example/skills.git")]
+    [InlineData("https://someone:hunter2@github.com/example/skills.git")]
+    public async Task ACredentialInTheRemoteUrlNeverReachesTheReport(string remoteUrl)
+    {
+        // GitHub Actions' own checkout writes an authenticated remote, and so does anyone using a personal access
+        // token over HTTPS. 'git remote get-url' returns the token intact, and this value is printed by
+        // 'provenance', written into a package manifest by 'pack' and compared by 'provenance diff'.
+        var provenance = await Reader(new FakeProcessRunner
+        {
+            TopLevel = "/repo",
+            Commit = "abc123def4567890abc123def4567890abc123de",
+            RemoteUrl = remoteUrl,
+            Status = string.Empty,
+        }).ReadAsync("/repo/skills/demo", CancellationToken.None);
+
+        provenance.Repository.Should().Be("https://github.com/example/skills.git");
+        provenance.Repository.Should().NotContain("secret");
+        provenance.Repository.Should().NotContain("hunter2");
+    }
+
+    [Fact]
+    public async Task AnScpStyleRemoteIsLeftAlone()
+    {
+        // Not an absolute URI, and it carries no password by construction: it names an SSH user and the key lives
+        // elsewhere. Rewriting it would lose the remote without removing anything.
+        var provenance = await Reader(new FakeProcessRunner
+        {
+            TopLevel = "/repo",
+            Commit = "abc123def4567890abc123def4567890abc123de",
+            RemoteUrl = "git@github.com:example/skills.git",
+            Status = string.Empty,
+        }).ReadAsync("/repo/skills/demo", CancellationToken.None);
+
+        provenance.Repository.Should().Be("git@github.com:example/skills.git");
+    }
+
     private static GitProvenanceReader Reader(IProcessRunner runner) =>
         new(runner, new FakeTimeProvider(Now), "26.215.1");
 

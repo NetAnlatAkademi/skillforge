@@ -8,6 +8,127 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
+## [26.249.1] — 2026-09-06
+
+### Added — provenance, update drift, agent identity and MCP tool surface
+
+Prompted by four things that happened to the ecosystem in a fortnight: skills spreading across GitHub by copy and
+fork, plugin marketplaces gaining **auto-update**, MCP moving towards workload and delegated identity, and servers
+arriving with tool counts in the hundreds. The input, and what was deliberately answered differently, is recorded
+in `docs/inputs-2026-09-06-two-week-update.md`. The claims in it are secondhand and unverified here: they moved the
+order of the roadmap, not the shape of any rule.
+
+The through-line: a package hash answers *"is this the file I approved"*, and it cannot answer *"will the file I
+approved still be the one running tomorrow"*. Five commands now answer the second question.
+
+**`skillforge provenance`** reports where each skill and plugin under a directory came from: repository, commit,
+declared version, publisher, marketplace, update mode, and a SHA-256 fingerprint of its own files. It describes and
+exits `0`, like `inspect` and `inventory`.
+
+Every field is nullable and every unknown prints as `unknown`. **An upstream is reported only when a manifest
+declares one** — "this skill resembles the one in that popular repository" is a guess, and a guess in a provenance
+report is read as a finding. Each asset carries the evidence it was read from: the manifest path, the marketplace
+path, `git status --porcelain`.
+
+**`skillforge provenance diff`** reports drift, and only in one direction. `SF5401` a changed publisher, `SF5201` a
+changed marketplace, `SF5302` a pin that became a branch, `SF5301` an asset that started updating itself, `SF5501` a
+fingerprint that moved while the declared version stood still, `SF5101` an asset that arrived untraceable, `SF5102`
+a declared fork, `SF5103` files that differ from the revision they name.
+
+An asset that *gained* a publisher, a marketplace or a pin is shown and coded nowhere — the same asymmetry
+`policy diff` already uses, for the same reason: a command that warns about every edit teaches people to skip its
+output.
+
+**`skillforge update analyze`** is the code the auto-updating plugin made necessary. It reads what an update adds —
+skills, MCP servers, hooks, scripts, hosts, credential sources — and combines it with *how the update arrives*:
+
+| Update mode | What it adds | Risk |
+|---|---|---|
+| Pinned | nothing that runs, reaches or reads | Informational |
+| Pinned | a script, a host, an MCP server, a credential source | Medium |
+| Automatic or floating | a script, a host, an MCP server, a credential source | **High**, plus `SF5303` |
+| Any | a different publisher | **High** |
+| Automatic or floating | a different publisher | **Critical** |
+
+The same new script means different things depending on who chose to take it. A removal is never an expansion, and
+a new reference file is a change rather than growth.
+
+**`skillforge identity inspect` and `identity diff`** report whose authority an agent reaches each MCP server with:
+user OAuth, service account, workload identity, delegated identity, token exchange or API key, with delegation and
+credential lifetime alongside. `SF7101` a changed identity type, `SF7102` a credential that stopped expiring,
+`SF7201` a scope that was not asked for before, `SF7202` delegation turned on.
+
+**No credential value is ever read, stored or printed.** Every signal is the *name* of an environment variable or
+header, or something a server's own `401` stated — and the output says so every time, because inference from a name
+is exactly as strong as the name. `subject` is always `null`: a subject lives inside a token, and SkillForge does
+not read tokens.
+
+**`skillforge mcp surface`** counts what a server puts into every conversation before anything has decided the task
+needs it: tools, how many change things, govern access or reach a secret, and whether anything says the server
+narrows what it exposes as a task goes on. `SF7301` a surface at or above the configured threshold, `SF7302` a large
+surface that is also privileged, `SF7401` no progressive discovery detected.
+
+Thresholds are configurable under `mcp.surface` in the policy file and default to 50 and 100 — **reported as
+defaults**, because the right number depends on the model, the naming and the team, and nobody should mistake a
+starting point for a measurement. No model is used and no tool description is read: categories come from names,
+against lists that live in one file and can be argued with.
+
+`skillforge inventory <project>` gained a **Distribution** section — marketplaces, auto-updating, floating, pinned,
+unknown provenance — scoped to the project directory, because finding plugin manifests in a home directory means
+walking all of it and a report that takes a minute is a report nobody runs.
+
+### Fixed — a credential in a git remote URL could be printed
+
+Found by the security review of this change, and it predates it: `git remote get-url origin` returns an
+authenticated remote intact, and `https://x-access-token:<token>@github.com/...` is what GitHub Actions' own
+checkout writes. That value was stored and printed unchanged.
+
+Everything before the `@` is now stripped in `GitProvenanceReader`, which is the single place a remote URL enters
+SkillForge — so `provenance`, `provenance diff`, `update analyze` **and the `pack` manifest**, which had the same
+defect since `26.215.1`, are all covered by the one fix. The whole user-info component goes rather than only the
+part after a colon: a bare `https://ghp_xxx@github.com/...` carries the token in the user field with nothing beside
+it. An scp-style remote (`git@github.com:org/repo.git`) is left alone — it names an SSH user and carries no
+password.
+
+The same strip is applied to the issuer in `identity inspect`, which is built from a URL a remote server chose.
+
+A file larger than 10 MB is now fingerprinted by path and size rather than by contents: a fingerprint is computed
+over trees that came from somewhere else, and reading one whole is a decision about how much memory a stranger gets
+to allocate.
+
+### Decisions taken in this phase
+
+- **`SF5101` onwards rather than more `SF50xx`.** `SF5001` is a rule about a skill's own references; the new block
+  is about distribution. Same band, deliberate gap, the way `SF8101` was split from `SF8001`.
+- **Drift codes, not scan codes.** The deferral recorded in v0.5 stands: *"no source is declared"* fires on
+  approximately every skill in existence. What changed is that a publisher *changing* is an edit somebody made in a
+  pull request somebody is reviewing, and it fires once.
+- **`Unknown` is the default update mode.** An entry that says nothing is not pinned. Reporting the safest possible
+  mode for the least evidence is how a supply-chain report reassures somebody about a plugin nobody has looked at.
+- **A version tag counts as pinned**, though a tag can be moved. Republishing a tag is a supply-chain event in
+  itself, and calling every tagged install floating would bury the entries that genuinely are.
+- **`GitProvenanceReader` answers two interfaces from the same four git questions.** A scan over a tree asks the
+  repository-wide questions once and the per-asset one many times; asking all four per asset would multiply process
+  launches by the number of skills for two answers that cannot differ. `inventory` skips the per-asset question
+  entirely.
+- **Zero is not unknown.** A server that was not probed reports *why* instead of a tool count, and a stdio server
+  reports that SkillForge never launches a local server to inspect it. Printing `0` would say the surface is tiny
+  when nobody looked.
+- **`McpServerDeclaration` gained `HeaderNames`** — names only, values never read, under the rule `env` already
+  followed. An `Authorization` header is the strongest identity signal a declaration carries and the most dangerous
+  value to touch.
+- **Two paths, not a revision range.** `provenance diff` and `update analyze` take directories, like every other
+  comparison here. `docs/ci.md` carries the `git worktree` recipe.
+
+### Not done, and deliberately
+
+- **No marketplace, no registry, no generic evaluator.** The two-week review asked for none of them and the
+  roadmap forbids all three.
+- **`subject` and issuer without `--probe`.** Both come from a server's own challenge. Without a probe they stay
+  empty rather than being inferred from a URL.
+- **Progressive discovery is reported as *not detected*, never *not implemented*.** The mechanism is new, and a
+  server may narrow its surface in a way nothing here recognises yet.
+
 ## [26.222.1] — 2026-08-10
 
 ### Added — MCP allow/deny policy and `skillforge policy diff`

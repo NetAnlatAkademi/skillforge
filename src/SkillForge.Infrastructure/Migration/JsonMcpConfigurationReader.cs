@@ -119,7 +119,8 @@ public sealed class JsonMcpConfigurationReader : IMcpConfigurationReader
             command ?? url,
             Arguments(server.Value),
             EnvironmentVariableNames(server.Value),
-            path);
+            path,
+            NamesOf(server.Value, "headers"));
     }
 
     /// <summary>
@@ -150,9 +151,16 @@ public sealed class JsonMcpConfigurationReader : IMcpConfigurationReader
 
     /// <summary>Names only. See the remarks on this class.</summary>
     private static IReadOnlyList<string> EnvironmentVariableNames(JsonElement server) =>
-        server.TryGetProperty("env", out var env) && env.ValueKind is JsonValueKind.Object
-            ? [.. env.EnumerateObject()
-                .Select(variable => variable.Name)
+        NamesOf(server, "env");
+
+    /// <summary>
+    /// The property names of an object, ordered, with the values never read. Used for <c>env</c> and
+    /// <c>headers</c>, which are the two places a declaration holds a credential.
+    /// </summary>
+    private static IReadOnlyList<string> NamesOf(JsonElement server, string property) =>
+        server.TryGetProperty(property, out var value) && value.ValueKind is JsonValueKind.Object
+            ? [.. value.EnumerateObject()
+                .Select(entry => entry.Name)
                 .OrderBy(name => name, StringComparer.Ordinal)]
             : [];
 }

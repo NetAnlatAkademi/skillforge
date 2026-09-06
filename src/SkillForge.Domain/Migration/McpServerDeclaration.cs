@@ -22,6 +22,11 @@ namespace SkillForge.Domain.Migration;
 /// Names of the environment variables the declaration sets, ordered, values excluded.
 /// </param>
 /// <param name="SourcePath">The configuration file this was read from.</param>
+/// <param name="HeaderNames">
+/// Names of the HTTP headers the declaration sets, ordered, values excluded — under the same rule as
+/// <paramref name="EnvironmentVariableNames"/>, and for a stronger reason: an <c>Authorization</c> header holds
+/// the credential itself. The name is what says how the server is authorised against; the value is never read.
+/// </param>
 public sealed record McpServerDeclaration(
     string Name,
     string ProviderId,
@@ -29,4 +34,9 @@ public sealed record McpServerDeclaration(
     string? Command,
     IReadOnlyList<string> Arguments,
     IReadOnlyList<string> EnvironmentVariableNames,
-    string SourcePath);
+    string SourcePath,
+    IReadOnlyList<string>? HeaderNames = null)
+{
+    /// <summary>Gets the header names the declaration sets, or an empty list when it sets none.</summary>
+    public IReadOnlyList<string> HeaderNamesOrEmpty => HeaderNames ?? [];
+}

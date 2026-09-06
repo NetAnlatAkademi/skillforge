@@ -247,6 +247,82 @@ the same class as SF1009 and SF1010, which between them already make `--strict` 
 of that shape would make the default report worse without telling anyone anything they could act on. It waits for
 a reason to exist beyond being true.
 
+## Distribution and update drift
+
+| Code | Severity | Rule | Reported by |
+|---|---|---|---|
+| SF5101 | Warning | Nothing observed says where an asset came from | `provenance diff` |
+| SF5102 | Info | An asset declares an upstream it is not distributed from | `provenance diff` |
+| SF5103 | Warning | An asset's files differ from the revision it names | `provenance diff` |
+| SF5201 | Warning | The marketplace an asset is distributed through changed | `provenance diff` |
+| SF5301 | Warning | An asset that was not updating itself now does | `provenance diff`, `update analyze` |
+| SF5302 | Warning | An asset that named an immutable revision now names one that can move | `provenance diff` |
+| SF5303 | Error | An update that arrives without review added a capability | `update analyze` |
+| SF5401 | Error | The publisher changed between two revisions of the same asset | `provenance diff`, `update analyze` |
+| SF5501 | Error | The content fingerprint changed while the declared version did not | `provenance diff` |
+
+`SF5001` is a rule about a skill's own references and predates this block. `SF5101` onwards are about
+**distribution**: where an asset came from, who publishes it, and how it gets its next version. Both are `SF5xxx`;
+the numeric gap is what lets a reader tell the two apart in one report.
+
+### Why these are diff codes, not scan codes
+
+The deferral recorded above still stands: *"no source is declared"* fires on approximately every skill in
+existence, and a third rule of that shape would make the default report worse. `provenance` therefore reports and
+never judges — it exits `0` over a tree where nothing can be traced anywhere.
+
+What changed is that **drift** is a different question from **absence**. `company` becoming `unknown-publisher` is
+not a fact about the state of the world; it is an edit somebody made, in a pull request somebody is reviewing, and
+it fires exactly once. Every code in this block is about a transition, which is why they live in `provenance diff`
+and `update analyze` rather than in `validate` or `scan`.
+
+The asymmetry is deliberate everywhere it appears. An asset that *gained* a publisher, a marketplace or a pin is
+shown in the report and coded nowhere — a reviewer who tightened a distribution does not need a warning about it,
+and a command that warned about every edit teaches people to skip its output.
+
+### SF5303 is the code the auto-updating plugin made necessary
+
+Package hashes answer "is this the file I approved". They cannot answer "will the file I approved still be the one
+running tomorrow", and an enterprise marketplace with auto-update turned on means the answer is often no.
+
+`update analyze` reads both halves and only reports the combination:
+
+| Update mode | What the update adds | Risk |
+|---|---|---|
+| Pinned | nothing that runs, reaches or reads | Informational |
+| Pinned | a script, a host, an MCP server, a credential source | Medium |
+| Automatic or floating | a script, a host, an MCP server, a credential source | **High**, plus `SF5303` |
+| Any | a different publisher | **High** |
+| Automatic or floating | a different publisher | **Critical** |
+
+A new reference file is a change and not an expansion. So is a removal: an update that gives something up is shown
+and never coded, for the same reason a tightened policy is not a `policy diff` finding.
+
+### What a credential source is, exactly
+
+The name of an environment variable an MCP declaration reads, where the name contains one of `token`, `key`,
+`secret`, `password`, `credential`, `auth`, `session` or `cookie`. **The value is never read**: the configuration
+readers take the property names out of the `env` and `headers` objects and drop the values on the floor, so there
+is no filter on the way out to get wrong.
+
+That makes it a name-shaped heuristic, and it is labelled as one in the output. `DEPLOY_TOKEN` makes a declaration
+look like it carries a token; nothing here proves that it does.
+
+### Update mode, and why "unknown" is the default
+
+| What the marketplace entry says | Mode |
+|---|---|
+| `autoUpdate: true`, or `updateMode: automatic` | Automatic |
+| A commit SHA, or a version tag (`v1.4.2`, `2.0.0-beta.1`) | Pinned |
+| A branch, `latest`, `main`, `HEAD`, or a repository with no revision | Floating |
+| Nothing | **Unknown** |
+
+An entry that says nothing is `Unknown` rather than `Pinned`. Reporting the safest possible mode for the least
+evidence is how a supply-chain report ends up reassuring somebody about a plugin nobody has looked at.
+
+A version tag counts as pinned even though a tag can be moved. Republishing a tag is a supply-chain event in
+itself, and reporting every tagged install as floating would bury the entries that genuinely are.
+
 ## Version and evolution
 
 | Code | Rule | Status |
@@ -365,6 +441,99 @@ unactionable, and teaching people to skim past warnings.
 The honest cost is stated rather than buried: at 1000 the rule now fires on **nothing** in the corpus, so its value rests
 entirely on entry points that are genuinely unusual rather than merely long. A test pins 734 as passing, so any future
 tightening has to face the fact that it would start speaking about a real skill again.
+
+## Agent identity
+
+| Code | Severity | Rule | Reported by |
+|---|---|---|---|
+| SF7101 | Warning | The kind of identity an MCP server is reached with changed | `identity diff` |
+| SF7102 | Warning | A credential that does not expire replaced one that did | `identity diff` |
+| SF7201 | Warning | An identity asks for scopes it did not ask for before | `identity diff` |
+| SF7202 | Warning | An identity that acted for itself now acts on behalf of another party | `identity diff` |
+
+`SF7001`–`SF7003` are about agent providers and predate this block. `SF7101` onwards are about the identity an
+agent connects with, and `SF7301` onwards about the tool surface a server opens to it. Same band, three blocks; the
+gaps are what let a reader tell them apart.
+
+### The question these answer
+
+Not "is this server authorised" — **whose authority is the agent using**. A person's OAuth session is bounded by
+what that person may do and disappears when they leave. A workload identity is bounded by what the workload was
+granted, which is usually more, and it does not. Between two revisions of a configuration, that substitution is one
+line in a diff.
+
+### Inference from names, and nothing else
+
+**No credential value is ever read, stored or printed.** Every signal is the *name* of an environment variable or
+of a header, or something a server's own `401` stated. That is a real limit, and it is printed in the output rather
+than papered over.
+
+| Evidence | Identity |
+|---|---|
+| `STS_SUBJECT_TOKEN`, `ACTOR_TOKEN`, `*_TOKEN_EXCHANGE` | Token exchange, always delegated |
+| `AWS_WEB_IDENTITY_TOKEN_FILE`, `AZURE_FEDERATED_TOKEN_FILE`, `IDENTITY_ENDPOINT` | Workload identity |
+| `*SERVICE_ACCOUNT*`, `GOOGLE_APPLICATION_CREDENTIALS`, `*CLIENT_SECRET` | Service account, long-lived |
+| `*OAUTH*`, `*REFRESH_TOKEN`, `*ACCESS_TOKEN` | User OAuth |
+| `*API_KEY*`, `*_KEY`, `*TOKEN*`, `*SECRET*` | API key, long-lived |
+| A `Bearer` challenge and nothing else | User OAuth — the weakest signal, checked last |
+| Nothing | **Unknown** |
+
+Where several apply, the most specific machine identity wins. A declaration carrying both a federated token file
+and an API key is reported as a workload identity, because that is the one that decides what the agent can actually
+do; naming the API key would report the credential a reviewer least needs to hear about.
+
+`subject` is always `null`. A subject lives inside a token, and SkillForge does not read tokens. The field exists
+because a diff of subjects is what identity drift looks like, and it has to exist before anything can fill it
+honestly.
+
+Scopes and issuers come only from a probed server's `401`, so without `--probe` they are empty rather than assumed.
+
+## MCP tool surface
+
+| Code | Severity | Rule | Reported by |
+|---|---|---|---|
+| SF7301 | Warning | A server exposes at least as many tools as the configured threshold | `mcp surface --probe` |
+| SF7302 | Warning | A large surface includes tools that change, govern or reach a secret | `mcp surface --probe` |
+| SF7401 | Info | Nothing observed says the server narrows what it exposes as a task goes on | `mcp surface --probe` |
+
+Every tool a server exposes is in the model's context whether or not the task needs it, so a server with 147 tools
+is a decision about every conversation the agent has — and it is usually a decision nobody made, because the number
+arrives one tool at a time.
+
+### The thresholds are configurable, and the defaults say so
+
+```yaml
+# .skillforge/policy.yaml
+rules:
+  mcp:
+    surface:
+      warningToolCount: 50
+      highToolCount: 100
+```
+
+Without a policy the defaults above apply and the report labels them as defaults. They are a starting point, not a
+measurement: the right number depends on the model's context window, on how the tools are named and on what the
+team is doing. What is knowable from here is that the number matters and that somebody should pick it deliberately.
+
+### No model is used, and the categories are name-shaped
+
+Write, credential and admin are read from tool **names** against lists that live in `McpSurfaceAnalyzer` where they
+can be argued with. Asking a model whether a tool is dangerous would make the same configuration produce different
+reports on different days, which is not a check anybody can put in a pipeline.
+
+`SF7302` fires only when the surface is *also* at or above the threshold. A server with two privileged tools is
+most of what MCP is for; a server with sixty tools, nine of which delete things, is the case worth a sentence.
+
+### Zero is not the same as unknown
+
+A tool count comes from the server's own `tools/list`, so it exists only for a server that was probed. A server that
+was not probed carries the reason instead of a count, and a stdio server says why it will never have one:
+SkillForge does not launch a local server to inspect it. Printing `0` there would tell a reader the surface is tiny
+when nobody looked at it.
+
+`SF7401` is deliberately `Info` and deliberately gated on the same threshold. Progressive discovery is new, most
+servers do not implement it, and a mechanism nothing recognises is reported as *not detected* rather than as *not
+implemented*.
 
 ## MCP servers
 

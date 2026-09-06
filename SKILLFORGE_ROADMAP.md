@@ -1722,3 +1722,74 @@ skillforge policy diff
 - **ADR-001 aynen geçerli.** Bu girdi CLI + Action eksenini güçlendiriyor; web paneli kapsamında değil.
 - **Ölçülmüş gerçeklik hâlâ üstün.** Yeni kodlar yayınlanmadan önce gerçek input üzerinde ateşlenme
   oranı ölçülmelidir (bkz. §30.9).
+
+---
+
+## 33. Ekosistem Girdileri ve Revize Öncelik (2026-09-06)
+
+Kaynak: `docs/inputs-2026-09-06-two-week-update.md`. İçindeki dış iddialar ikincil kaynaktır ve burada
+doğrulanmamıştır: yol haritasının **sırasını** değiştirdi, kuralların şeklini değil. Yayınlanan her kural,
+SkillForge'un diskte gözleyebildiği şeye dayanır.
+
+### 33.1 Girdinin özeti
+
+Son iki haftada dört şey değişti: skill'ler GitHub'da kopyalama ve fork yoluyla yayıldı, plugin marketplace'leri
+**otomatik güncelleme** kazandı, MCP workload/delegated identity yönüne gitti ve tool sayısı yüzleri bulan
+server'lar sıradanlaştı.
+
+Bunların ortak sonucu tek bir cümlede toplanır:
+
+> Package hash "onayladığım dosya bu mu" sorusunu yanıtlar; "onayladığım dosya yarın da çalışan dosya olacak mı"
+> sorusunu yanıtlayamaz.
+
+### 33.2 Uygulanan
+
+Sprint 14–18, `26.249.1` sürümünde:
+
+```bash
+skillforge provenance
+skillforge provenance diff <before> <after>
+skillforge update analyze <base> <target>
+skillforge identity inspect|diff <file>
+skillforge mcp surface <file>
+```
+
+Yeni diagnostic blokları: `SF51xx`–`SF55xx` (provenance ve dağıtım drift'i), `SF71xx`–`SF72xx` (agent kimliği),
+`SF73xx`–`SF74xx` (MCP tool yüzeyi). `SF5001` ile `SF5101` arasındaki boşluk bilinçlidir — biri skill'in kendi
+referansları hakkında bir kural, diğeri dağıtım hakkında bir blok.
+
+### 33.3 Bu fazın kararları
+
+- **Drift kodu, tarama kodu değil.** v0.5'teki erteleme geçerli: "kaynağı bilinmiyor" pratikte her skill'de
+  ateşlenir. Ama publisher'ın *değişmesi* birinin yaptığı bir edit'tir, bir pull request'te incelenir ve bir kez
+  ateşlenir. Blok bu yüzden `provenance diff` ve `update analyze` içinde yaşıyor.
+- **Varsayılan update mode `Unknown`.** Hiçbir şey söylemeyen bir kayıt pinned sayılmaz. En az kanıta en güvenli
+  modu atamak, kimsenin bakmadığı bir plugin hakkında güven veren rapor üretmenin yoludur.
+- **Version tag pinned sayılır** — tag taşınabilir olsa bile. Tag'in yeniden yayınlanması başlı başına bir
+  supply-chain olayıdır; her tag'li kurulumu floating raporlamak, gerçekten floating olanları gömerdi.
+- **Sıfır ile bilinmeyen aynı şey değildir.** Probe edilmemiş bir server tool sayısı yerine *nedenini* raporlar;
+  stdio server ise SkillForge'un yerel bir server'ı incelemek için asla başlatmadığını söyler.
+- **Kimlik çıkarımı yalnızca isimlerden yapılır.** Hiçbir credential değeri okunmaz, saklanmaz, yazılmaz — ve
+  çıktı bunu her seferinde söyler. Bir isimden yapılan çıkarım tam olarak o isim kadar güçlüdür.
+- **İki yol, revision range değil.** `provenance diff` ve `update analyze` de diğer tüm karşılaştırmalar gibi iki
+  dizin alır; `docs/ci.md`'deki `git worktree` tarifi bugün aynı işi görüyor.
+
+### 33.4 Bu girdinin değiştirmediği şeyler
+
+- **ADR-006 aynen geçerli.** Yeni kodların hiçbiri "güvenli/güvensiz" demez; ne gözlendiğini ve neyin değiştiğini
+  söyler.
+- **Marketplace, registry ve generic evaluator kapsam dışıdır.** Girdi de bunları açıkça yasaklıyor.
+- **Ölçülmüş gerçeklik hâlâ üstün.** Yeni bloklardan hiçbiri varsayılan raporu gürültüye boğmuyor: hepsi ya bir
+  diff'e ya da yapılandırılabilir bir eşiğe bağlı.
+
+### 33.5 Yapılmayanlar
+
+```text
+graph node türleri (Workflow, ApprovalBoundary, Harness, Automation)
+agent surface score
+harici evaluator adaptörleri
+uzak marketplace/repository indirip karşılaştırma
+```
+
+İlk üçü girdinin kendi öncelik sırasında da sonda; dördüncüsü ürün ilkesine aykırı — SkillForge hiçbir şey
+indirmez, karşılaştırmanın iki tarafı da diskte olmalıdır.

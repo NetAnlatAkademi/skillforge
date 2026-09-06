@@ -55,6 +55,20 @@ public sealed class CommandSurfaceTests
     [InlineData("eval ./samples/dotnet-api-review --model qwen3:8b --model-endpoint http://localhost:11434/v1")]
     [InlineData("eval . --model gpt-5 --model-endpoint https://api.openai.com/v1 --model-api-key-env OPENAI_API_KEY")]
     [InlineData("eval . --model m --model-endpoint http://e/v1 --max-model-requests 20")]
+    [InlineData("provenance")]
+    [InlineData("provenance ./skills")]
+    [InlineData("provenance . --format json --output artifacts/provenance.json")]
+    [InlineData("provenance diff ./before ./after")]
+    [InlineData("provenance diff ./before ./after --fail-on-drift --format sarif")]
+    [InlineData("update analyze ./plugin-v1 ./plugin-v2")]
+    [InlineData("update analyze ./plugin-v1 ./plugin-v2 --fail-on-expansion --format json")]
+    [InlineData("identity inspect ./mcp.json")]
+    [InlineData("identity inspect ./mcp.json --probe --format json")]
+    [InlineData("identity diff ./old/mcp.json ./new/mcp.json")]
+    [InlineData("identity diff ./old/mcp.json ./new/mcp.json --probe --fail-on-drift --format sarif")]
+    [InlineData("mcp surface ./mcp.json")]
+    [InlineData("mcp surface ./mcp.json --probe --policy .skillforge/policy.yaml")]
+    [InlineData("mcp surface ./mcp.json --probe --fail-on-threshold --format json")]
     public void AcceptsTheDocumentedInvocations(string commandLine)
     {
         var result = Root().Parse(commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries));
@@ -71,6 +85,12 @@ public sealed class CommandSurfaceTests
     [InlineData("scan ./samples --nonsense")]
     [InlineData("mcp validate ./mcp.json --format sarif")]
     [InlineData("migrate inspect --format sarif")]
+
+    // 'update' installs nothing and 'provenance' verifies nothing, so neither has a verb that suggests it does.
+    [InlineData("update apply")]
+    [InlineData("provenance verify ./skills")]
+    [InlineData("identity rotate ./mcp.json")]
+    [InlineData("provenance . --format sarif")]
 
     // A model named with nowhere to send it, or an endpoint with no model, would quietly probe nothing.
     [InlineData("eval . --model qwen3:8b")]

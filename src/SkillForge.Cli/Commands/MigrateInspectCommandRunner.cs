@@ -3,8 +3,10 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Migration;
+using SkillForge.Application.Provenance;
 using SkillForge.Domain.Mcp;
 using SkillForge.Domain.Migration;
+using SkillForge.Domain.Provenance;
 
 namespace SkillForge.Cli.Commands;
 
@@ -26,23 +28,28 @@ internal sealed class MigrateInspectCommandRunner
     private readonly IMigrationInspector _inspector;
     private readonly IUserEnvironment _userEnvironment;
     private readonly IFileSystem _fileSystem;
+    private readonly ProvenanceInspector _provenance;
 
     /// <summary>Initialises the runner.</summary>
     /// <param name="inspector">Runs the provider adapters.</param>
     /// <param name="userEnvironment">Supplies the home directory when the caller does not name one.</param>
     /// <param name="fileSystem">Writes machine-readable output when asked.</param>
+    /// <param name="provenance">Counts how the project's assets are distributed, when a project was named.</param>
     public MigrateInspectCommandRunner(
         IMigrationInspector inspector,
         IUserEnvironment userEnvironment,
-        IFileSystem fileSystem)
+        IFileSystem fileSystem,
+        ProvenanceInspector provenance)
     {
         ArgumentNullException.ThrowIfNull(inspector);
         ArgumentNullException.ThrowIfNull(userEnvironment);
         ArgumentNullException.ThrowIfNull(fileSystem);
+        ArgumentNullException.ThrowIfNull(provenance);
 
         _inspector = inspector;
         _userEnvironment = userEnvironment;
         _fileSystem = fileSystem;
+        _provenance = provenance;
     }
 
     /// <summary>Reads the installed agent tooling and prints the inventory.</summary>
@@ -64,9 +71,12 @@ internal sealed class MigrateInspectCommandRunner
                 cancellationToken)
             .ConfigureAwait(false);
 
+        var distribution = await ReadDistributionAsync(request.ProjectPath, cancellationToken)
+            .ConfigureAwait(false);
+
         var text = string.Equals(request.Format, OutputFormat.Json, StringComparison.OrdinalIgnoreCase)
-            ? ToJson(inspection)
-            : ToText(inspection);
+            ? ToJson(inspection, distribution)
+            : ToText(inspection, distribution);
 
         if (request.OutputPath is { Length: > 0 } outputPath)
         {
@@ -86,7 +96,31 @@ internal sealed class MigrateInspectCommandRunner
         return ExitCodes.Success;
     }
 
-    private static string ToText(MigrationInspection inspection)
+    /// <summary>
+    /// Counts how the project's assets are distributed, or <see langword="null"/> when no project was named.
+    /// </summary>
+    /// <remarks>
+    /// Scoped to the project on purpose. The counts come from plugin and marketplace files, and finding those in a
+    /// home directory would mean walking all of it — a report that takes a minute is a report nobody runs. The
+    /// output names the directory the numbers describe rather than implying they cover the machine.
+    /// </remarks>
+    private async Task<DistributionSummary?> ReadDistributionAsync(
+        string? projectPath,
+        CancellationToken cancellationToken)
+    {
+        if (projectPath is not { Length: > 0 } project || !_fileSystem.DirectoryExists(project))
+        {
+            return null;
+        }
+
+        var report = await _provenance
+            .InspectAsync(project, includeLocalModifications: false, cancellationToken)
+            .ConfigureAwait(false);
+
+        return report.Distribution;
+    }
+
+    private static string ToText(MigrationInspection inspection, DistributionSummary? distribution)
     {
         var builder = new StringBuilder();
 
@@ -100,6 +134,7 @@ internal sealed class MigrateInspectCommandRunner
         AppendMcpServers(builder, inspection);
         AppendInstructionFiles(builder, inspection);
         AppendMcpProbes(builder, inspection);
+        AppendDistribution(builder, inspection, distribution);
         AppendDiagnostics(builder, inspection);
 
         builder.AppendLine();
@@ -286,6 +321,33 @@ internal sealed class MigrateInspectCommandRunner
         }
     }
 
+    /// <summary>
+    /// Writes how the project's assets are distributed: through what, updating how, traceable or not.
+    /// </summary>
+    private static void AppendDistribution(
+        StringBuilder builder,
+        MigrationInspection inspection,
+        DistributionSummary? distribution)
+    {
+        builder.AppendLine();
+        builder.AppendLine("Distribution");
+        builder.AppendLine("------------");
+
+        if (distribution is null)
+        {
+            builder.AppendLine(
+                "  (not inspected: pass a project directory. The provenance command reports it asset by asset.)");
+            return;
+        }
+
+        builder.AppendLine($"  Scope                 {inspection.ProjectDirectory}");
+        builder.AppendLine($"  Marketplaces          {distribution.Marketplaces}");
+        builder.AppendLine($"  Auto-update enabled   {distribution.AutomaticUpdates}");
+        builder.AppendLine($"  Floating assets       {distribution.FloatingAssets}");
+        builder.AppendLine($"  Pinned assets         {distribution.PinnedAssets}");
+        builder.AppendLine($"  Unknown provenance    {distribution.UnknownProvenance}");
+    }
+
     private static string Join(IReadOnlyList<string> values) =>
         values.Count == 0 ? "(none reported)" : string.Join(", ", values);
 
@@ -324,7 +386,7 @@ internal sealed class MigrateInspectCommandRunner
         }
     }
 
-    private static string ToJson(MigrationInspection inspection)
+    private static string ToJson(MigrationInspection inspection, DistributionSummary? distribution)
     {
         var document = new JsonObject
         {
@@ -408,6 +470,20 @@ internal sealed class MigrateInspectCommandRunner
                     ["message"] = diagnostic.Message,
                     ["filePath"] = diagnostic.FilePath,
                 })]),
+
+            // Null rather than zeroes when no project was named: a count of nothing must not read as "nothing
+            // here updates itself".
+            ["distribution"] = distribution is null
+                ? null
+                : new JsonObject
+                {
+                    ["scope"] = inspection.ProjectDirectory,
+                    ["marketplaces"] = distribution.Marketplaces,
+                    ["automaticUpdates"] = distribution.AutomaticUpdates,
+                    ["floatingAssets"] = distribution.FloatingAssets,
+                    ["pinnedAssets"] = distribution.PinnedAssets,
+                    ["unknownProvenance"] = distribution.UnknownProvenance,
+                },
         };
 
         return document.ToJsonString(JsonOptions) + Environment.NewLine;

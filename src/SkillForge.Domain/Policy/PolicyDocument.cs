@@ -92,12 +92,17 @@ public sealed record PolicySkills(bool RequireLicense, int? MaxSkillFileLines);
 /// Servers an agent may not connect to, whatever else the policy says. Deny is checked first, so an entry here
 /// cannot be undone by a broader allow written below it.
 /// </param>
+/// <param name="Surface">
+/// How many tools the organisation accepts a server exposing, or <see langword="null"/> when it does not say —
+/// in which case <c>mcp surface</c> uses its documented defaults and reports them as defaults.
+/// </param>
 public sealed record PolicyMcp(
     IReadOnlyList<string> AllowedProtocolVersions,
     bool DenyDeprecatedCapabilities,
     McpPolicyDefault Default,
     IReadOnlyList<McpPolicyRule> Allow,
-    IReadOnlyList<McpPolicyRule> Deny)
+    IReadOnlyList<McpPolicyRule> Deny,
+    McpSurfaceThresholds? Surface = null)
 {
     /// <summary>
     /// Gets a value indicating whether the section decides anything about which servers may be connected to.

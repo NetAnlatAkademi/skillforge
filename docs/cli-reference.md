@@ -322,7 +322,7 @@ is, the CLI says so rather than doing it silently. Tooling directories (`bin`, `
     "workingTreeIsDirty": false,
     "generatedAt": "2026-08-03T07:03:28Z"
   },
-  "tool": { "name": "SkillForge", "version": "26.222.1" }
+  "tool": { "name": "SkillForge", "version": "26.249.1" }
 }
 ```
 
@@ -663,6 +663,199 @@ skillforge inventory . --probe-mcp --format json
 Every option and every guarantee is `migrate inspect`'s, documented below — including that environment variable
 values are never read.
 
+The report ends with a **Distribution** section: how many marketplaces the assets come through, how many update
+themselves, how many float, how many are pinned, and how many cannot be traced at all.
+
+```text
+Distribution
+------------
+  Scope                 /work/repo
+  Marketplaces          3
+  Auto-update enabled   2
+  Floating assets       6
+  Pinned assets         4
+  Unknown provenance    3
+```
+
+It is scoped to the **project directory**, and only appears when one was named. The counts come from plugin and
+marketplace files, and finding those in a home directory would mean walking all of it — a report that takes a
+minute is a report nobody runs. Without a project the section says it was not inspected rather than printing
+zeroes, and `provenance` reports the same thing asset by asset.
+
+## `skillforge provenance`
+
+Where each skill and plugin under a directory came from, and how it gets its next version.
+
+```bash
+skillforge provenance
+skillforge provenance ./skills
+skillforge provenance . --format json --output artifacts/provenance.json
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `path` | `.` | Directory to trace |
+| `--format`, `-f` | `console` | `console` or `json`. SARIF is not offered: a provenance report is not a set of findings |
+| `--output`, `-o` | stdout | Write to a file |
+
+```text
+  dotnet-api-review [Skill] skills/dotnet-api-review
+      Status:       VERIFIED SOURCE
+      Origin:       https://github.com/example/skills.git
+      Version:      1.2.0
+      Commit:       43ab2c1f9e0d4b8a7c6e5f4a3b2c1d0e9f8a7b6c
+      SHA-256:      a9f3...
+      Publisher:    unknown
+      Marketplace:  unknown
+      Update mode:  Unknown
+      Evidence:     skills/dotnet-api-review/SKILL.md, git status --porcelain
+```
+
+Every value was read from a plugin manifest, a marketplace file, the git checkout, or the bytes on disk, and the
+evidence line names which. **`unknown` means nothing said it — never a guess.** An upstream is reported only when a
+manifest declares one: "this skill looks like the one in that popular repository" is a guess, and a guess in a
+provenance report is read as a finding.
+
+It describes and always exits `0`, like `inspect` and `inventory`. Whether unknown provenance is acceptable is a
+policy decision, and `policy check --policy` with `provenance.requireCommitSha` is where that decision lives.
+
+Recorded provenance is **not a signature**. It says what the source claimed, not that the claim was verified.
+
+**A credential in the remote URL never reaches the report.** An authenticated HTTPS remote is ordinary — GitHub
+Actions' own checkout writes `https://x-access-token:<token>@github.com/...`, and a developer using a personal
+access token over HTTPS has `https://<token>@github.com/...`. `git remote get-url` returns the token intact, so
+everything before the `@` is stripped before the value is stored, printed, written into a `pack` manifest or
+compared by a diff. An scp-style remote (`git@github.com:org/repo.git`) is left alone: it names an SSH user and
+carries no password.
+
+A file larger than 10 MB is fingerprinted by its path and size rather than its contents. A fingerprint is computed
+over trees that came from somewhere else, and reading one whole is a decision about how much memory a stranger
+gets to allocate.
+
+### What it reads
+
+| Source | What it gives |
+|---|---|
+| `git rev-parse`, `remote get-url`, `status --porcelain` | Repository, commit, uncommitted file count |
+| `.claude-plugin/plugin.json` | Plugin name, version, publisher, repository |
+| `.claude-plugin/marketplace.json` | Marketplace name, owner, and the revision each plugin is listed at |
+| The asset's own files | A SHA-256 fingerprint that is stable across machines |
+
+A skill inside a plugin is listed in its own right, with its own fingerprint. A plugin's version can stay put while
+a skill inside it is edited, and that is exactly what a per-asset fingerprint exists to catch.
+
+## `skillforge provenance diff`
+
+What changed about where two trees' assets come from.
+
+```bash
+skillforge provenance diff ./before ./after
+skillforge provenance diff ./before ./after --fail-on-drift --format sarif -o artifacts/drift.sarif
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `before`, `after` | — | The two trees |
+| `--fail-on-drift` | off | Exit `1` when something drifted |
+| `--format`, `-f` | `console` | `console`, `json` or `sarif` |
+
+```text
+  company-deploy [Plugin] plugins/deploy
+      Publisher    company -> unknown-publisher
+      Marketplace  company-internal -> community
+      Update mode  Pinned -> Automatic
+
+Drift:
+  x SF5401 The publisher of 'company-deploy' changed from 'company' to 'unknown-publisher'.
+  ! SF5201 'company-deploy' is now distributed through 'community' rather than 'company-internal'.
+  ! SF5302 'company-deploy' no longer names an immutable revision: Pinned became Automatic.
+```
+
+Relaxations only, and in one direction: an asset that *gained* a publisher, a marketplace or a pin is shown and
+coded nowhere. The codes are in [validation-rules.md](validation-rules.md#distribution-and-update-drift).
+
+Like every other diff here it takes **two paths** rather than a revision range. Resolving `origin/main...HEAD` means
+materialising a tree, which is a worktree or a `git archive` and a set of failure modes of its own; [ci.md](ci.md)
+carries the `git worktree` recipe that does the same job today.
+
+## `skillforge update analyze`
+
+What one update does to what an asset can reach, and what that means given how the update arrives.
+
+```bash
+skillforge update analyze ./plugin-v1 ./plugin-v2
+skillforge update analyze ./plugin-v1 ./plugin-v2 --fail-on-expansion --format json
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `base`, `target` | — | The version the update starts from, and the one it arrives at |
+| `--fail-on-expansion` | off | Exit `1` when the update reaches further than what it replaces |
+| `--format`, `-f` | `console` | `console`, `json` or `sarif` |
+
+```text
+SkillForge Update Analysis
+
+Base:        ./plugin-v1
+Target:      ./plugin-v2
+Update mode: Automatic
+
+Changes:
+  + MCP server: deployment-prod
+  + host: prod.company.com
+  + credential source: DEPLOY_TOKEN
+
+Risk:   HIGH
+Reason: The update arrives without review (Automatic) and expands what the asset can reach.
+
+Findings:
+  x SF5303 This update arrives without review (Automatic) and adds 1 MCP server (deployment-prod); 1 host
+    (prod.company.com); 1 credential source (DEPLOY_TOKEN).
+```
+
+The combination is the point. A new shell script in a release somebody chose to install is ordinary; the same script
+arriving overnight in a plugin that updates itself never passed a review. The full risk matrix is in
+[validation-rules.md](validation-rules.md#sf5303-is-the-code-the-auto-updating-plugin-made-necessary).
+
+A credential source is the **name** of an environment variable that looks like one. The value is never read.
+
+## `skillforge identity`
+
+Whose authority the agent is using to reach each MCP server.
+
+```bash
+skillforge identity inspect ./.mcp.json
+skillforge identity inspect ./.mcp.json --probe --format json
+skillforge identity diff ./old/.mcp.json ./new/.mcp.json --fail-on-drift
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `file` / `before`, `after` | — | MCP configuration file(s) |
+| `--probe` | off | Ask each HTTP server about itself. The only way a scope or an issuer can be observed |
+| `--fail-on-drift` | off | `diff` only: exit `1` when an identity widened |
+| `--format`, `-f` | `console` | `inspect`: `console` or `json`. `diff` adds `sarif` |
+
+```text
+  deployment-prod
+      Identity:   Workload identity
+      Issuer:     unknown
+      Delegated:  yes
+      Credential: short-lived or unknown
+      Scopes:     (none observed)
+      Risk:       MEDIUM
+      Reason:     This identity acts on behalf of another party.
+      Evidence:   env AZURE_FEDERATED_TOKEN_FILE (name only), env DEPLOY_ON_BEHALF_OF (name only)
+```
+
+**No credential value is ever read, stored or printed.** Identity is inferred from the names of environment
+variables and headers, and from what a server's own `401` asked for — the table of signals is in
+[validation-rules.md](validation-rules.md#agent-identity). Inference from a name is exactly as strong as the name,
+and the output says so.
+
+`identity diff` reports widenings only: a new scope, a delegation turned on, a credential that stopped expiring, or
+a changed identity type. A dropped scope is shown and never coded.
+
 ## `skillforge mcp`
 
 The MCP checks, against a **file the caller names** rather than the files a provider owns. That is the difference
@@ -695,6 +888,59 @@ of a file the user named is how a parse error ends up describing the wrong probl
 
 Declarations are attributed to the provider `file`, not to a guess. Which agent wrote a file the caller named is not
 knowable from its contents.
+
+### `mcp surface`
+
+How many tools a server puts into an agent's context before it has done anything.
+
+```bash
+skillforge mcp surface ./.mcp.json --probe
+skillforge mcp surface ./.mcp.json --probe --policy .skillforge/policy.yaml --fail-on-threshold
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `file` | — | MCP configuration file |
+| `--probe` | off | Ask each HTTP server for its tool list. Without it there is nothing to count |
+| `--policy` | `.skillforge/policy.yaml` | Where `mcp.surface` thresholds are read from |
+| `--fail-on-threshold` | off | Exit `1` when a server is at or above the warning count |
+| `--format`, `-f` | `console` | `console` or `json` |
+
+```text
+SkillForge MCP Surface
+
+File: ./.mcp.json
+Thresholds: warning at 50, high at 100 (defaults — set them under 'mcp.surface' in the policy file)
+
+Servers (1):
+
+  enterprise-tools
+      Tools:      147
+      Exposed:    147 from the first response
+      Write:      38
+      Credential: 4
+      Admin:      9
+      Discovery:  not detected
+      Risk:       HIGH
+```
+
+Counts come from the server's own `tools/list`, so a server that was not probed reports **why** rather than `0`, and
+a stdio server reports that SkillForge never launches a local server to inspect it. Write, credential and admin are
+read from tool **names**; no model is used, and the rule lists are in `docs/validation-rules.md`.
+
+Thresholds come from the policy file when it sets them:
+
+```yaml
+rules:
+  mcp:
+    surface:
+      warningToolCount: 50
+      highToolCount: 100
+```
+
+A policy file that is missing is ordinary — the defaults apply and the report says they are defaults. A policy that
+is **there and cannot be parsed** fails the run, for the same reason `policy check` refuses to continue without its
+rules.
 
 ### `mcp diff`
 

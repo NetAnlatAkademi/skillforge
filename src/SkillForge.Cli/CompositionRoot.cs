@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Application.Abstractions;
+using SkillForge.Application.Identity;
 using SkillForge.Application.Inspection;
 using SkillForge.Application.Mcp;
 using SkillForge.Application.Migration;
@@ -10,12 +11,14 @@ using SkillForge.Application.Policy;
 using SkillForge.Application.Provenance;
 using SkillForge.Application.Providers;
 using SkillForge.Application.Skills;
+using SkillForge.Application.Updates;
 using SkillForge.Application.Validation;
 using SkillForge.Cli.Commands;
 using SkillForge.Infrastructure;
 using SkillForge.Infrastructure.Mcp;
 using SkillForge.Infrastructure.Migration;
 using SkillForge.Infrastructure.Modeling;
+using SkillForge.Infrastructure.Provenance;
 using SkillForge.Infrastructure.Yaml;
 using SkillForge.Reporting;
 
@@ -51,13 +54,25 @@ internal static class CompositionRoot
 
         services.AddSingleton<IUserEnvironment, UserEnvironment>();
 
-        // Provenance shells out to git for three read-only questions. The tool version is passed in here so one
+        // Provenance shells out to git for four read-only questions. The tool version is passed in here so one
         // place in the process decides what version SkillForge claims to be.
         services.AddSingleton<IProcessRunner, ProcessRunner>();
-        services.AddSingleton<IProvenanceReader>(provider => new GitProvenanceReader(
+        services.AddSingleton<GitProvenanceReader>(provider => new GitProvenanceReader(
             provider.GetRequiredService<IProcessRunner>(),
             provider.GetRequiredService<TimeProvider>(),
             SkillForgeTool.Version));
+        services.AddSingleton<IProvenanceReader>(provider => provider.GetRequiredService<GitProvenanceReader>());
+        services.AddSingleton<IRepositoryFactsReader>(provider =>
+            provider.GetRequiredService<GitProvenanceReader>());
+
+        // Where an asset came from, for a whole tree rather than one packaged skill.
+        services.AddSingleton<IDistributionManifestReader, JsonDistributionManifestReader>();
+        services.AddSingleton<AssetFingerprinter>();
+        services.AddSingleton<ProvenanceInspector>();
+
+        // What a tree can reach, read through the parts that already answer that: discovery, the skill inspector
+        // and the MCP readers. A second scanner would let 'update analyze' contradict 'inspect'.
+        services.AddSingleton<CapabilitySurfaceScanner>();
 
         // One reader per format, one adapter per provider — the seam the roadmap asks for, so a provider that moves
         // a file or a protocol that changes touches one class rather than the inspector.
@@ -83,6 +98,9 @@ internal static class CompositionRoot
             new HttpClient { Timeout = TimeSpan.FromSeconds(20) }));
         services.AddSingleton<McpProber>();
         services.AddSingleton<McpFileInspector>();
+
+        // Identity is read on top of the same file inspection: one parse, and a stdio server still never launched.
+        services.AddSingleton<McpIdentityInspector>();
 
         services.AddSingleton<IMigrationInspector, MigrationInspector>();
 
@@ -123,6 +141,9 @@ internal static class CompositionRoot
         services.AddSingleton<PolicyCheckCommandRunner>();
         services.AddSingleton<PolicyDiffCommandRunner>();
         services.AddSingleton<McpCommandRunner>();
+        services.AddSingleton<ProvenanceCommandRunner>();
+        services.AddSingleton<UpdateAnalyzeCommandRunner>();
+        services.AddSingleton<IdentityCommandRunner>();
 
         // ValidateOnBuild turns a missing or unresolvable registration into a failure here rather than when
         // the user runs a command. It is what makes the composition smoke test meaningful.

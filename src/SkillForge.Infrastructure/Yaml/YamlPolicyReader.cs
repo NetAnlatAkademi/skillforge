@@ -31,6 +31,9 @@ public sealed class YamlPolicyReader : IPolicyReader
     private const string ProvenanceSection = "provenance";
     private const string SkillsSection = "skills";
     private const string McpSection = "mcp";
+    private const string SurfaceSection = "surface";
+    private const string WarningToolCountField = "warningToolCount";
+    private const string HighToolCountField = "highToolCount";
     private const string AllowField = "allow";
     private const string DenyField = "deny";
     private const string DefaultField = "default";
@@ -195,9 +198,26 @@ public sealed class YamlPolicyReader : IPolicyReader
             ReadBoolean(mcp, DenyDeprecatedCapabilitiesField),
             ReadDefault(mcp, path, findings),
             allow,
-            deny);
+            deny,
+            ReadSurface(Section(mcp, SurfaceSection)));
 
         return (section, findings);
+    }
+
+    /// <summary>
+    /// Reads <c>mcp.surface</c>. A section that sets one threshold and not the other keeps the default for the
+    /// other, rather than being refused: half a decision is still a decision, and the defaults are documented.
+    /// </summary>
+    private static McpSurfaceThresholds? ReadSurface(YamlMappingNode? surface)
+    {
+        if (surface is null)
+        {
+            return null;
+        }
+
+        return new McpSurfaceThresholds(
+            ReadInteger(surface, WarningToolCountField) ?? McpSurfaceThresholds.Default.WarningToolCount,
+            ReadInteger(surface, HighToolCountField) ?? McpSurfaceThresholds.Default.HighToolCount);
     }
 
     /// <summary>
