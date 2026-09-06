@@ -145,6 +145,59 @@ public static class DiagnosticCodes
     public const string MutableRemoteReference = "SF5001";
 
     /// <summary>
+    /// Nothing observed says where an asset came from. Reported by <c>provenance diff</c> about an asset that
+    /// arrived, or one whose origin stopped being determinable.
+    /// </summary>
+    /// <remarks>
+    /// <c>SF5001</c> is a rule about a skill's own references and predates this block. <c>SF5101</c> onwards are
+    /// about distribution: where an asset came from, who publishes it, and how it gets its next version. Both are
+    /// SF5xxx; the gap between them is what lets a reader tell the two apart in one report.
+    /// </remarks>
+    public const string ProvenanceUnknown = "SF5101";
+
+    /// <summary>
+    /// An asset declares an upstream it is not distributed from — a fork, in the asset's own words. Information
+    /// rather than a warning: forking is ordinary, and only the reviewer knows whether this one was intended.
+    /// </summary>
+    public const string ProvenanceForked = "SF5102";
+
+    /// <summary>
+    /// An asset's files differ from the revision it names, so the commit in its provenance describes something
+    /// other than what is on disk.
+    /// </summary>
+    public const string ProvenanceLocallyModified = "SF5103";
+
+    /// <summary>The marketplace an asset is distributed through is not the one recorded earlier.</summary>
+    public const string DistributionMarketplaceChanged = "SF5201";
+
+    /// <summary>
+    /// An asset that was not updating itself now does. What arrives next will not pass through whoever reviewed
+    /// this change.
+    /// </summary>
+    public const string DistributionAutomaticUpdate = "SF5301";
+
+    /// <summary>An asset that named an immutable revision now names one that can move.</summary>
+    public const string DistributionVersionFloating = "SF5302";
+
+    /// <summary>
+    /// An update that arrives without review added a capability: a script, a host, a permission, an MCP server.
+    /// Reported by <c>update analyze</c>, which is the only command that can see both halves.
+    /// </summary>
+    public const string DistributionUpdateAddedCapability = "SF5303";
+
+    /// <summary>
+    /// The publisher changed between two revisions of the same asset. An error: whoever the organisation decided
+    /// to trust is not who is shipping this now.
+    /// </summary>
+    public const string DistributionPublisherChanged = "SF5401";
+
+    /// <summary>
+    /// An asset's content fingerprint changed while its declared version did not, so a consumer pinned to that
+    /// version received different bytes without being told.
+    /// </summary>
+    public const string DistributionHashChanged = "SF5501";
+
+    /// <summary>
     /// The skill's reach grew while its declared version stayed the same, so a consumer pinned to that version
     /// received the change without being told. Reported by <c>diff</c>, which is the only command that can see it.
     /// </summary>
@@ -184,6 +237,48 @@ public static class DiagnosticCodes
     /// The <c>description</c> is longer than a provider the skill declares compatibility with accepts.
     /// </summary>
     public const string ProviderDescriptionTooLong = "SF7003";
+
+    /// <summary>
+    /// The kind of identity an MCP server is reached with changed — a person's OAuth session became a workload
+    /// identity, or the other way round.
+    /// </summary>
+    /// <remarks>
+    /// <c>SF7001</c>-<c>SF7003</c> are about agent providers and predate this block. <c>SF7101</c> onwards are
+    /// about the identity an agent connects with, and <c>SF7301</c> onwards about the tool surface a server opens
+    /// to it. Same band, three blocks; the gaps are what let a reader tell them apart.
+    /// </remarks>
+    public const string IdentityTypeChanged = "SF7101";
+
+    /// <summary>
+    /// A credential that does not expire on its own replaced one that did, so revoking access became a deliberate
+    /// act rather than a matter of waiting.
+    /// </summary>
+    public const string IdentityBecameLongLived = "SF7102";
+
+    /// <summary>An identity asks for scopes it did not ask for before.</summary>
+    public const string DelegationScopeExpanded = "SF7201";
+
+    /// <summary>An identity that acted for itself now acts on behalf of another party.</summary>
+    public const string DelegationEnabled = "SF7202";
+
+    /// <summary>
+    /// An MCP server exposes more tools than the configured threshold, so every one of them is in the agent's
+    /// context whether or not the task needs it.
+    /// </summary>
+    public const string McpToolSurfaceLarge = "SF7301";
+
+    /// <summary>
+    /// A server exposes tools that change or delete things, or that reach credentials, and does so from the first
+    /// response — before anything has decided the task needs them.
+    /// </summary>
+    public const string McpPrivilegedToolsExposed = "SF7302";
+
+    /// <summary>
+    /// Nothing observed says the server narrows what it exposes as a task goes on, so the whole tool surface is in
+    /// play from the start. Information rather than a warning: progressive discovery is new, and most servers do
+    /// not implement it yet.
+    /// </summary>
+    public const string McpNoProgressiveDiscovery = "SF7401";
 
     /// <summary>
     /// An MCP server is declared over the HTTP+SSE transport, which the specification deprecated in

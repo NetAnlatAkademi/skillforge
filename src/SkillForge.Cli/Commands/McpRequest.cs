@@ -39,3 +39,29 @@ internal sealed record McpDiffRequest(
     string Format,
     string? OutputPath,
     ReportRenderOptions RenderOptions);
+
+/// <summary>
+/// Everything <c>mcp surface</c> was asked to do.
+/// </summary>
+/// <param name="Path">The MCP configuration file to read.</param>
+/// <param name="Probe">
+/// Whether to ask each HTTP server about itself. Without it there is nothing to count: a tool list comes from the
+/// server, and SkillForge does not speak to anything unless it is told to.
+/// </param>
+/// <param name="PolicyPath">
+/// Policy file to read <c>mcp.surface</c> thresholds from. A file that is not there is not an error — the
+/// documented defaults apply and the report says they are defaults — but one that cannot be parsed fails the run,
+/// for the same reason <c>policy check</c> refuses to continue without its rules.
+/// </param>
+/// <param name="FailOnThreshold">Whether a surface at or above the warning count should fail the run.</param>
+/// <param name="Format">Console or JSON.</param>
+/// <param name="OutputPath">File to write to, or <see langword="null"/> for stdout.</param>
+/// <param name="RenderOptions">How to present console output.</param>
+internal sealed record McpSurfaceRequest(
+    string Path,
+    bool Probe,
+    string PolicyPath,
+    bool FailOnThreshold,
+    string Format,
+    string? OutputPath,
+    ReportRenderOptions RenderOptions);

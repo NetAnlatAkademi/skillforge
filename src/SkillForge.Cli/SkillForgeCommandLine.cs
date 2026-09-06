@@ -69,6 +69,9 @@ internal static partial class SkillForgeCommandLine
         root.Subcommands.Add(BuildScanCommand(services, globals));
         root.Subcommands.Add(BuildInventoryCommand(services, globals));
         root.Subcommands.Add(BuildMcpCommand(services, globals));
+        root.Subcommands.Add(BuildProvenanceCommand(services, globals));
+        root.Subcommands.Add(BuildUpdateCommand(services, globals));
+        root.Subcommands.Add(BuildIdentityCommand(services, globals));
 
         return root;
     }
@@ -345,7 +348,71 @@ internal static partial class SkillForgeCommandLine
                 "Report what an MCP configuration file declares, and fail when there is anything to report.",
                 gate: true),
             BuildMcpDiffCommand(services, globals),
+            BuildMcpSurfaceCommand(services, globals),
         };
+    }
+
+    /// <summary>
+    /// Builds <c>mcp surface</c>: how many tools a server puts in an agent's context before it has done anything.
+    /// </summary>
+    /// <remarks>
+    /// <c>--probe</c> is not optional in practice and is still opt-in in principle. A tool list comes from the
+    /// server, so without it the report says so per server rather than printing zeroes — a count of nothing must
+    /// never read as "there is nothing there".
+    /// </remarks>
+    private static Command BuildMcpSurfaceCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var path = new Argument<string>("file")
+        {
+            Description = "MCP configuration file to read.",
+        };
+
+        var probe = CreateProbeOption();
+
+        var policy = new Option<string>("--policy")
+        {
+            Description = "Policy file to read 'mcp.surface' thresholds from. Without one, the documented "
+                + "defaults apply and the report says they are defaults.",
+            DefaultValueFactory = _ => DefaultPolicyPath,
+        };
+
+        var failOnThreshold = new Option<bool>("--fail-on-threshold")
+        {
+            Description = "Fail when a server exposes at least as many tools as the warning threshold.",
+        };
+
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var output = CreateOutputOption();
+
+        var surface = new Command(
+            "surface",
+            "Measure how many tools each MCP server exposes, and how many of them change things.")
+        {
+            path,
+            probe,
+            policy,
+            failOnThreshold,
+            format,
+            output,
+        };
+
+        surface.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<McpCommandRunner>();
+
+            return await runner.SurfaceAsync(
+                new McpSurfaceRequest(
+                    parseResult.GetValue(path) ?? DefaultPath,
+                    parseResult.GetValue(probe),
+                    parseResult.GetValue(policy) ?? DefaultPolicyPath,
+                    parseResult.GetValue(failOnThreshold),
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return surface;
     }
 
     private static Command BuildMcpInspectionCommand(
@@ -772,6 +839,278 @@ internal static partial class SkillForgeCommandLine
         });
 
         return command;
+    }
+
+    /// <summary>
+    /// Builds <c>provenance</c>, with <c>provenance diff</c> under it.
+    /// </summary>
+    /// <remarks>
+    /// A group from the start, for the reason <c>policy</c> is one: where an asset came from and how that changed
+    /// are the same question asked of one tree and of two, and splitting them across unrelated top-level commands
+    /// would hide the second behind the first.
+    /// </remarks>
+    private static Command BuildProvenanceCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var path = new Argument<string>("path")
+        {
+            Description = "Directory to trace. Defaults to the current directory.",
+            DefaultValueFactory = _ => DefaultPath,
+        };
+
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var output = CreateOutputOption();
+
+        var command = new Command(
+            "provenance",
+            "Report where each skill and plugin came from, and how it gets its next version.")
+        {
+            path,
+            format,
+            output,
+            BuildProvenanceDiffCommand(services, globals),
+        };
+
+        command.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<ProvenanceCommandRunner>();
+
+            return await runner.RunAsync(
+                new ProvenanceRequest(
+                    parseResult.GetValue(path) ?? DefaultPath,
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// Builds <c>identity</c>, with <c>inspect</c> and <c>diff</c> under it.
+    /// </summary>
+    /// <remarks>
+    /// Its own group rather than a subcommand of <c>mcp</c>: the question is whose authority an agent is using,
+    /// and the answer will eventually come from more places than an MCP configuration file.
+    /// </remarks>
+    private static Command BuildIdentityCommand(IServiceProvider services, GlobalOptions globals) =>
+        new("identity", "Report the identity an agent reaches each MCP server with, and how it changed.")
+        {
+            BuildIdentityInspectCommand(services, globals),
+            BuildIdentityDiffCommand(services, globals),
+        };
+
+    private static Command BuildIdentityInspectCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var path = new Argument<string>("file")
+        {
+            Description = "MCP configuration file to read.",
+        };
+
+        var probe = CreateProbeOption();
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var output = CreateOutputOption();
+
+        var inspect = new Command(
+            "inspect",
+            "Report what identity each declared MCP server is reached with, from names only.")
+        {
+            path,
+            probe,
+            format,
+            output,
+        };
+
+        inspect.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<IdentityCommandRunner>();
+
+            return await runner.InspectAsync(
+                new IdentityInspectRequest(
+                    parseResult.GetValue(path) ?? DefaultPath,
+                    parseResult.GetValue(probe),
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return inspect;
+    }
+
+    private static Command BuildIdentityDiffCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var before = new Argument<string>("before")
+        {
+            Description = "The earlier MCP configuration file.",
+        };
+
+        var after = new Argument<string>("after")
+        {
+            Description = "The later MCP configuration file.",
+        };
+
+        var probe = CreateProbeOption();
+        var format = CreateFormatOption();
+        var output = CreateOutputOption();
+
+        var failOnDrift = new Option<bool>("--fail-on-drift")
+        {
+            Description = "Fail when an identity widened: a new scope, a new delegation, a longer-lived credential.",
+        };
+
+        var diff = new Command(
+            "diff",
+            "Compare two MCP configurations by the identity each server is reached with.")
+        {
+            before,
+            after,
+            probe,
+            format,
+            output,
+            failOnDrift,
+        };
+
+        diff.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<IdentityCommandRunner>();
+
+            return await runner.DiffAsync(
+                new IdentityDiffRequest(
+                    parseResult.GetValue(before) ?? DefaultPath,
+                    parseResult.GetValue(after) ?? DefaultPath,
+                    parseResult.GetValue(probe),
+                    parseResult.GetValue(failOnDrift),
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return diff;
+    }
+
+    /// <summary>
+    /// The flag that lets a command speak to a server. Shared, and worded the same everywhere, because "does this
+    /// leave my machine" is a question a user should never have to answer twice.
+    /// </summary>
+    private static Option<bool> CreateProbeOption() =>
+        new("--probe")
+        {
+            Description = "Ask each HTTP MCP server about itself with one request. Local stdio servers are never "
+                + "launched.",
+        };
+
+    /// <summary>
+    /// Builds <c>update</c>, with <c>update analyze</c> under it.
+    /// </summary>
+    /// <remarks>
+    /// A group with one subcommand today, because "what would this update do" is a question that will grow other
+    /// verbs, and because <c>skillforge update</c> on its own must never read as a command that installs anything.
+    /// </remarks>
+    private static Command BuildUpdateCommand(IServiceProvider services, GlobalOptions globals) =>
+        new("update", "Analyse what an update does before it arrives.")
+        {
+            BuildUpdateAnalyzeCommand(services, globals),
+        };
+
+    private static Command BuildUpdateAnalyzeCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var baseTree = new Argument<string>("base")
+        {
+            Description = "The version the update starts from: a plugin or skill directory.",
+        };
+
+        var target = new Argument<string>("target")
+        {
+            Description = "The version it arrives at.",
+        };
+
+        var format = CreateFormatOption();
+        var output = CreateOutputOption();
+
+        var failOnExpansion = new Option<bool>("--fail-on-expansion")
+        {
+            Description = "Fail when the update lets the asset reach further than what it replaces.",
+        };
+
+        var analyze = new Command(
+            "analyze",
+            "Report what an update adds — skills, MCP servers, hooks, scripts, hosts, credentials — and what "
+                + "that means given how it arrives.")
+        {
+            baseTree,
+            target,
+            format,
+            output,
+            failOnExpansion,
+        };
+
+        analyze.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<UpdateAnalyzeCommandRunner>();
+
+            return await runner.RunAsync(
+                new UpdateAnalyzeRequest(
+                    parseResult.GetValue(baseTree) ?? DefaultPath,
+                    parseResult.GetValue(target) ?? DefaultPath,
+                    parseResult.GetValue(failOnExpansion),
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return analyze;
+    }
+
+    private static Command BuildProvenanceDiffCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var before = new Argument<string>("before")
+        {
+            Description = "The earlier tree.",
+        };
+
+        var after = new Argument<string>("after")
+        {
+            Description = "The later tree.",
+        };
+
+        var format = CreateFormatOption();
+        var output = CreateOutputOption();
+
+        var failOnDrift = new Option<bool>("--fail-on-drift")
+        {
+            Description = "Fail when something drifted: a changed publisher, marketplace, pin or fingerprint.",
+        };
+
+        var diff = new Command(
+            "diff",
+            "Compare two trees by where their assets come from, and report what drifted.")
+        {
+            before,
+            after,
+            format,
+            output,
+            failOnDrift,
+        };
+
+        diff.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<ProvenanceCommandRunner>();
+
+            return await runner.DiffAsync(
+                new ProvenanceDiffRequest(
+                    parseResult.GetValue(before) ?? DefaultPath,
+                    parseResult.GetValue(after) ?? DefaultPath,
+                    parseResult.GetValue(failOnDrift),
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return diff;
     }
 
     private static Argument<string> CreateSkillPathArgument()

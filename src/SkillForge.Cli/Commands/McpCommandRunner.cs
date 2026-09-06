@@ -3,10 +3,12 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Mcp;
+using SkillForge.Application.Policy;
 using SkillForge.Domain.Diagnostics;
 using SkillForge.Domain.Diffing;
 using SkillForge.Domain.Mcp;
 using SkillForge.Domain.Migration;
+using SkillForge.Domain.Policy;
 
 namespace SkillForge.Cli.Commands;
 
@@ -31,17 +33,21 @@ internal sealed class McpCommandRunner
 
     private readonly McpFileInspector _inspector;
     private readonly IFileSystem _fileSystem;
+    private readonly IPolicyReader _policyReader;
 
     /// <summary>Initialises the runner.</summary>
     /// <param name="inspector">Reads and inspects a configuration file.</param>
     /// <param name="fileSystem">Writes machine-readable output when asked.</param>
-    public McpCommandRunner(McpFileInspector inspector, IFileSystem fileSystem)
+    /// <param name="policyReader">Reads the surface thresholds, which are the one thing here a policy decides.</param>
+    public McpCommandRunner(McpFileInspector inspector, IFileSystem fileSystem, IPolicyReader policyReader)
     {
         ArgumentNullException.ThrowIfNull(inspector);
         ArgumentNullException.ThrowIfNull(fileSystem);
+        ArgumentNullException.ThrowIfNull(policyReader);
 
         _inspector = inspector;
         _fileSystem = fileSystem;
+        _policyReader = policyReader;
     }
 
     /// <summary>Inspects one configuration file.</summary>
@@ -114,6 +120,195 @@ internal sealed class McpCommandRunner
 
         return request.FailOnChange && diff.HasChanges ? ExitCodes.ValidationFailed : ExitCodes.Success;
     }
+
+    /// <summary>Measures how much of an agent's attention each declared server takes up.</summary>
+    /// <param name="request">What to measure and how to present it.</param>
+    /// <param name="cancellationToken">Token used to cancel the work.</param>
+    /// <returns>
+    /// <see cref="ExitCodes.Success"/> unless <c>--fail-on-threshold</c> was given and a server is at or above the
+    /// configured count.
+    /// </returns>
+    internal async Task<int> SurfaceAsync(
+        McpSurfaceRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var thresholds = await ReadThresholdsAsync(request.PolicyPath, cancellationToken).ConfigureAwait(false);
+        if (thresholds is null)
+        {
+            return ExitCodes.ValidationFailed;
+        }
+
+        var areDefaults = thresholds == McpSurfaceThresholds.Default;
+
+        var inspection = await _inspector
+            .InspectAsync(request.Path, request.Probe, cancellationToken)
+            .ConfigureAwait(false);
+
+        var report = McpSurfaceAnalyzer.Analyze(
+            request.Path,
+            inspection.Servers,
+            inspection.Probes,
+            thresholds,
+            inspection.Diagnostics);
+
+        await WriteAsync(
+            request.Format,
+            request.OutputPath,
+            () => ToJson(report, areDefaults),
+            () => ToText(report, areDefaults),
+            cancellationToken).ConfigureAwait(false);
+
+        if (inspection.Diagnostics.Any(finding =>
+            finding.Code == DiagnosticCodes.ProviderConfigurationNotParsable))
+        {
+            return ExitCodes.ValidationFailed;
+        }
+
+        return request.FailOnThreshold
+            && report.Diagnostics.Any(finding => finding.Code == DiagnosticCodes.McpToolSurfaceLarge)
+                ? ExitCodes.ValidationFailed
+                : ExitCodes.Success;
+    }
+
+    /// <summary>
+    /// Reads the thresholds, or <see langword="null"/> when the policy exists and could not be read.
+    /// </summary>
+    /// <remarks>
+    /// A missing policy is ordinary: the defaults apply and the report says they are defaults. A policy that is
+    /// there and will not parse is not ordinary — continuing with defaults would silently ignore the numbers
+    /// somebody wrote down, which is the failure mode <c>policy check</c> refuses for the same reason.
+    /// </remarks>
+    private async Task<McpSurfaceThresholds?> ReadThresholdsAsync(
+        string policyPath,
+        CancellationToken cancellationToken)
+    {
+        if (!_fileSystem.FileExists(policyPath))
+        {
+            return McpSurfaceThresholds.Default;
+        }
+
+        var result = await _policyReader.ReadAsync(policyPath, cancellationToken).ConfigureAwait(false);
+
+        if (!result.IsSuccess || result.Value is not { } policy)
+        {
+            foreach (var diagnostic in result.Diagnostics)
+            {
+                await Console.Error
+                    .WriteLineAsync($"{diagnostic.Code} {diagnostic.Message}")
+                    .ConfigureAwait(false);
+            }
+
+            return null;
+        }
+
+        return policy.Mcp?.Surface ?? McpSurfaceThresholds.Default;
+    }
+
+    private static string ToText(McpSurfaceReport report, bool thresholdsAreDefaults)
+    {
+        var builder = new StringBuilder();
+
+        builder.AppendLine("SkillForge MCP Surface");
+        builder.AppendLine();
+        builder.AppendLine($"File: {report.Path}");
+        builder.AppendLine(
+            $"Thresholds: warning at {report.Thresholds.WarningToolCount}, high at "
+            + $"{report.Thresholds.HighToolCount}"
+            + (thresholdsAreDefaults ? " (defaults — set them under 'mcp.surface' in the policy file)" : string.Empty));
+        builder.AppendLine();
+        builder.AppendLine($"Servers ({report.Servers.Count}):");
+
+        if (report.Servers.Count == 0)
+        {
+            builder.AppendLine("  (none declared)");
+        }
+
+        foreach (var surface in report.Servers)
+        {
+            builder.AppendLine();
+            builder.AppendLine($"  {surface.ServerName}");
+
+            if (surface.NotProbedReason is { Length: > 0 } reason)
+            {
+                builder.AppendLine($"      Tools:      {reason}");
+                continue;
+            }
+
+            builder.AppendLine($"      Tools:      {surface.ToolCount}");
+            builder.AppendLine($"      Exposed:    {surface.InitiallyExposed} from the first response");
+            builder.AppendLine($"      Write:      {surface.WriteCapableTools.Count}");
+            builder.AppendLine($"      Credential: {surface.CredentialCapableTools.Count}");
+            builder.AppendLine($"      Admin:      {surface.AdminTools.Count}");
+            builder.AppendLine(
+                $"      Discovery:  {(surface.ProgressiveDiscoveryDetected ? "detected" : "not detected")}");
+            builder.AppendLine($"      Risk:       {surface.Risk.ToString().ToUpperInvariant()}");
+        }
+
+        if (report.Diagnostics.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("Findings:");
+
+            foreach (var finding in report.Diagnostics)
+            {
+                builder.AppendLine($"  {Mark(finding.Severity)} {finding.Code} {finding.Message}");
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine(
+            "Counts come from each server's own tools/list, so they exist only for servers that were probed. "
+                + "A stdio server is never launched.");
+        builder.AppendLine(
+            "Write, credential and admin are read from tool names, not from what the tools do. No model is used.");
+
+        return builder.ToString();
+    }
+
+    private static string ToJson(McpSurfaceReport report, bool thresholdsAreDefaults)
+    {
+        var document = new JsonObject
+        {
+            ["schemaVersion"] = Reporting.SkillForgeTool.ReportSchemaVersion,
+            ["path"] = report.Path,
+            ["thresholds"] = new JsonObject
+            {
+                ["warningToolCount"] = report.Thresholds.WarningToolCount,
+                ["highToolCount"] = report.Thresholds.HighToolCount,
+                ["areDefaults"] = thresholdsAreDefaults,
+            },
+            ["servers"] = new JsonArray([.. report.Servers.Select(surface => (JsonNode)new JsonObject
+            {
+                ["server"] = surface.ServerName,
+                ["toolCount"] = surface.ToolCount,
+                ["initiallyExposed"] = surface.InitiallyExposed,
+                ["writeCapableTools"] = Array(surface.WriteCapableTools),
+                ["credentialCapableTools"] = Array(surface.CredentialCapableTools),
+                ["adminTools"] = Array(surface.AdminTools),
+                ["progressiveDiscovery"] = surface.ProgressiveDiscoveryDetected,
+                ["notProbedReason"] = surface.NotProbedReason,
+                ["risk"] = surface.Risk.ToString().ToLowerInvariant(),
+            })]),
+            ["diagnostics"] = new JsonArray([.. report.Diagnostics.Select(finding => (JsonNode)new JsonObject
+            {
+                ["code"] = finding.Code,
+                ["severity"] = finding.Severity.ToString().ToLowerInvariant(),
+                ["message"] = finding.Message,
+                ["filePath"] = finding.FilePath,
+            })]),
+        };
+
+        return document.ToJsonString(JsonOptions) + Environment.NewLine;
+    }
+
+    private static string Mark(DiagnosticSeverity severity) => severity switch
+    {
+        DiagnosticSeverity.Error => "x",
+        DiagnosticSeverity.Warning => "!",
+        _ => "i",
+    };
 
     private async Task WriteAsync(
         string format,

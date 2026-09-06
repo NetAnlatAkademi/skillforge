@@ -563,6 +563,54 @@ unverified here — useful for direction, not as justification until checked aga
 - **`ReportRenderOptions.SubjectPlural`**, because "Skills: 3" over a list containing an MCP configuration and the
   policy file is untrue. The same sentence as the `Title` fix, one line down.
 
+## v0.7 — Provenance, update drift, identity and MCP surface (from the two-week update of 2026-09-06)
+
+Done in one pass on 2026-09-06, against `docs/inputs-2026-09-06-two-week-update.md`. Sprints 14–18 of that
+document, in order.
+
+The through-line, and the reason all five commands belong to one release: **a package hash answers "is this the
+file I approved" and cannot answer "will the file I approved still be the one running tomorrow"**.
+
+- [x] **Sprint 14 — provenance foundation.** `DistributionSource`, `UpdateMode`, `ProvenanceStatus`, `AssetKind`,
+  `AssetProvenance`, `DistributionSummary`. `skillforge provenance`, console and JSON, over skills and plugins.
+  Repository, commit and uncommitted count from git; publisher, marketplace, version and revision from
+  `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`; a SHA-256 fingerprint of the asset's own
+  files, which is the one field that is always computable.
+  **Every unknown prints as `unknown`, and an upstream is reported only when a manifest declares one.**
+- [x] **Sprint 15 — provenance diff.** `SF5101`–`SF5501`, console, JSON and SARIF, `--fail-on-drift`.
+  Relaxations only and in one direction: an asset that gained a publisher, a marketplace or a pin is shown and
+  coded nowhere.
+- [x] **Sprint 16 — update capability drift.** `skillforge update analyze`, reusing the skill inspector, the MCP
+  readers and the provenance inspector rather than parsing anything twice. `SF5303` when an update that arrives
+  without review adds something that runs, reaches or reads. Risk from the **combination** of update mode,
+  publisher drift and capability expansion.
+- [x] **Sprint 17 — MCP identity.** `AgentIdentity`, `identity inspect`, `identity diff`, `SF7101`, `SF7102`,
+  `SF7201`, `SF7202`. Inference from names of environment variables and headers, and from a probed server's `401`.
+  `McpServerDeclaration` gained `HeaderNames` — names only.
+- [x] **Sprint 18 — MCP surface analysis.** `skillforge mcp surface`, `SF7301`, `SF7302`, `SF7401`, thresholds
+  configurable under `mcp.surface` in the policy file and reported as defaults when they are.
+- [x] `inventory <project>` gained a **Distribution** section, scoped to the project directory.
+
+### Decisions taken in this phase
+
+- **Drift codes, not scan codes.** The v0.5 deferral stands — "no source is declared" fires on approximately every
+  skill. A publisher *changing* is an edit in a pull request and fires once, which is why the whole `SF51xx`–
+  `SF55xx` block lives in `provenance diff` and `update analyze`.
+- **`Unknown` is the default update mode.** An entry that says nothing is not pinned.
+- **`GitProvenanceReader` answers two interfaces from four git questions**, and `inventory` skips the per-asset one
+  entirely: one process per asset is worth it for a repository report and is not worth it for a summary.
+- **Zero is not unknown.** A server that was not probed reports why rather than a tool count.
+- **Two paths, not a revision range**, matching every other comparison in the tool.
+
+### Still not done, and deliberately
+
+- [-] `graph` and its new node types (`Workflow`, `ApprovalBoundary`, `Harness`, `Automation`). The update asks for
+  room, not for an implementation, and the domain model does not foreclose them.
+- [-] Agent surface score. Data model only, per the update's own instruction not to productise it yet.
+- [-] External evaluator adapters. Lowest priority in the update's own ordering.
+- [-] Fetching a marketplace or a repository to compare against. SkillForge downloads nothing; both sides of every
+  comparison have to be on disk.
+
 ## Out of scope for v0.1.0
 
 Web panel · public marketplace · private registry · user and organisation management · Auth0 ·

@@ -7,13 +7,16 @@
 
 # SkillForge
 
-A local, open source CLI for AI agent skills. SkillForge creates, validates, inspects and packages
-`SKILL.md`-based skills, and reports findings as human-readable console output, JSON or SARIF.
+A local, open source CLI for the agent ecosystem's supply chain. SkillForge creates, validates, inspects and
+packages `SKILL.md`-based skills — and reports where every skill, plugin and MCP server came from, how it gets its
+next version, whose identity it runs with and how much it opens to an agent. Console output, JSON or SARIF, and
+nothing is sent to any service.
 
-> Status: **released as `26.222.1`** — v0.2 and v0.3 complete; v0.4's migration inventory and MCP inspection in,
-> plus change control, provenance, policy-as-code, and MCP allow/deny policy with `policy diff`.
-> Every command works end to end. CI builds and tests on Linux and Windows, and runs the CLI over the sample
-> skills.
+> Status: **released as `26.249.1`** — v0.2 and v0.3 complete; v0.4's migration inventory and MCP inspection in,
+> plus change control, policy-as-code and MCP allow/deny policy with `policy diff`, and now v0.5 and v0.6's
+> supply-chain surface: `provenance`, `provenance diff`, `update analyze`, `identity inspect|diff` and
+> `mcp surface`. Every command works end to end. CI builds and tests on Linux and Windows, and runs the CLI over
+> the sample skills.
 
 ## Try it
 
@@ -63,6 +66,11 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 | `skillforge policy check <path>` | Judge skills, and the MCP servers a configuration declares, against `.skillforge/policy.yaml` — the one command that judges rather than describes |
 | `skillforge policy diff <before> <after>` | Compare two policy files and report what the later one permits that the earlier did not |
 | `skillforge mcp inspect\|validate\|diff <file>` | Inspect, gate or compare an MCP configuration file |
+| `skillforge mcp surface <file>` | Measure how many tools a server puts in an agent's context, and how many of them change things |
+| `skillforge provenance [path]` | Report where each skill and plugin came from, and how it gets its next version |
+| `skillforge provenance diff <before> <after>` | Report what drifted: publisher, marketplace, pin, fingerprint |
+| `skillforge update analyze <base> <target>` | Report what an update adds, and what that means given how it arrives |
+| `skillforge identity inspect\|diff <file>` | Report whose authority an agent reaches each MCP server with |
 | `skillforge inventory` | Report the agent tooling installed here: skills, MCP servers and instruction files, per provider |
 | `skillforge migrate inspect` | The same inventory, under the migration group |
 
@@ -116,6 +124,66 @@ tool invented.
 `skillforge policy diff` then answers the question a pull request asks about the policy itself: what does the later
 version permit that the earlier one did not? An allow added and a deny removed are the same answer, and both are
 reported as one.
+
+### Where it came from, and what arrives next
+
+A package hash answers "is this the file I approved". It cannot answer "will the file I approved still be the one
+running tomorrow" — and with plugin marketplaces that update themselves, the answer is often no.
+
+```bash
+skillforge provenance                                     # where every asset here came from
+skillforge provenance diff ./before ./after               # publisher, marketplace, pin, fingerprint
+skillforge update analyze ./plugin-v1 ./plugin-v2         # what the next version would add
+```
+
+```text
+Update mode: Automatic
+
+Changes:
+  + MCP server: deployment-prod
+  + host: prod.company.com
+  + credential source: DEPLOY_TOKEN
+
+Risk:   HIGH
+Reason: The update arrives without review (Automatic) and expands what the asset can reach.
+```
+
+The combination is what carries the meaning. A new shell script in a release somebody chose to install is ordinary;
+the same script arriving overnight in a plugin that updates itself never passed a review, and a publisher change on
+top of that means it did not even come from the party the organisation decided to trust.
+
+Every value is read from a plugin manifest, a marketplace file, the git checkout or the bytes on disk, and each
+asset carries the evidence it was read from. **`unknown` means nothing said it, never a guess** — an upstream is
+reported only when a manifest declares one, because "this looks like that popular repository" is a guess, and a
+guess in a provenance report is read as a finding. Recorded provenance is not a signature.
+
+### Whose authority the agent is using
+
+```bash
+skillforge identity inspect ./.mcp.json
+skillforge identity diff ./old/.mcp.json ./new/.mcp.json --fail-on-drift
+```
+
+```text
+Identity    UserOAuth -> WorkloadIdentity
+Delegated   false -> true
+
+Widened:
+  ! SF7101 'deployment-prod' is now reached with a different kind of identity: UserOAuth became WorkloadIdentity.
+  ! SF7202 'deployment-prod' now acts on behalf of another party.
+```
+
+A person's OAuth session is bounded by what that person may do and disappears when they leave. A workload identity
+is bounded by what the workload was granted, which is usually more, and it does not. Between two revisions of a
+configuration that substitution is one line, and this is the command that reads it.
+
+**No credential value is ever read, stored or printed.** Identity is inferred from the *names* of environment
+variables and headers and from what a server's own `401` asked for — inference exactly as strong as a name, and the
+output says so.
+
+`skillforge mcp surface` answers the neighbouring question: how many tools a server puts into every conversation
+before anything has decided the task needs them, and how many of those change things, govern access or reach a
+secret. Deterministic, name-based, no model involved.
 
 ### Checking a skill against an agent provider
 
@@ -211,7 +279,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: NetAnlatAkademi/skillforge@v26.222.1
+      - uses: NetAnlatAkademi/skillforge@v26.249.1
         with:
           path: ./skills
           suppress: SF1009,SF1010

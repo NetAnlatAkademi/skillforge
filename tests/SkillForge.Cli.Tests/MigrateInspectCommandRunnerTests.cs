@@ -1,8 +1,13 @@
 using System.Text.Json;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Migration;
+using SkillForge.Application.Provenance;
+using SkillForge.Application.Skills;
 using SkillForge.Cli.Commands;
 using SkillForge.Domain.Migration;
+using SkillForge.Infrastructure;
+using SkillForge.Infrastructure.Provenance;
+using SkillForge.Infrastructure.Yaml;
 
 namespace SkillForge.Cli.Tests;
 
@@ -104,7 +109,7 @@ public sealed class MigrateInspectCommandRunnerTests
     [Fact]
     public void RejectsMissingDependencies()
     {
-        var act = () => new MigrateInspectCommandRunner(null!, null!, null!);
+        var act = () => new MigrateInspectCommandRunner(null!, null!, null!, null!);
 
         act.Should().Throw<ArgumentNullException>();
     }
@@ -145,11 +150,31 @@ public sealed class MigrateInspectCommandRunnerTests
     {
         inspector = new StubInspector(inspection);
 
+        var files = fileSystem ?? new FakeFileSystem();
+
         return new MigrateInspectCommandRunner(
             inspector,
             new StubUserEnvironment(),
-            fileSystem ?? new FakeFileSystem());
+            files,
+            Provenance(files));
     }
+
+    /// <summary>
+    /// A real provenance inspector over the same in-memory file system. It is only reached when a project
+    /// directory is named and exists, which none of these tests set up — the distribution section then reports
+    /// that it was not inspected, which is the behaviour worth pinning.
+    /// </summary>
+    private static ProvenanceInspector Provenance(IFileSystem fileSystem) =>
+        new(
+            fileSystem,
+            new SkillDiscovery(fileSystem),
+            new SkillLoader(
+                fileSystem,
+                new YamlFrontmatterParser(),
+                new YamlSkillConfigurationReader(fileSystem)),
+            new GitProvenanceReader(new ProcessRunner(), TimeProvider.System, "test"),
+            new JsonDistributionManifestReader(fileSystem),
+            new AssetFingerprinter(fileSystem, new Sha256HashCalculator()));
 
     private sealed class StubInspector(MigrationInspection inspection) : IMigrationInspector
     {
