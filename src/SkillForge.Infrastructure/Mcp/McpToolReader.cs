@@ -37,6 +37,57 @@ internal static class McpToolReader
         ];
     }
 
+    /// <summary>
+    /// Reads the opaque cursor that asks for the next page.
+    /// </summary>
+    /// <param name="result">The <c>result</c> node of a <c>tools/list</c> response, or <see langword="null"/>.</param>
+    /// <returns>
+    /// The cursor, or <see langword="null"/> when the response carries none — which is how the specification says the
+    /// last page announces itself. An empty string is treated as absent: a server that sends
+    /// <c>"nextCursor": ""</c> has ended the list, and asking for page after page of nothing would be a loop.
+    /// </returns>
+    internal static string? NextCursor(JsonNode? result) =>
+        result?["nextCursor"] is JsonValue value
+            && value.TryGetValue<string>(out var cursor)
+            && cursor.Length > 0
+                ? cursor
+                : null;
+
+    /// <summary>
+    /// Reduces the pages of a tool list to one list: one entry per name, ordered by name.
+    /// </summary>
+    /// <param name="pages">Every page's tools, in the order the pages were read.</param>
+    /// <returns>The merged list.</returns>
+    /// <remarks>
+    /// Two decisions, both so that two runs against one server agree.
+    ///
+    /// **Names are compared with ordinal case sensitivity**, because the specification identifies a tool by its name
+    /// and does not say two names differing in case are the same tool. Folding case here would silently merge two
+    /// real tools.
+    ///
+    /// **The first description of a repeated name wins.** A server that lists one name twice has made its own surface
+    /// ambiguous — a client cannot know which schema applies — and there is no honest way to pick the "right" one.
+    /// Taking the first is arbitrary and stated; taking the last would be arbitrary and unstated.
+    ///
+    /// **The result is ordered by name, not by the order the server listed them.** A paging server is free to return
+    /// its pages in whatever order it likes, and a report that changes between two identical runs cannot be diffed in
+    /// a pipeline. What the first response carried is kept as a count on
+    /// <see cref="SkillForge.Domain.Mcp.McpToolPaging.FirstPageToolCount"/> rather than as a position in this list.
+    /// </remarks>
+    internal static IReadOnlyList<McpToolSummary> Merge(IEnumerable<IReadOnlyList<McpToolSummary>> pages)
+    {
+        ArgumentNullException.ThrowIfNull(pages);
+
+        return
+        [
+            .. pages
+                .SelectMany(page => page)
+                .GroupBy(tool => tool.Name, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .OrderBy(tool => tool.Name, StringComparer.Ordinal),
+        ];
+    }
+
     private static McpToolSummary? Summarise(JsonObject tool)
     {
         // A tool without a name cannot be reported about usefully, and the specification identifies tools by name.

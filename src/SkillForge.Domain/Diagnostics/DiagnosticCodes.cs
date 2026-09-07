@@ -103,6 +103,14 @@ public static class DiagnosticCodes
     /// </summary>
     public const string ProviderConfigurationNotParsable = "SF1015";
 
+    /// <summary>
+    /// A remote registry could not be searched, or answered with something that could not be read: unreachable,
+    /// too slow, larger than the response limit, not JSON, or more results than one run reads. Same shape as
+    /// SF1012, SF1014 and SF1015 — reported rather than fatal, because a registry that will not answer is a fact
+    /// about that registry and not a reason to abandon the run.
+    /// </summary>
+    public const string DiscoveryResponseNotUsable = "SF1016";
+
     /// <summary>The skill contains a script.</summary>
     public const string ContainsScript = "SF2001";
 
@@ -333,6 +341,12 @@ public static class DiagnosticCodes
     public const string McpToolNameOutsideGuidance = "SF8009";
 
     /// <summary>
+    /// A server's <c>tools/list</c> was not read to the end, so its tool count is a floor rather than a total.
+    /// Either SkillForge stopped at its page limit or the server repeated a pagination cursor.
+    /// </summary>
+    public const string McpToolListIncomplete = "SF8010";
+
+    /// <summary>
     /// An MCP server the organisation's policy does not permit is declared: a deny rule names it, or no allow rule
     /// does and the policy denies by default.
     /// </summary>
@@ -379,6 +393,30 @@ public static class DiagnosticCodes
     /// removing a deny rule.
     /// </summary>
     public const string McpPolicyRemoteDomainPermitted = "SF8107";
+
+    /// <summary>
+    /// A discovered MCP server answered with a tool the registry that listed it did not declare — a capability
+    /// that is running and was never reviewed. Reported by <c>discovery verify</c>.
+    /// </summary>
+    public const string DiscoveryUnexpectedRuntimeTool = "SF8201";
+
+    /// <summary>
+    /// A registry declares a tool that the server it lists did not answer with. Usually a stale listing, and
+    /// worth knowing because a skill written against the listing will call something that is not there.
+    /// </summary>
+    public const string DiscoveryDeclaredToolMissing = "SF8202";
+
+    /// <summary>
+    /// A discovered server's tool count could not be compared name by name — most often because the listing
+    /// declares no capabilities at all — and the two counts differ.
+    /// </summary>
+    public const string DiscoveryToolCountDrift = "SF8203";
+
+    /// <summary>
+    /// The version a registry names and the version a server reports about itself disagree. Two claims, neither
+    /// verified by the protocol.
+    /// </summary>
+    public const string DiscoverySelfReportedVersionDrift = "SF8204";
 
     /// <summary>
     /// The policy file exists but could not be read or parsed, so no policy was applied. An error rather than a

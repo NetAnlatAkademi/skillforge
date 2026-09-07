@@ -115,10 +115,12 @@ the `resource_metadata` URL and any `scope`. Only the **gap** is a finding — S
 and points nowhere, when MCP servers must implement RFC 9728 and clients must use it for discovery. SkillForge does not
 fetch that metadata document, nor the authorization server's.
 
-When a server declares the `tools` capability, the probe makes one more request — `tools/list` — and checks what comes
-back: SF8007 an `inputSchema` that is not an object, SF8008 an `x-mcp-header` breaking a constraint a client **must**
-reject the whole tool over, SF8009 a name outside the naming guidance. Only the first page is read; paging a large
-catalogue to inspect it is not proportionate. **There is deliberately no "must be JSON Schema 2020-12" rule** — the
+When a server declares the `tools` capability, the probe asks for `tools/list` and checks what comes back: SF8007 an
+`inputSchema` that is not an object, SF8008 an `x-mcp-header` breaking a constraint a client **must** reject the whole
+tool over, SF8009 a name outside the naming guidance. The list is read **to the end**, following `nextCursor` under
+three bounds — a hundred pages, a repeated cursor, and the cancellation token between requests — and SF8010 says so
+whenever one of them fires, because a count that stopped early is a floor rather than a total.
+**There is deliberately no "must be JSON Schema 2020-12" rule** — the
 specification shows `draft-07` as valid — and `x-mcp-header` is read from top-level properties only. Both limits, and
 their reasons, are in [validation-rules.md](validation-rules.md#tool-conformance--and-the-rule-that-was-deliberately-not-written).
 

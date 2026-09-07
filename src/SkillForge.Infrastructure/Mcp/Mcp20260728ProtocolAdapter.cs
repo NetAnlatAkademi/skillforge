@@ -36,6 +36,18 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
     private const int MethodNotFound = -32601;
 
     /// <summary>
+    /// How many <c>tools/list</c> pages one probe will ask for.
+    /// </summary>
+    /// <remarks>
+    /// A hundred, which at any realistic page size is thousands of tools — far past the point where the surface
+    /// report has already said everything there is to say about a server this large. The number exists because the
+    /// cursor comes from the server: without a bound, one that always returns a fresh cursor turns an inspection
+    /// into an unbounded walk. Not configurable, deliberately — a limit nobody has needed to change is not a
+    /// setting, and reaching it is reported rather than silently absorbed.
+    /// </remarks>
+    private const int MaxPages = 100;
+
+    /// <summary>
     /// What SkillForge calls itself to a server. Not taken from the Reporting layer: Infrastructure may not reference
     /// it, and the dependency rules are worth more than sharing one string.
     /// </summary>
@@ -126,13 +138,18 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
 
             var probe = Read(server.Name, payload);
 
-            // A second request, and only when the server said it has tools. Tool conformance cannot be checked without
-            // the tool list, and the list cannot be had without asking — but a server that declares no tools is never
-            // asked, and only the first page is read: paging through a large catalogue to inspect it is not proportionate.
-            return probe.Status == McpProbeStatus.Answered
-                && probe.Capabilities.Contains("tools", StringComparer.OrdinalIgnoreCase)
-                    ? probe with { Tools = await ToolsAsync(url, cancellationToken).ConfigureAwait(false) }
-                    : probe;
+            // Further requests, and only when the server said it has tools. Tool conformance cannot be checked
+            // without the tool list, and the list cannot be had without asking — but a server that declares no
+            // tools is never asked.
+            if (probe.Status != McpProbeStatus.Answered
+                || !probe.Capabilities.Contains("tools", StringComparer.OrdinalIgnoreCase))
+            {
+                return probe;
+            }
+
+            var listing = await ToolsAsync(url, cancellationToken).ConfigureAwait(false);
+
+            return probe with { Tools = listing.Tools, Paging = listing.Paging };
         }
     }
 
@@ -172,40 +189,101 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
     }
 
     /// <summary>
-    /// Reads the first page of <c>tools/list</c>, reducing each tool to the facts a conformance check needs.
+    /// Reads every page of <c>tools/list</c>, reducing each tool to the facts a conformance check needs.
     /// </summary>
     /// <remarks>
-    /// Failure here is deliberately quiet: the probe already succeeded, and a server that answers discovery but refuses
-    /// its tool list has told us something less interesting than what we already have. An empty list is the honest
-    /// result, and it produces no findings rather than false ones.
+    /// The whole list, because a partial one cannot answer the question the tool list is read for. "This server
+    /// exposes fifty tools" is a different sentence from "the first page of this server's tools holds fifty", and a
+    /// declared-versus-runtime comparison built on the second would report every tool past page one as missing.
+    ///
+    /// Three bounds, because following a cursor the server controls is an unbounded walk by construction:
+    /// <see cref="MaxPages"/> pages, a repeated cursor stops it, and the cancellation token is checked before every
+    /// request rather than only at the start. Whichever bound fires is recorded on the result — a count that stopped
+    /// early must never be read as a total.
+    ///
+    /// Failure is deliberately quiet: the probe already succeeded, and a server that answers discovery but refuses
+    /// its tool list has told us something less interesting than what we already have. Pages read before a failure
+    /// are kept, because they are true.
     /// </remarks>
-    private async Task<IReadOnlyList<McpToolSummary>> ToolsAsync(string url, CancellationToken cancellationToken)
+    private async Task<McpToolListing> ToolsAsync(string url, CancellationToken cancellationToken)
     {
-        var body = new JsonObject
-        {
-            ["jsonrpc"] = "2.0",
-            ["id"] = "skillforge-tools-1",
-            ["method"] = "tools/list",
-            ["params"] = new JsonObject
-            {
-                ["_meta"] = new JsonObject
-                {
-                    [ProtocolVersionKey] = Revision,
-                    [ClientInfoKey] = new JsonObject
-                    {
-                        ["name"] = ClientName,
-                        ["version"] = ClientVersion,
-                    },
-                    [ClientCapabilitiesKey] = new JsonObject(),
-                },
-            },
-        }.ToJsonString();
+        var pages = new List<IReadOnlyList<McpToolSummary>>();
+        var seenCursors = new HashSet<string>(StringComparer.Ordinal);
+        var firstPageCount = 0;
+        var outcome = McpToolPagingOutcome.Complete;
+        string? cursor = null;
 
+        while (true)
+        {
+            // Between pages, not only at the start: a hundred round trips to a slow server is exactly the wait
+            // somebody presses Ctrl+C during.
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var page = await ToolPageAsync(url, cursor, pages.Count + 1, cancellationToken).ConfigureAwait(false);
+
+            if (page is null)
+            {
+                // The server stopped answering. What was read stays, and the list is only called complete when
+                // nothing had been asked for yet — an empty list from a refused first page is the honest result,
+                // while a walk that broke off mid-way has read less than there is.
+                outcome = pages.Count == 0
+                    ? McpToolPagingOutcome.Complete
+                    : McpToolPagingOutcome.PageLimitReached;
+                break;
+            }
+
+            pages.Add(page.Tools);
+
+            if (pages.Count == 1)
+            {
+                firstPageCount = page.Tools.Count;
+            }
+
+            if (page.NextCursor is not { Length: > 0 } next)
+            {
+                break;
+            }
+
+            // A cursor the server has already handed out means following it returns here again. Stopping is the only
+            // termination this walk gets: the cursor is opaque, so it cannot be checked for progress any other way.
+            if (!seenCursors.Add(next))
+            {
+                outcome = McpToolPagingOutcome.CursorLoopDetected;
+                break;
+            }
+
+            if (pages.Count >= MaxPages)
+            {
+                outcome = McpToolPagingOutcome.PageLimitReached;
+                break;
+            }
+
+            cursor = next;
+        }
+
+        return new McpToolListing(
+            McpToolReader.Merge(pages),
+            new McpToolPaging(pages.Count, firstPageCount, outcome));
+    }
+
+    /// <summary>
+    /// Asks for one page of <c>tools/list</c>.
+    /// </summary>
+    /// <returns>
+    /// The page, or <see langword="null"/> when the server did not answer with one. Null means "stop", not "empty":
+    /// an empty page is a real answer, and it ends the walk through its missing cursor.
+    /// </returns>
+    private async Task<ToolPage?> ToolPageAsync(
+        string url,
+        string? cursor,
+        int pageNumber,
+        CancellationToken cancellationToken)
+    {
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
-                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+                Content = new StringContent(ToolsBody(cursor, pageNumber), Encoding.UTF8, "application/json"),
             };
 
             request.Headers.TryAddWithoutValidation("MCP-Protocol-Version", Revision);
@@ -214,22 +292,68 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
 
             if (!response.IsSuccessStatusCode)
             {
-                return [];
+                return null;
             }
 
             var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-            return McpToolReader.Read(JsonNode.Parse(payload)?["result"]?["tools"]);
+            return JsonNode.Parse(payload)?["result"] is { } result
+                ? new ToolPage(McpToolReader.Read(result["tools"]), McpToolReader.NextCursor(result))
+                : null;
         }
         catch (HttpRequestException)
         {
-            return [];
+            return null;
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
         }
         catch (JsonException)
         {
-            return [];
+            return null;
         }
     }
+
+    /// <summary>
+    /// The <c>tools/list</c> request body. The cursor goes in <c>params.cursor</c>, which is where the
+    /// specification's pagination puts it, and is absent on the first request rather than sent as null.
+    /// </summary>
+    private static string ToolsBody(string? cursor, int pageNumber)
+    {
+        var parameters = new JsonObject
+        {
+            ["_meta"] = new JsonObject
+            {
+                [ProtocolVersionKey] = Revision,
+                [ClientInfoKey] = new JsonObject
+                {
+                    ["name"] = ClientName,
+                    ["version"] = ClientVersion,
+                },
+                [ClientCapabilitiesKey] = new JsonObject(),
+            },
+        };
+
+        if (cursor is { Length: > 0 })
+        {
+            parameters["cursor"] = cursor;
+        }
+
+        return new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = $"skillforge-tools-{pageNumber}",
+            ["method"] = "tools/list",
+            ["params"] = parameters,
+        }.ToJsonString();
+    }
+
+    /// <summary>One page as it came back: its tools, and the cursor for the next one when there is one.</summary>
+    private sealed record ToolPage(IReadOnlyList<McpToolSummary> Tools, string? NextCursor);
+
+    /// <summary>A whole tool list, with what it took to read it.</summary>
+    private sealed record McpToolListing(IReadOnlyList<McpToolSummary> Tools, McpToolPaging Paging);
 
     private static string Body() =>
         new JsonObject

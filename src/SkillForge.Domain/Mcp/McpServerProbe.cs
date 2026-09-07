@@ -23,6 +23,13 @@ namespace SkillForge.Domain.Mcp;
 /// <param name="Tools">
 /// What <c>tools/list</c> returned, when the server declared the <c>tools</c> capability. Empty otherwise — including
 /// when it declares tools and has none, which are not distinguished here because the specification allows an empty set.
+///
+/// Tools are ordered by name and carry one entry per name. A server that lists the same name twice has made its own
+/// surface ambiguous, and the first description of it wins so that two runs against that server agree.
+/// </param>
+/// <param name="Paging">
+/// What it took to read <paramref name="Tools"/>, and whether the whole list was read.
+/// <see langword="null"/> when no tool list was asked for.
 /// </param>
 public sealed record McpServerProbe(
     string ServerName,
@@ -34,7 +41,8 @@ public sealed record McpServerProbe(
     string? Detail,
     string? AnsweredRevision = null,
     McpAuthorizationChallenge? Authorization = null,
-    IReadOnlyList<McpToolSummary>? Tools = null)
+    IReadOnlyList<McpToolSummary>? Tools = null,
+    McpToolPaging? Paging = null)
 {
     /// <summary>Gets the tools the probe read, or an empty list when it read none.</summary>
     public IReadOnlyList<McpToolSummary> ToolsOrEmpty => Tools ?? [];
@@ -47,6 +55,7 @@ public sealed record McpServerProbe(
     /// <param name="selfReportedVersion">Its self-reported version.</param>
     /// <param name="answeredRevision">The revision whose adapter got the answer.</param>
     /// <param name="tools">What <c>tools/list</c> returned, when it was asked.</param>
+    /// <param name="paging">What it took to read that list, when one was read.</param>
     /// <returns>The probe result.</returns>
     public static McpServerProbe Answered(
         string serverName,
@@ -55,7 +64,8 @@ public sealed record McpServerProbe(
         string? selfReportedName,
         string? selfReportedVersion,
         string? answeredRevision = null,
-        IReadOnlyList<McpToolSummary>? tools = null) =>
+        IReadOnlyList<McpToolSummary>? tools = null,
+        McpToolPaging? paging = null) =>
         new(
             serverName,
             McpProbeStatus.Answered,
@@ -66,7 +76,8 @@ public sealed record McpServerProbe(
             null,
             answeredRevision,
             null,
-            tools);
+            tools,
+            paging);
 
     /// <summary>A server that asked to be authorised against.</summary>
     /// <param name="serverName">The declared name.</param>

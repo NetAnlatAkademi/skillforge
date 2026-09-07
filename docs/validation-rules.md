@@ -99,6 +99,7 @@ number in front of it.
 | SF1013 | A `version` field was written at the top level instead of under `metadata` | **Implemented** (loader) |
 | SF1014 | A file under `evals` could not be read or parsed, so its cases were skipped | **Implemented** (`eval`) |
 | SF1015 | A provider's own configuration file could not be read, so what it declares is missing from the migration inventory | **Implemented** (`migrate inspect`) |
+| SF1016 | A remote registry could not be searched, or answered with something unreadable | **Implemented** (`discover`) |
 
 SF1013 exists because the old behaviour was to discard the value without a word. Every other field a skill declares
 is top-level, so writing `version:` there is an easy mistake — and it meant SF0010 never checked the version,
@@ -548,6 +549,7 @@ implemented*.
 | SF8007 | A tool's `inputSchema` is absent or is not a JSON object | **Implemented** (`migrate inspect --probe-mcp`) |
 | SF8008 | A tool's `x-mcp-header` annotation breaks a constraint a client must reject the tool over | **Implemented** (`migrate inspect --probe-mcp`) |
 | SF8009 | A tool name falls outside the specification's naming guidance | **Implemented** (`migrate inspect --probe-mcp`) |
+| SF8010 | A server's `tools/list` was not read to the end, so its tool count is a floor | **Implemented** (`mcp surface --probe`) |
 
 **The whole band is `Info`, and that is a decision.** `migrate inspect` describes and does not judge (ADR-006) and always
 exits `0`, so nothing here is a gate. It also solves a real measurement problem: SF8003 fires on **three of the four** MCP
@@ -624,9 +626,43 @@ a local server by running it is the exact act SkillForge exists to let somebody 
 server is reported as "not asked", with the reason, so it cannot be mistaken for one that failed to answer.
 
 A probe is one `server/discover` request, which `2026-07-28` made mandatory for servers and which returns supported
-versions, capabilities and identity together. The reported identity is always labelled **self-reported**: the
+versions, capabilities and identity together. A server that declares the `tools` capability is then asked for its tool
+list — see [The whole tool list, and its three bounds](#the-whole-tool-list-and-its-three-bounds). The reported identity is always labelled **self-reported**: the
 specification states plainly that `serverInfo` is not verified by the protocol and that clients should not use it for
 security decisions, so printing it as bare fact would repeat a claim as though SkillForge had checked it.
+
+### The whole tool list, and its three bounds
+
+`tools/list` is paginated, and SkillForge follows `nextCursor` to the end. It used to read the first page only, which
+made every tool count a first-page count wearing a total's clothes: "this server exposes 50 tools" and "the first page
+of this server's tools holds 50" are different sentences, and a declared-versus-runtime comparison built on the second
+reports every tool past page one as missing.
+
+Following a cursor the server controls is an unbounded walk by construction, so there are three bounds:
+
+- **A hundred pages.** At any realistic page size that is thousands of tools, far past the point where the surface
+  report has already said everything there is to say about a server this large. Not configurable: a limit nobody has
+  needed to change is not a setting.
+- **A repeated cursor stops the walk.** A cursor is opaque, so there is no other way to tell that following it makes
+  progress. A server handing back one it has already given out would loop forever.
+- **The cancellation token is checked before every request**, not only on entry. A hundred round trips to a slow server
+  is exactly the wait somebody presses Ctrl+C during.
+
+**SF8010 is emitted whenever a bound fires**, at any tool count and before any threshold is applied, because it is a
+statement about the number rather than about the server: a count that stopped early cannot be compared against a
+threshold, and a reader who is not told will compare it anyway. `Info`, not a warning — SkillForge stopping is a fact
+about the report, not a defect in the server. The one case that *is* a server defect, a repeated cursor, says so in the
+suggestion.
+
+**A tool named twice is one tool.** The specification identifies tools by name, and a server listing one name on two
+pages has made its own surface ambiguous — a client cannot know which schema applies. The first description wins, which
+is arbitrary and stated; taking the last would be arbitrary and unstated. Names are compared **case-sensitively**: the
+specification does not say `Deploy` and `deploy` are the same tool, and folding case would silently merge two real ones.
+
+**The merged list is ordered by name**, not by the order the server listed them. A paging server may return its pages in
+whatever order it likes, and a report that changes between two identical runs cannot be diffed in a pipeline. What the
+first response carried survives as a count — `initiallyExposed` in `mcp surface`, which is the number actually in the
+agent's context after one round trip — rather than as a position in the list.
 
 SF8005 looks for **`logging` only**. Roots and Sampling were deprecated by the same SEP and are listed beside it
 everywhere, but they are *client* capabilities — a server cannot declare them, so looking for them here would be a check
@@ -727,6 +763,76 @@ an **empty policy produces zero findings**, and a policy of `default: deny` with
 per server plus one `SF8104`, which is the arithmetic the rule promises. The number that matters is the first: a
 policy that has not decided anything about MCP is silent, so the command is safe to put in a pipeline before the
 rules exist.
+
+## Discovery drift
+
+The codes that answer the question a registry cannot answer about itself.
+
+| Code | Severity | Rule | Reported by |
+|---|---|---|---|
+| SF8201 | Warning | A discovered MCP server answered with a tool the registry did not declare | `discovery verify --probe` |
+| SF8202 | Info | A registry declares a tool the server did not answer with | `discovery verify --probe` |
+| SF8203 | Info | The tool counts differ and the names could not be compared one to one | `discovery verify --probe` |
+| SF8204 | Info | The version the registry names and the one the server reports about itself disagree | `discovery verify --probe` |
+| SF1016 | Warning | A registry could not be searched, or answered with something unreadable | `discover`, `discovery verify` |
+
+**SF8201 is the finding the feature exists for.** A registry says a server has twelve tools; the server answers with
+seventeen. Discovery metadata is written by a publisher, and a tool surface is answered by a process — the five that
+appear only at runtime are capabilities nobody reviewed, and that is the shape an unreviewed capability arrives in.
+
+### Measured before the severities were fixed
+
+Eight fixture listings: four matching their servers exactly, two whose servers answer with an extra tool, one whose
+listing declares a tool the server dropped, and one declaring no capabilities at all.
+
+| Code | Findings on 8 fixtures |
+|---|---|
+| SF8201 | **2** — only the two servers with a genuinely unlisted tool |
+| SF8202 | **1** |
+| SF8203 | **1** |
+| On the four matching listings | **0** between them |
+
+That last row is the number that matters. A rule that fired on a correct listing would be a rule nobody could put in
+a pipeline — the SF8003 problem, which is why SF8003 is information. Two out of eight is a rate a reader will
+actually read, so SF8201 is a Warning. The measurement is a test, not a note: `MeasuredOnFixturesBeforeTheSeverities
+WereFixed` in `DiscoveryVerifierTests`, so the numbers above fail the build if they stop being true.
+
+### Silence is not a claim
+
+A registry that declares no capabilities has **not** declared that the server has none. It has said nothing.
+
+Comparing runtime names against nothing would report every tool on every such server as unexpected, which would make
+SF8201 fire on every listing that omits an optional field — and the MCP Registry lists no tools at all, so that is
+most of them. When there is nothing to compare names against, only the counts are stated, as SF8203.
+
+### An incomplete tool list suppresses only one of the two directions
+
+When `tools/list` stopped early (SF8010), SF8202 is not emitted: a tool absent from a partial read might be on the
+page nobody reached, and reporting it would be a finding produced by SkillForge's own page limit rather than by the
+server.
+
+SF8201 still fires. The asymmetry is the point — a tool that **was** seen is present whether or not reading
+finished, while a tool that was not seen might simply not have been reached.
+
+### Endpoint drift has no code, deliberately
+
+"The registry listed it at one host and another host answered" is a real drift kind, and `DiscoveryDriftKind`
+names it. Nothing emits it, and no code has been published for it: establishing it means knowing the URL that
+answered after redirects, and the MCP prober reports what a server *said* rather than where the socket ended up. A
+drift kind that cannot be established would be an empty promise on a report.
+
+### What `VerifiedNoDrift` does not mean
+
+It means the capabilities a registry declared matched the tools a server answered with, at the moment it was asked.
+
+It does not mean the server is trusted. It does not mean it is safe. A server can match its listing exactly and
+still be malicious, still be compromised tomorrow, and still expose a tool that drops a database. Every output path
+says so in those words, and `ResourceVerification` has no field that could say otherwise — there is a test that
+asserts the absence.
+
+Whether a difference is *permitted* is `policy check`'s answer. The two layers stay apart so that "unexpected
+runtime tool: `delete_database`" is a description and "`delete_database` is not permitted" is a violation, rather
+than one confused sentence that is neither.
 
 ## Organisation policy
 

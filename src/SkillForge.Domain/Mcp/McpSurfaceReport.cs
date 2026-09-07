@@ -33,8 +33,9 @@ public enum SurfaceRisk
 /// <param name="ServerName">The name the configuration gives the server.</param>
 /// <param name="ToolCount">How many tools it returned.</param>
 /// <param name="InitiallyExposed">
-/// How many were in the first response. Equal to <paramref name="ToolCount"/> for every server that does not
-/// narrow what it lists, which is what makes the pair worth printing.
+/// How many were in the first <c>tools/list</c> response. Equal to <paramref name="ToolCount"/> for every server
+/// that returns its whole surface in one page, which is what makes the pair worth printing: a gap between them is
+/// the server paging, and it is the number that is actually in the agent's context after one round trip.
 /// </param>
 /// <param name="WriteCapableTools">Tools whose names say they change something.</param>
 /// <param name="CredentialCapableTools">Tools whose names say they touch a secret.</param>
@@ -45,6 +46,10 @@ public enum SurfaceRisk
 /// </param>
 /// <param name="NotProbedReason">Why there are no counts, or <see langword="null"/> when there are.</param>
 /// <param name="Risk">The combined verdict.</param>
+/// <param name="Paging">
+/// What it took to read the tool list, when one was read. An enumeration that stopped early makes
+/// <paramref name="ToolCount"/> a floor, and the report says so rather than leaving the number to be trusted.
+/// </param>
 public sealed record McpToolSurface(
     string ServerName,
     int ToolCount,
@@ -54,7 +59,8 @@ public sealed record McpToolSurface(
     IReadOnlyList<string> AdminTools,
     bool ProgressiveDiscoveryDetected,
     string? NotProbedReason,
-    SurfaceRisk Risk)
+    SurfaceRisk Risk,
+    McpToolPaging? Paging = null)
 {
     /// <summary>Gets the tools that change, govern or reach a secret, without double-counting any.</summary>
     public IReadOnlyList<string> PrivilegedTools =>

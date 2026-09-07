@@ -280,7 +280,7 @@ internal sealed class MigrateInspectCommandRunner
                     if (probe.ToolsOrEmpty.Count > 0)
                     {
                         builder.AppendLine(
-                            $"      tools:        {probe.ToolsOrEmpty.Count} read "
+                            $"      tools:        {probe.ToolsOrEmpty.Count} read{PagingNote(probe.Paging)} "
                             + $"({Join([.. probe.ToolsOrEmpty.Select(tool => tool.Name)])})");
                     }
 
@@ -347,6 +347,30 @@ internal sealed class MigrateInspectCommandRunner
         builder.AppendLine($"  Pinned assets         {distribution.PinnedAssets}");
         builder.AppendLine($"  Unknown provenance    {distribution.UnknownProvenance}");
     }
+
+    /// <summary>
+    /// Says how a tool list was read, and only when that changes what the count means. A complete single-page
+    /// read gets nothing: every line that always appears is a line nobody reads.
+    /// </summary>
+    private static string PagingNote(McpToolPaging? paging) => paging switch
+    {
+        null or { IsComplete: true, PagesRead: <= 1 } => string.Empty,
+        { IsComplete: true } => $" over {paging.PagesRead} pages",
+        { Outcome: McpToolPagingOutcome.CursorLoopDetected } =>
+            $" over {paging.PagesRead} pages, incomplete — the server repeated a pagination cursor",
+        _ => $" over {paging.PagesRead} pages, incomplete — the page limit was reached",
+    };
+
+    private static JsonObject? ToolPagingJson(McpToolPaging? paging) =>
+        paging is null
+            ? null
+            : new JsonObject
+            {
+                ["pagesRead"] = paging.PagesRead,
+                ["firstPageToolCount"] = paging.FirstPageToolCount,
+                ["complete"] = paging.IsComplete,
+                ["outcome"] = paging.Outcome.ToString(),
+            };
 
     private static string Join(IReadOnlyList<string> values) =>
         values.Count == 0 ? "(none reported)" : string.Join(", ", values);
@@ -460,6 +484,7 @@ internal sealed class MigrateInspectCommandRunner
                             ["declaredSchemaDialect"] = tool.DeclaredSchemaDialect,
                             ["headerAnnotations"] = tool.HeaderAnnotations.Count,
                         })]),
+                    ["toolPaging"] = ToolPagingJson(probe.Paging),
                     ["detail"] = probe.Detail,
                 })]),
             ["diagnostics"] = new JsonArray(
