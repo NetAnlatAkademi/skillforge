@@ -2,10 +2,15 @@
 
 A local, open source CLI for the agent ecosystem's supply chain. It creates, validates, inspects, compares and
 packages `SKILL.md`-based skills — and reports where each skill, plugin and MCP server came from, how it gets its
-next version, whose identity it runs with and how much it opens to an agent. Console text, JSON or SARIF 2.1.0.
+next version, whose identity it runs with, how much it opens to an agent, what is wired to what, and whether a
+registry's claims survive contact with the servers behind them. Console text, JSON, SARIF 2.1.0 or Mermaid.
 
-Nothing is sent to any service. Everything runs on your machine, and the one command that can speak to an MCP
-server does so only when you pass `--probe`.
+**SkillForge is not a registry or a marketplace.** It verifies the gap between the capability an agent ecosystem
+declares and the capability it actually offers.
+
+Nothing reaches any service unless you hand a command a URL. Everything else runs on your machine: probing an MCP
+server needs `--probe`, searching a registry needs an explicit `--registry`, and a local stdio server is never
+launched under any flag.
 
 ## Install
 
@@ -34,6 +39,9 @@ Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download) or newer.
 | `skillforge provenance diff <before> <after>` | Report what drifted: publisher, marketplace, pin, fingerprint |
 | `skillforge update analyze <base> <target>` | Report what an update adds, and what that means given how it arrives |
 | `skillforge identity inspect\|diff <file>` | Report whose authority an agent reaches each MCP server with |
+| `skillforge graph [path]` | Draw what is wired to what — console, JSON or Mermaid, every edge citing its source file |
+| `skillforge discover <query>` | Search a remote registry and report what it declares, without connecting to any of it |
+| `skillforge discovery verify <query>` | Compare what a registry declares about its MCP servers with what those servers answer |
 | `skillforge inventory` | Report the agent tooling installed here: skills, MCP servers, instruction files |
 | `skillforge migrate inspect` | The same inventory, under the migration group |
 
@@ -199,10 +207,52 @@ skillforge policy check ./skills --format sarif --output artifacts/policy.sarif
 No rule has a default that forbids anything, so an empty policy produces no findings. A policy that cannot be read
 fails the run and checks nothing, and a rule the command cannot observe says so rather than passing quietly.
 
+## What is wired to what
+
+```bash
+skillforge graph .
+skillforge graph . --format mermaid
+```
+
+Skills, plugins, MCP servers, instruction files, hooks, scripts, external hosts, credential **names**, identities
+and declared approval boundaries — with every edge naming the file it was read from and, where the claim came out
+of the file's text, the line.
+
+**No evidence, no claim.** There is no "probably talks to" edge and no transitive closure. A solid Mermaid arrow was
+read from a structured field; a dotted one was inferred from a name matched in prose, which is exact evidence and a
+heuristic conclusion. An approval boundary is drawn only from `approval.required: true` in a skill's own
+`skillforge.yaml` — never from prose that says "ask the user first", because that is a sentence nothing enforces.
+
+It makes no network request, and it reaches no verdict.
+
+## What a registry claims, against what its servers answer
+
+```bash
+skillforge discover "database" --registry https://registry.example.com/resources
+skillforge discovery verify "database" --registry https://registry.example.com/resources --probe
+```
+
+A registry says a server has twelve tools; the server answers with seventeen. The five that appear only at runtime
+are capabilities nobody reviewed — `SF8201`.
+
+- **`--registry` has no default and will not get one.** `skillforge discover postgres` on its own is a usage error
+  that makes no request.
+- **Registry metadata is untrusted structurally.** There is no `Trusted`, `Verified` or `TrustScore` field for a
+  registry's claim to be recorded in. Membership says where something was found, not that it is safe.
+- **`--probe` is a second decision.** Without it nothing is contacted. Only remote HTTP MCP servers are ever asked.
+- **"Verified, no drift" does not mean trusted or safe.** It means the declared capabilities matched the runtime
+  tool list at the moment it was asked.
+
+Two adapters, one verification layer: `--kind ard` for Agentic Resource Discovery and `--kind mcp-registry` for an
+MCP Registry listing. Both read-only.
+
 ## What it deliberately does not do
 
 SkillForge reports concrete diagnostics and risk signals. It never labels a skill "safe" or "unsafe": that is a
 judgement about intent, and a tool that claims it teaches people to trust the claim instead of reading the skill.
+
+It is also not a registry, not a marketplace and not an installer. It publishes nothing, installs nothing, connects
+to nothing it discovered, and never launches a local server in order to inspect it.
 
 ## Documentation
 
@@ -211,6 +261,8 @@ judgement about intent, and a tool that claims it teaches people to trust the cl
 - [Every rule, with its measurements](https://github.com/NetAnlatAkademi/skillforge/blob/main/docs/validation-rules.md)
 - [CI and SARIF](https://github.com/NetAnlatAkademi/skillforge/blob/main/docs/ci.md)
 - [Migration inventory](https://github.com/NetAnlatAkademi/skillforge/blob/main/docs/migration.md)
+- [The asset graph](https://github.com/NetAnlatAkademi/skillforge/blob/main/docs/graph.md)
+- [Discovery and runtime verification](https://github.com/NetAnlatAkademi/skillforge/blob/main/docs/discovery.md)
 - [Changelog](https://github.com/NetAnlatAkademi/skillforge/blob/main/CHANGELOG.md)
 
 MIT licensed.

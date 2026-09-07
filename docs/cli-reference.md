@@ -856,6 +856,133 @@ and the output says so.
 `identity diff` reports widenings only: a new scope, a delegation turned on, a credential that stopped expiring, or
 a changed identity type. A dropped scope is shown and never coded.
 
+## `skillforge graph`
+
+Draws what is wired to what under one directory: skills, plugins, MCP servers, instruction files, hooks, scripts,
+external hosts, credential names, identities and declared approval boundaries.
+
+```bash
+skillforge graph .
+skillforge graph . --format json
+skillforge graph . --format mermaid --output docs/wiring.mmd
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `path` | `.` | Directory to read |
+| `--format`, `-f` | `console` | `console`, `json` or `mermaid`. **No SARIF**: a graph is a description, and uploading one as static-analysis results would put a hundred "issues" on a pull request that nobody claimed were problems |
+| `--output`, `-o` | stdout | Write to a file |
+
+It **describes and does not judge** and exits `0`. There is no `--fail-on-*` flag, because a flag needs a rule behind
+it and the composition rules a graph makes possible have not been measured on real repositories yet.
+
+**There is no `--probe`.** The graph is read from files on disk; asking a server about itself is `mcp surface`'s and
+`discovery verify`'s business, and a diagram that could silently make network requests would be the one output nobody
+would think to check for them.
+
+Every edge names the file it was read from, and the line when the claim came out of the file's text. A dotted
+`(inferred)` edge came from a name matched in prose or from the spelling of a variable — exact evidence, heuristic
+conclusion. Where a declared and an inferred reading exist for the same pair, the declared one wins.
+
+**Credential nodes are environment variable and header names. No value is ever read or printed.**
+
+An MCP configuration that cannot be parsed is **SF1015** and fails the run: a node missing from a graph because a
+file would not read is worse than a stated gap, and worst of all when it exits zero.
+
+Node and edge types, the evidence rule, the approval-boundary policy and the Mermaid guarantees are in
+[graph.md](graph.md).
+
+---
+
+## `skillforge discover`
+
+Searches a remote registry and reports what it declares — without connecting to any of it.
+
+```bash
+skillforge discover "postgres" --registry https://registry.example.com/resources
+skillforge discover "" --registry https://registry.example.com/v0/servers --kind mcp-registry
+skillforge discover "database" --registry https://registry.example.com/resources --format json
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `query` | empty | What to search for. Empty lists whatever the registry returns without a query |
+| `--registry` | **none, ever** | Registry URL. Required |
+| `--kind` | `ard` | Which adapter: `ard` or `mcp-registry` |
+| `--type` | all | Only one resource type: `skill`, `mcpserver`, `agent`, `workflow`, `api`, `unknown` |
+| `--timeout` | `20` | Seconds to wait for the registry |
+| `--limit` | `200` | How many resources to read from the response |
+| `--format`, `-f` | `console` | `console` or `json`. **No SARIF**: a search result is not a set of findings |
+| `--output`, `-o` | stdout | Write to a file |
+
+**`--registry` has no default and will not get one.**
+
+```text
+$ skillforge discover "postgres"
+Usage error:
+No registry was specified. Discovery has no default registry: SkillForge never reaches a registry nobody named.
+```
+
+Exit `2`, and no request is made. A default would make `skillforge discover postgres` reach the internet, and a tool
+that reaches the internet without being told to is one nobody can put in a locked-down pipeline. There is no
+background refresh, no cache, no telemetry, no auto-install and no auto-connect either.
+
+**Everything printed is a claim the registry made.** The console says so at the top; the JSON carries
+`"declaredByRegistry": true`. Registry membership says where something was found — not that it is safe, trusted, or
+what it claims to be. Fields this adapter does not recognise are preserved under `metadata` and never interpreted.
+
+Exit `1` when the registry could not be searched (**SF1016**): "no results" and "no answer" are different facts, and
+only one of them is reassuring.
+
+Bounds, adapters and the trust model are in [discovery.md](discovery.md).
+
+---
+
+## `skillforge discovery verify`
+
+Reads a registry, then — only with `--probe` — asks each remote HTTP MCP server it listed what it actually exposes,
+and reports the differences.
+
+```bash
+skillforge discovery verify "postgres" --registry https://registry.example.com/resources
+skillforge discovery verify "postgres" --registry https://registry.example.com/resources --probe
+skillforge discovery verify "" --registry https://registry.example.com/v0/servers \
+  --kind mcp-registry --probe --fail-on-drift --format sarif -o drift.sarif
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `query` | empty | What to search for |
+| `--registry` | **none, ever** | Registry URL. Required |
+| `--kind` | `ard` | Which adapter: `ard` or `mcp-registry` |
+| `--probe` | off | Ask each discovered **remote HTTP** MCP server what it exposes. Without it, every resource is reported as not probed and nothing is contacted. A local stdio server is never launched either way |
+| `--fail-on-drift` | off | Fail when a difference is reported |
+| `--timeout` | `20` | Seconds to wait for the registry |
+| `--limit` | `200` | How many resources to read from the response |
+| `--format`, `-f` | `console` | `console`, `json` or `sarif` |
+| `--output`, `-o` | stdout | Write to a file |
+
+`--probe` is a second decision, separate from the search, because reading a registry and reaching out to every server
+it lists are different acts with different consequences.
+
+| Finding | Severity | Meaning |
+|---|---|---|
+| SF8201 | Warning | The server answered with a tool the registry did not declare |
+| SF8202 | Info | The registry declares a tool the server did not answer with |
+| SF8203 | Info | The counts differ and the names could not be compared one to one |
+| SF8204 | Info | The registry's version and the server's self-reported version disagree |
+
+**"Verified, no drift" does not mean trusted and does not mean safe.** It means the declared capabilities matched the
+runtime tool list at the moment it was asked. Whether a difference is *permitted* is `policy check`'s answer — this
+command describes, and the two layers stay apart on purpose.
+
+SARIF carries **only the findings**, not the listing: drift is a scanner result, a search result is not.
+
+The pipeline, the reuse of the existing MCP prober, and the measurements behind the severities are in
+[discovery.md](discovery.md) and [validation-rules.md](validation-rules.md#discovery-drift).
+
+---
+
 ## `skillforge mcp`
 
 The MCP checks, against a **file the caller names** rather than the files a provider owns. That is the difference
@@ -924,9 +1051,15 @@ Servers (1):
       Risk:       HIGH
 ```
 
-Counts come from the server's own `tools/list`, so a server that was not probed reports **why** rather than `0`, and
-a stdio server reports that SkillForge never launches a local server to inspect it. Write, credential and admin are
-read from tool **names**; no model is used, and the rule lists are in `docs/validation-rules.md`.
+Counts come from the server's own `tools/list`, **read to the end** over as many pages as the server returns, so a
+server that was not probed reports **why** rather than `0`, and a stdio server reports that SkillForge never launches
+a local server to inspect it. Write, credential and admin are read from tool **names**; no model is used, and the
+rule lists are in `docs/validation-rules.md`.
+
+`Exposed` is what the **first** response carried, which is the number actually in the agent's context after one round
+trip. It equals `Tools` for every server that returns its whole surface in one page; a gap between them is the server
+paging. When a bound stopped the walk — a hundred pages, or a cursor the server repeated — the count is a floor and
+the report says so as **SF8010**.
 
 Thresholds come from the policy file when it sets them:
 

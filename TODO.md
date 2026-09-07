@@ -5,7 +5,7 @@ mirrored into the Obsidian vault under `SkillForge/` for cross-session context.
 
 Legend: `[ ]` open · `[x]` done · `[~]` in progress · `[-]` deliberately deferred
 
-Last updated: 2026-08-10
+Last updated: 2026-09-07
 
 ---
 
@@ -604,12 +604,83 @@ file I approved" and cannot answer "will the file I approved still be the one ru
 
 ### Still not done, and deliberately
 
-- [-] `graph` and its new node types (`Workflow`, `ApprovalBoundary`, `Harness`, `Automation`). The update asks for
-  room, not for an implementation, and the domain model does not foreclose them.
+- [x] ~~`graph` and its new node types~~ - **done in v0.8.** `Workflow`, `Harness` and `Automation` still have no
+  detector, which remains the honest state; `ApprovalBoundary` shipped with one, from a structured declaration only.
 - [-] Agent surface score. Data model only, per the update's own instruction not to productise it yet.
 - [-] External evaluator adapters. Lowest priority in the update's own ordering.
 - [-] Fetching a marketplace or a repository to compare against. SkillForge downloads nothing; both sides of every
   comparison have to be on disk.
+
+## v0.8 — Full tool enumeration, the graph, discovery and runtime verification (from the weekly update of 2026-09-07)
+
+Done in one pass on 2026-09-07, against `docs/inputs-2026-09-07-weekly-update.md`. Sprints 19-24 of that document,
+in order.
+
+The through-line, and the reason all of it belongs to one release: **a registry can say a server has twelve tools
+while the server answers with seventeen.** Discovery metadata is written by a publisher; a tool surface is answered
+by a process. Comparing them needed the whole tool list first, which is why the pagination work is P0 and not
+housekeeping.
+
+- [x] **Sprint 19 - full `tools/list` pagination.** `McpToolPaging`, `McpToolPagingOutcome`, `SF8010`. The walk
+  follows `nextCursor` under three bounds: a hundred pages, a stop on a repeated cursor, and a cancellation check
+  before every request. A tool listed twice is one tool, first description wins, names compared case-sensitively;
+  the merged list is ordered by name so a paging server cannot make two identical runs differ.
+  `mcp surface`'s `initiallyExposed` is finally the first page rather than a copy of the total.
+  Reused `IMcpProtocolAdapter` and `McpProber`. **No second probing stack, and stdio still never launched.**
+- [x] **Sprint 20 - graph foundation.** `GraphNodeType`, `GraphRelation`, `GraphConfidence`, `GraphEvidence`,
+  `GraphNode`, `GraphEdge`, `AssetGraph`. `skillforge graph [path]`, console, JSON and Mermaid.
+  Nine node types detected, five named with no detector. Every edge carries a file and, where the claim came out of
+  the file's text, a line. **No evidence, no claim**; no transitive closure; declared beats inferred for one pair.
+  Nothing is parsed twice - the builder reuses discovery, the loader, the skill inspector, the MCP readers and the
+  manifest reader.
+- [x] **Sprint 21 - remote discovery foundation.** `IRemoteResourceDiscoveryAdapter`, `DiscoveredResource`,
+  `DeclaredCapability`, `RemoteDiscoveryRequest|Result|Limits`, `ArdDiscoveryAdapter`, `SF1016`.
+  `skillforge discover <query> --registry <url>`. **No default registry**, bounded on time, response size,
+  redirects, result count and JSON depth. No JSON-LD in `Domain`.
+- [x] **Sprint 22 - discovery verification.** `DiscoveryVerifier`, `DiscoveryVerificationStatus`,
+  `DiscoveryDriftKind`, `DiscoveryDrift`, `ResourceVerification`, `SF8201`-`SF8204`.
+  `skillforge discovery verify --probe`, console, JSON and SARIF, `--fail-on-drift`.
+  Remote HTTP MCP servers only. Reuses `McpProber` and the pagination.
+  **Severities measured on eight fixtures before the codes were published**, as a test.
+- [x] **Sprint 23 - MCP Registry adapter.** `McpRegistryDiscoveryAdapter` through the same abstraction, read-only,
+  `GET` only. Registry membership is provenance evidence, never trust. The registry's own bounds moved into a
+  shared `RegistryDocumentReader` so two adapters cannot disagree about how large a response may be.
+- [x] **Sprint 24 - approval boundary graph support.** `approval.required` and `approval.before` in
+  `skillforge.yaml`, `ApprovalBoundary` nodes, `ApprovedBy` edges. **Only from that structured declaration.**
+
+### Decisions taken in this phase
+
+- **`GraphConfidence` has two levels, not the three an `Observed` value would imply.** The graph makes no network
+  request - no protocol adapter is injected into the builder - so a level meaning "seen at runtime" would let a
+  diagram imply a probe that never happened. Runtime is `discovery verify`'s answer.
+- **A server name shorter than four characters is never matched in prose.** A server called `db` matches inside
+  half the English language, and an edge produced that way is noise with a citation attached.
+- **Silence is not a claim.** A registry that declares no capabilities has not declared that the server has none.
+  Comparing names against nothing would make `SF8201` fire on every listing that omits an optional field - and the
+  MCP Registry lists no tools at all.
+- **An incomplete tool list suppresses `SF8202` and not `SF8201`.** A tool that was seen is present whether or not
+  reading finished; a tool that was not seen might be on the page nobody reached.
+- **`SF8010` is `Info` and fires before any threshold is applied.** It is a statement about the number, not about
+  the server, and a count that stopped early cannot be compared against a threshold.
+- **`mermaid` is deliberately not in `OutputFormat.All`.** A format listed as generally available would have to be
+  implemented by every command that takes `--format`.
+- **`discovery` and `discover` are separate commands.** Reading a registry and reaching out to every server it
+  lists are different acts; a command name is the cheapest place to make that visible.
+
+### Still not done, and deliberately
+
+- [-] Endpoint drift as a published finding. The drift kind is named in the model and nothing emits it: establishing
+  it needs the URL that answered after redirects, which the prober does not report. A drift kind that cannot be
+  established would be an empty promise on a report.
+- [-] The `ProductionImpactingPath + NoExplicitApprovalBoundary` composition rule. Documented in `docs/graph.md` as
+  deferred. It cannot be measured honestly while approval boundaries are declared by almost nobody and production is
+  not classifiable at all - publishing it now would fire on approximately every repository, which is the SF1009
+  failure mode.
+- [-] Detectors for `Workflow`, `Harness`, `Automation` and `ExecutionEnvironment`. The model leaves room, which is
+  what the update asked for; nothing in a repository declares them in a form that could be read without guessing.
+- [-] Provider-specific execution-environment detectors. No Docker, Vercel, Cursor or Cloudflare detector, by
+  explicit instruction and by preference.
+- [-] Anything that installs, connects to, publishes or executes a discovered resource.
 
 ## Out of scope for v0.1.0
 

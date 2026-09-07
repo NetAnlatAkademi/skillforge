@@ -1785,7 +1785,7 @@ referansları hakkında bir kural, diğeri dağıtım hakkında bir blok.
 ### 33.5 Yapılmayanlar
 
 ```text
-graph node türleri (Workflow, ApprovalBoundary, Harness, Automation)
+graph node türleri (Workflow, ApprovalBoundary, Harness, Automation)  → §34'te yapıldı
 agent surface score
 harici evaluator adaptörleri
 uzak marketplace/repository indirip karşılaştırma
@@ -1793,3 +1793,93 @@ uzak marketplace/repository indirip karşılaştırma
 
 İlk üçü girdinin kendi öncelik sırasında da sonda; dördüncüsü ürün ilkesine aykırı — SkillForge hiçbir şey
 indirmez, karşılaştırmanın iki tarafı da diskte olmalıdır.
+
+Graph 2026-09-07 girdisiyle geldi: bkz. §34. `Workflow`, `Harness` ve `Automation` hâlâ detector'sız —
+`ApprovalBoundary` yalnızca yapılandırılmış beyandan üretiliyor.
+
+---
+
+## 34. Discovery drift ve graph — 2026-09-07 haftalık girdisi
+
+Kaynak: `docs/inputs-2026-09-07-weekly-update.md`. Girdinin iddiaları ikinci eldir ve burada doğrulanmamıştır;
+roadmap'in **sırasını** değiştirdiler, hiçbir kuralın şeklini değiştirmediler.
+
+### 34.1 Ürün kararı
+
+> **SkillForge bir registry veya marketplace değildir.** Agent ekosisteminin ilan ettiği capability ile gerçekten
+> sunduğu capability arasındaki farkı, provenance ve policy bağlamında doğrulayan vendor-bağımsız güvenlik ve
+> yönetişim katmanıdır.
+
+ARD'nin sorusu *"hangi agent kaynağı var?"*. SkillForge'un soruları: *ne ilan edildi, gerçekte ne var, sapma var
+mı, policy izin veriyor mu, nereden geldi?*
+
+Yeni ana kavram: **discovery drift**.
+
+Yeni ana eksen:
+
+```text
+Inventory → Graph → Discovery → Runtime Verification → Drift → Policy → Provenance
+```
+
+### 34.2 Bu fazda yapılanlar
+
+| Sprint | İş | Sonuç |
+|---|---|---|
+| 19 | MCP `tools/list` full pagination | `McpToolPaging`, `SF8010`, üç sınır |
+| 20 | Graph foundation | `skillforge graph`, console/JSON/Mermaid, 9 node tipi |
+| 21 | Remote discovery abstraction + ARD adapter | `IRemoteResourceDiscoveryAdapter`, `skillforge discover`, `SF1016` |
+| 22 | Discovery verification | `skillforge discovery verify`, `SF8201`–`SF8204` |
+| 23 | MCP Registry adapter | `McpRegistryDiscoveryAdapter`, aynı abstraction, salt-okunur |
+| 24 | Approval boundary graph desteği | `approval.required`, `ApprovalBoundary`, `ApprovedBy` |
+
+### 34.3 Bu fazın kararları
+
+- **Mevcut abstraction genişletildi, paralel motor yazılmadı.** Pagination `IMcpProtocolAdapter` ve `McpProber`
+  üzerinde; `DiscoveryVerifier` kendi probe'unu yapmaz, aynı prober'a sentezlenmiş bir declaration verir. İki probe
+  yığını olsaydı bir gün bir server hakkında birbirleriyle çelişirlerdi ve komutun en ilginç çıktısı o çelişki
+  olurdu.
+- **Kanıt yoksa iddia yok.** Her graph edge'i okunduğu dosyayı, iddia dosyanın metninden çıktıysa satırı da taşır.
+  Transitive closure yok: SkillForge'un başka edge'lerden çıkardığı bir edge, diyagramda okuduğu bir edge'e
+  birebir benzer.
+- **`GraphConfidence` iki seviyeli.** Girdinin örneği prose'dan gelen bir `Invokes` edge'ini `Declared` gösteriyordu;
+  burada yapılandırılmış alan `Declared`, prose'da eşleşen isim `Inferred`. Üçüncü bir "Observed" seviyesi yok —
+  `graph` hiçbir şeye bağlanmaz, öyle bir seviye bir diyagramın hiç yapılmamış bir isteği ima etmesine izin verirdi.
+- **Registry metadata yapısal olarak güvenilmez.** `DiscoveredResource` üzerinde `Trusted`, `Verified`, `Official`
+  veya `TrustScore` alanı yok — bir registry'nin iddiasının verdict olarak kaydedilebileceği bir yer yok, ve bu
+  yokluk reflection ile test edilir. Tanınmayan alanlar korunur ve asla yorumlanmaz.
+- **Network her zaman explicit.** Varsayılan registry yok ve olmayacak: `skillforge discover postgres` tek başına
+  hiçbir istek yapmayan bir usage error'dur. Söylenmeden internete uzanan bir aracı kimse kapalı bir pipeline'a
+  koyamaz.
+- **Approval boundary yalnızca yapılandırılmış beyandan üretilir.** "Kullanıcıya sor" diyen bir prose satırı hiçbir
+  şeyin uygulamadığı bir cümledir; ondan çizilen bir sınır, hiçbir kodun karşılamadığı bir güvenlik kontrolünü
+  diyagrama koyardı. Host isminden production sınıflandırması da yapılmaz.
+- **Bir kural yayınlanmadan önce ölçülür** — bu kez not olarak değil, test olarak. Sekiz fixture listing üzerinde
+  `SF8201` iki kez, `SF8202` bir, `SF8203` bir kez ateşler; eşleşen dört listing hiçbir bulgu üretmez. Önemli olan
+  son sayıydı.
+- **Discovery tanımlar, policy yargılar.** İki katman birleştirilmedi: "beklenmeyen runtime tool: `delete_database`"
+  bir tanımdır, "`delete_database` izinli değil" bir ihlaldir.
+
+### 34.4 Bu girdinin değiştirmediği şeyler
+
+- **ADR-006 aynen geçerli.** `graph` ve `discover` tanımlar ve `0` ile çıkar. Yalnızca `discovery verify`'ın drift
+  bulguları gate edilebilir, ve yalnızca `--fail-on-drift` verildiğinde.
+- **stdio server hiçbir koşulda çalıştırılmaz.** Pagination, discovery verification ve graph — üçü de bu kuralı
+  devraldı, çünkü hiçbiri kendi probe'unu yazmadı.
+- **Credential değeri hiçbir yere düşmez.** Graph'ta credential node'ları environment variable ve header
+  *isimleridir*; MCP okuyucuları değeri modele hiç almaz.
+- **Marketplace, registry, installer kapsam dışıdır.** Girdi de bunları açıkça yasaklıyor.
+
+### 34.5 Yapılmayanlar
+
+```text
+endpoint drift (yayınlanmış bir kod olarak)
+ProductionImpactingPath + NoExplicitApprovalBoundary composition rule
+Workflow / Harness / Automation / ExecutionEnvironment detector'ları
+provider-specific sandbox detector'ları (Docker, Vercel, Cursor, Cloudflare)
+keşfedilen bir kaynağı kuran, bağlanan, yayınlayan veya çalıştıran hiçbir şey
+```
+
+Endpoint drift: redirect sonrası cevaplayan URL bilinmeden kurulamaz, prober böyle bir şey raporlamaz —
+kurulamayan bir drift türü rapordaki boş bir vaat olurdu. Composition rule: gerçek repository'lerde ölçülmeden
+yayınlanamaz, ve approval boundary'yi neredeyse kimse beyan etmezken production hiç sınıflandırılamazken dürüst
+bir ölçüm mümkün değil. Diğerleri için model yer bırakıyor; girdinin istediği de yer, implementasyon değildi.

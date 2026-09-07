@@ -9,14 +9,19 @@
 
 A local, open source CLI for the agent ecosystem's supply chain. SkillForge creates, validates, inspects and
 packages `SKILL.md`-based skills — and reports where every skill, plugin and MCP server came from, how it gets its
-next version, whose identity it runs with and how much it opens to an agent. Console output, JSON or SARIF, and
-nothing is sent to any service.
+next version, whose identity it runs with, how much it opens to an agent, what is wired to what, and whether a
+registry's claims survive contact with the servers behind them. Console output, JSON, SARIF or Mermaid, and nothing
+reaches any service unless a command is handed a URL.
 
-> Status: **released as `26.249.1`** — v0.2 and v0.3 complete; v0.4's migration inventory and MCP inspection in,
-> plus change control, policy-as-code and MCP allow/deny policy with `policy diff`, and now v0.5 and v0.6's
-> supply-chain surface: `provenance`, `provenance diff`, `update analyze`, `identity inspect|diff` and
-> `mcp surface`. Every command works end to end. CI builds and tests on Linux and Windows, and runs the CLI over
-> the sample skills.
+> **SkillForge is not a registry or a marketplace.** It is a vendor-neutral security and governance layer that
+> verifies the gap between the capability an agent ecosystem *declares* and the capability it actually *offers* —
+> in the context of provenance and policy.
+
+> Status: **released as `26.250.1`** — v0.2 through v0.7 complete: validation, change control, policy-as-code with
+> MCP allow/deny rules, the migration inventory, MCP inspection and tool-surface analysis, provenance, update drift
+> and agent identity. New in v0.8: full `tools/list` pagination, the asset `graph`, remote discovery with an ARD and
+> an MCP Registry adapter, and declared-versus-runtime `discovery verify`. Every command works end to end. CI builds
+> and tests on Linux and Windows, and runs the CLI over the sample skills.
 
 ## Try it
 
@@ -71,11 +76,62 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 | `skillforge provenance diff <before> <after>` | Report what drifted: publisher, marketplace, pin, fingerprint |
 | `skillforge update analyze <base> <target>` | Report what an update adds, and what that means given how it arrives |
 | `skillforge identity inspect\|diff <file>` | Report whose authority an agent reaches each MCP server with |
+| `skillforge graph [path]` | Draw what is wired to what — console, JSON or Mermaid, every edge citing the file it was read from |
+| `skillforge discover <query>` | Search a remote registry and report what it declares, without connecting to any of it |
+| `skillforge discovery verify <query>` | Compare what a registry declares about its MCP servers with what those servers answer |
 | `skillforge inventory` | Report the agent tooling installed here: skills, MCP servers and instruction files, per provider |
 | `skillforge migrate inspect` | The same inventory, under the migration group |
 
 Full options are in [docs/cli-reference.md](docs/cli-reference.md); CI usage, including SARIF upload, is in
-[docs/ci.md](docs/ci.md).
+[docs/ci.md](docs/ci.md). The graph's evidence model is in [docs/graph.md](docs/graph.md), and the discovery trust
+model in [docs/discovery.md](docs/discovery.md).
+
+### Drawing what is wired to what
+
+```bash
+skillforge graph . --format mermaid
+```
+
+```mermaid
+graph LR
+  credential_deploy_token_635b(["DEPLOY_TOKEN"])
+  host_prod_company_com_e520("prod.company.com")
+  mcp_production_mcp_6411["production-mcp"]
+  skill_deploy_skill_94a7["deploy-skill"]
+
+  mcp_production_mcp_6411 -.->|"ReadsCredential (inferred)"| credential_deploy_token_635b
+  mcp_production_mcp_6411 -->|"ConnectsTo"| host_prod_company_com_e520
+  skill_deploy_skill_94a7 -->|"Invokes"| mcp_production_mcp_6411
+```
+
+Every edge carries the file it was read from and, when the claim came out of the file's text, the line. **No
+evidence, no claim** — there is no "probably talks to" edge, and credential nodes are variable *names*, never
+values. A dotted arrow is inferred from a name matched in prose; a solid one was read from a structured field.
+
+### Checking a registry's claims against reality
+
+```bash
+skillforge discovery verify "database" --registry https://registry.example.com/resources --probe
+```
+
+```text
+  database-tools
+      endpoint: https://db.example.com/mcp
+      status:   drift detected (1)
+      declared: 12 capabilities (by the registry)
+      runtime:  17 tools (from the server's own tools/list)
+      drift:    UnexpectedRuntimeTool — delete_database
+                declared: (nothing) · runtime: delete_database
+                read from https://registry.example.com/resources and https://db.example.com/mcp (2026-07-28)
+```
+
+A registry says twelve; the server answers seventeen. The five that appear only at runtime are capabilities nobody
+reviewed — `SF8201`.
+
+`--registry` has **no default and will not get one**: a tool that reaches the internet without being told to is one
+nobody can put in a locked-down pipeline. `--probe` is a second, separate decision, and a local stdio server is
+never launched either way. "Verified, no drift" means the declared capabilities matched the runtime tool list when
+asked — it does **not** mean trusted, and it does not mean safe.
 
 ### Applying an organisation's policy
 
@@ -303,7 +359,7 @@ themselves; the step itself still fails on anything but 0.
 
 ```text
 skillforge/
-├── docs/         Architecture, validation rules, CLI reference
+├── docs/         Architecture, validation rules, CLI reference, graph, discovery
 ├── samples/      Example skills used by integration tests
 ├── src/          Domain, Application, Infrastructure, Reporting, Cli
 └── tests/        One xUnit project per source project
