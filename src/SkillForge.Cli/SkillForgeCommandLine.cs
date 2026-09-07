@@ -3,7 +3,9 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Application.Abstractions;
 using SkillForge.Cli.Commands;
+using SkillForge.Domain.Discovery;
 using SkillForge.Domain.Modeling;
+using SkillForge.Infrastructure.Discovery;
 
 namespace SkillForge.Cli;
 
@@ -72,8 +74,261 @@ internal static partial class SkillForgeCommandLine
         root.Subcommands.Add(BuildProvenanceCommand(services, globals));
         root.Subcommands.Add(BuildUpdateCommand(services, globals));
         root.Subcommands.Add(BuildIdentityCommand(services, globals));
+        root.Subcommands.Add(BuildGraphCommand(services, globals));
+        root.Subcommands.Add(BuildDiscoverCommand(services, globals));
+        root.Subcommands.Add(BuildDiscoveryCommand(services, globals));
 
         return root;
+    }
+
+    /// <summary>
+    /// Builds the <c>discovery</c> group.
+    /// </summary>
+    /// <remarks>
+    /// A group rather than a flag on <c>discover</c>, because reading a registry and reaching out to every server
+    /// it lists are different acts with different consequences, and a command name is the cheapest place to make
+    /// that visible. The names <c>discover</c> and <c>discovery</c> are distinct tokens to System.CommandLine —
+    /// there is a test that asserts the whole command tree parses, which is what catches a collision here.
+    /// </remarks>
+    private static Command BuildDiscoveryCommand(IServiceProvider services, GlobalOptions globals) =>
+        new("discovery", "Check what a registry declares against what the servers it lists actually expose.")
+        {
+            BuildDiscoveryVerifyCommand(services, globals),
+        };
+
+    private static Command BuildDiscoveryVerifyCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var query = new Argument<string>("query")
+        {
+            Description = "What to search for. Empty lists whatever the registry returns without a query.",
+            DefaultValueFactory = _ => string.Empty,
+        };
+
+        var registry = new Option<string>("--registry")
+        {
+            Description = "Registry URL to search. Required: there is no default.",
+        };
+
+        var kind = new Option<string>("--kind")
+        {
+            Description = "Which discovery adapter to use: "
+                + $"{ArdDiscoveryAdapter.AdapterKind}, {McpRegistryDiscoveryAdapter.AdapterKind}.",
+            DefaultValueFactory = _ => ArdDiscoveryAdapter.AdapterKind,
+        };
+
+        var probe = new Option<bool>("--probe")
+        {
+            Description = "Ask each discovered remote HTTP MCP server what it actually exposes. Without this, "
+                + "every resource is reported as not probed and no server is contacted. A local stdio server is "
+                + "never launched either way.",
+        };
+
+        var failOnDrift = new Option<bool>("--fail-on-drift")
+        {
+            Description = "Fail when a difference between the declaration and the runtime is reported.",
+        };
+
+        var timeout = new Option<int>("--timeout")
+        {
+            Description = "Seconds to wait for the registry.",
+            DefaultValueFactory = _ => (int)RemoteDiscoveryLimits.Default.Timeout.TotalSeconds,
+        };
+
+        var limit = new Option<int>("--limit")
+        {
+            Description = "How many resources to read from the response.",
+            DefaultValueFactory = _ => RemoteDiscoveryLimits.Default.MaxResults,
+        };
+
+        var format = CreateFormatOption();
+        var output = CreateOutputOption();
+
+        var verify = new Command(
+            "verify",
+            "Compare what a registry declares about its MCP servers with what those servers answer.")
+        {
+            query,
+            registry,
+            kind,
+            probe,
+            failOnDrift,
+            timeout,
+            limit,
+            format,
+            output,
+        };
+
+        verify.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<DiscoveryVerifyCommandRunner>();
+
+            return await runner.RunAsync(
+                new DiscoveryVerifyRequest(
+                    parseResult.GetValue(query) ?? string.Empty,
+                    parseResult.GetValue(registry) ?? string.Empty,
+                    parseResult.GetValue(kind) ?? ArdDiscoveryAdapter.AdapterKind,
+                    parseResult.GetValue(probe),
+                    parseResult.GetValue(failOnDrift),
+                    RemoteDiscoveryLimits.Default with
+                    {
+                        Timeout = TimeSpan.FromSeconds(Math.Clamp(parseResult.GetValue(timeout), 1, 300)),
+                        MaxResults = Math.Clamp(parseResult.GetValue(limit), 1, 10_000),
+                    },
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return verify;
+    }
+
+    /// <summary>
+    /// Builds <c>discover</c>: what a registry says it lists.
+    /// </summary>
+    /// <remarks>
+    /// <c>--registry</c> is required and has no default, which is the whole security posture of this command in
+    /// one option. A default registry would make <c>skillforge discover postgres</c> reach the internet, and a
+    /// tool that reaches the internet without being told to is one nobody can put in a locked-down pipeline.
+    /// </remarks>
+    private static Command BuildDiscoverCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var query = new Argument<string>("query")
+        {
+            Description = "What to search for. Empty lists whatever the registry returns without a query.",
+            DefaultValueFactory = _ => string.Empty,
+        };
+
+        var registry = new Option<string>("--registry")
+        {
+            Description = "Registry URL to search. Required: there is no default, and SkillForge never reaches "
+                + "a registry nobody named.",
+        };
+
+        var kind = new Option<string>("--kind")
+        {
+            Description = "Which discovery adapter to use: "
+                + $"{ArdDiscoveryAdapter.AdapterKind}, {McpRegistryDiscoveryAdapter.AdapterKind}.",
+            DefaultValueFactory = _ => ArdDiscoveryAdapter.AdapterKind,
+        };
+
+        var type = new Option<string?>("--type")
+        {
+            Description = "Only list resources of one type: "
+                + $"{string.Join(", ", Enum.GetNames<DiscoveredResourceType>().Select(name => name.ToLowerInvariant()))}.",
+        };
+
+        type.Validators.Add(result =>
+        {
+            if (result.Tokens.Count > 0
+                && !Enum.TryParse<DiscoveredResourceType>(result.Tokens[0].Value, ignoreCase: true, out _))
+            {
+                result.AddError(
+                    $"'{result.Tokens[0].Value}' is not a resource type. Use one of: "
+                    + $"{string.Join(", ", Enum.GetNames<DiscoveredResourceType>().Select(name => name.ToLowerInvariant()))}.");
+            }
+        });
+
+        var timeout = new Option<int>("--timeout")
+        {
+            Description = "Seconds to wait for the registry.",
+            DefaultValueFactory = _ => (int)RemoteDiscoveryLimits.Default.Timeout.TotalSeconds,
+        };
+
+        var limit = new Option<int>("--limit")
+        {
+            Description = "How many resources to read from the response.",
+            DefaultValueFactory = _ => RemoteDiscoveryLimits.Default.MaxResults,
+        };
+
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var output = CreateOutputOption();
+
+        var command = new Command(
+            "discover",
+            "Search a remote registry, and report what it declares — without connecting to any of it.")
+        {
+            query,
+            registry,
+            kind,
+            type,
+            timeout,
+            limit,
+            format,
+            output,
+        };
+
+        command.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<DiscoverCommandRunner>();
+
+            var requestedType = parseResult.GetValue(type) is { Length: > 0 } value
+                && Enum.TryParse<DiscoveredResourceType>(value, ignoreCase: true, out var parsed)
+                    ? parsed
+                    : (DiscoveredResourceType?)null;
+
+            return await runner.RunAsync(
+                new DiscoverRequest(
+                    parseResult.GetValue(query) ?? string.Empty,
+                    parseResult.GetValue(registry) ?? string.Empty,
+                    parseResult.GetValue(kind) ?? ArdDiscoveryAdapter.AdapterKind,
+                    requestedType,
+                    RemoteDiscoveryLimits.Default with
+                    {
+                        Timeout = TimeSpan.FromSeconds(Math.Clamp(parseResult.GetValue(timeout), 1, 300)),
+                        MaxResults = Math.Clamp(parseResult.GetValue(limit), 1, 10_000),
+                    },
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return command;
+    }
+
+    /// <summary>
+    /// Builds <c>graph</c>: what is wired to what, under one directory.
+    /// </summary>
+    /// <remarks>
+    /// No <c>--probe</c> option, and that is the design. The graph is read from files on disk; asking a server
+    /// about itself is <c>mcp surface</c>'s and <c>discovery verify</c>'s business, and a diagram that could
+    /// silently make network requests would be the one output nobody would think to check for them.
+    /// </remarks>
+    private static Command BuildGraphCommand(IServiceProvider services, GlobalOptions globals)
+    {
+        var path = new Argument<string>("path")
+        {
+            Description = "Directory to read.",
+            DefaultValueFactory = _ => DefaultPath,
+        };
+
+        var format = CreateFormatOption(OutputFormat.Console, OutputFormat.Json, OutputFormat.Mermaid);
+        var output = CreateOutputOption();
+
+        var command = new Command(
+            "graph",
+            "Draw what is wired to what: skills, plugins, MCP servers, hosts, credential sources and identities.")
+        {
+            path,
+            format,
+            output,
+        };
+
+        command.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<GraphCommandRunner>();
+
+            return await runner.RunAsync(
+                new GraphRequest(
+                    parseResult.GetValue(path) ?? DefaultPath,
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return command;
     }
 
     private static Command BuildValidateCommand(IServiceProvider services, GlobalOptions globals)

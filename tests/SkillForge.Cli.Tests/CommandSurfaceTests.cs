@@ -69,6 +69,19 @@ public sealed class CommandSurfaceTests
     [InlineData("mcp surface ./mcp.json")]
     [InlineData("mcp surface ./mcp.json --probe --policy .skillforge/policy.yaml")]
     [InlineData("mcp surface ./mcp.json --probe --fail-on-threshold --format json")]
+    [InlineData("graph")]
+    [InlineData("graph .")]
+    [InlineData("graph ./repo --format json")]
+    [InlineData("graph . --format mermaid --output docs/wiring.mmd")]
+    [InlineData("discover")]
+    [InlineData("discover postgres --registry https://registry.example.test/resources")]
+    [InlineData("discover postgres --registry https://r.test/x --kind mcp-registry")]
+    [InlineData("discover postgres --registry https://r.test/x --type mcpserver --limit 10 --timeout 5")]
+    [InlineData("discover postgres --registry https://r.test/x --format json --output artifacts/d.json")]
+    [InlineData("discovery verify --registry https://r.test/x")]
+    [InlineData("discovery verify postgres --registry https://r.test/x --probe")]
+    [InlineData("discovery verify postgres --registry https://r.test/x --probe --fail-on-drift")]
+    [InlineData("discovery verify postgres --registry https://r.test/x --probe --format sarif -o d.sarif")]
     public void AcceptsTheDocumentedInvocations(string commandLine)
     {
         var result = Root().Parse(commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries));
@@ -95,12 +108,61 @@ public sealed class CommandSurfaceTests
     // A model named with nowhere to send it, or an endpoint with no model, would quietly probe nothing.
     [InlineData("eval . --model qwen3:8b")]
     [InlineData("eval . --model-endpoint http://localhost:11434/v1")]
+
+    // 'graph' reads files and reaches no verdict, so it has neither a probe nor a gate. Both would be a
+    // different command wearing this one's name.
+    [InlineData("graph . --probe")]
+    [InlineData("graph . --fail-on-drift")]
+    [InlineData("graph . --format sarif")]
+
+    // Discovery reads registries. It does not install, publish or connect to what it finds.
+    [InlineData("discover postgres --registry https://r.test/x --install")]
+    [InlineData("discovery install postgres")]
+    [InlineData("discovery connect postgres")]
+    [InlineData("discovery publish ./server.json")]
+    [InlineData("discover postgres --registry https://r.test/x --format sarif")]
+    [InlineData("discover postgres --registry https://r.test/x --type nonsense")]
     public void RejectsWhatItDoesNotUnderstand(string commandLine)
     {
         var result = Root().Parse(commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
         result.Errors.Should().NotBeEmpty();
     }
+
+    [Fact]
+    public void DiscoverAndDiscoveryAreDistinctCommandsRatherThanAPrefixCollision()
+    {
+        // Two command names one letter apart. System.CommandLine matches tokens exactly, so this is fine — and
+        // asserting it is what would catch a future rename that made one shadow the other.
+        var names = Root().Subcommands.Select(command => command.Name).ToArray();
+
+        names.Should().Contain(["discover", "discovery", "graph"]);
+
+        Root().Parse(["discover", "q", "--registry", "https://r.test/x"]).Errors.Should().BeEmpty();
+        Root().Parse(["discovery", "verify", "--registry", "https://r.test/x"]).Errors.Should().BeEmpty();
+
+        // 'discovery' is a group: on its own it has nothing to do, and saying so beats picking a default.
+        Root().Parse(["discovery"]).Errors.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void NoCommandOffersADefaultRegistry()
+    {
+        // The whole security posture of discovery, asserted where it cannot be quietly undone: an option with a
+        // default value factory would make a network request nobody asked for.
+        foreach (var command in Root().Subcommands.SelectMany(Descendants))
+        {
+            foreach (var option in command.Options.Where(option => option.Name == "--registry"))
+            {
+                option.HasDefaultValue.Should().BeFalse(
+                    $"'{command.Name} --registry' must have no default: SkillForge never reaches a registry "
+                    + "nobody named");
+            }
+        }
+    }
+
+    private static IEnumerable<Command> Descendants(Command command) =>
+        new[] { command }.Concat(command.Subcommands.SelectMany(Descendants));
 
     [Fact]
     public void RunningWithNoArgumentsIsAUsageError()

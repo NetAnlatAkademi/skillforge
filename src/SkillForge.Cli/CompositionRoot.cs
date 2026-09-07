@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Application.Abstractions;
+using SkillForge.Application.Discovery;
+using SkillForge.Application.Graph;
 using SkillForge.Application.Identity;
 using SkillForge.Application.Inspection;
 using SkillForge.Application.Mcp;
@@ -14,7 +16,9 @@ using SkillForge.Application.Skills;
 using SkillForge.Application.Updates;
 using SkillForge.Application.Validation;
 using SkillForge.Cli.Commands;
+using SkillForge.Domain.Discovery;
 using SkillForge.Infrastructure;
+using SkillForge.Infrastructure.Discovery;
 using SkillForge.Infrastructure.Mcp;
 using SkillForge.Infrastructure.Migration;
 using SkillForge.Infrastructure.Modeling;
@@ -34,6 +38,24 @@ namespace SkillForge.Cli;
 /// </remarks>
 internal static class CompositionRoot
 {
+    /// <summary>
+    /// A client for reading registries, with the one bound that has to live on the handler.
+    /// </summary>
+    /// <remarks>
+    /// Redirect following happens below the adapter, so the redirect limit is set here; every other bound travels
+    /// with each request. The client timeout is well past the per-request one the adapter applies, so the caller's
+    /// limit is the one that fires and the message says which bound was hit.
+    /// </remarks>
+    private static HttpClient DiscoveryHttpClient() =>
+        new(new SocketsHttpHandler
+        {
+            AllowAutoRedirect = true,
+            MaxAutomaticRedirections = RemoteDiscoveryLimits.Default.MaxRedirects,
+        })
+        {
+            Timeout = TimeSpan.FromMinutes(2),
+        };
+
     /// <summary>Builds the service provider the CLI runs on.</summary>
     /// <returns>A configured provider. The caller owns its lifetime.</returns>
     internal static ServiceProvider Build()
@@ -97,12 +119,33 @@ internal static class CompositionRoot
         services.AddSingleton<IMcpProtocolAdapter>(_ => new Mcp20251125ProtocolAdapter(
             new HttpClient { Timeout = TimeSpan.FromSeconds(20) }));
         services.AddSingleton<McpProber>();
+
+        // Declared-versus-runtime verification runs on that same prober. There is deliberately no second probing
+        // stack: two of them would eventually disagree about a server, and the disagreement would be the output.
+        services.AddSingleton<DiscoveryVerifier>();
         services.AddSingleton<McpFileInspector>();
 
         // Identity is read on top of the same file inspection: one parse, and a stdio server still never launched.
         services.AddSingleton<McpIdentityInspector>();
 
+        // What is wired to what, over the readers that already answer each half of the question. The graph talks to
+        // nothing: no protocol adapter is injected here, so no diagram can imply a probe that never happened.
+        services.AddSingleton<GraphBuilder>();
+
         services.AddSingleton<IMigrationInspector, MigrationInspector>();
+
+        // Remote discovery. Registered always and silent until a command hands it a registry: nothing here opens a
+        // connection on its own, and there is deliberately no default registry to open one to.
+        //
+        // The redirect bound lives on the handler because redirect following happens below the adapter. The other
+        // bounds — timeout, response size, result count, JSON depth — travel with each request, so a caller can
+        // tighten them without a different client.
+        // One adapter per registry dialect, both feeding the same verification layer. ARD and the MCP Registry are
+        // separate discovery sources, not competing ones.
+        services.AddSingleton<IRemoteResourceDiscoveryAdapter>(_ =>
+            new ArdDiscoveryAdapter(DiscoveryHttpClient()));
+        services.AddSingleton<IRemoteResourceDiscoveryAdapter>(_ =>
+            new McpRegistryDiscoveryAdapter(DiscoveryHttpClient()));
 
         // Registered always, used only when a command is given a model. It opens no connection until
         // it is asked a question, so a run that never mentions a model stays entirely offline.
@@ -144,6 +187,9 @@ internal static class CompositionRoot
         services.AddSingleton<ProvenanceCommandRunner>();
         services.AddSingleton<UpdateAnalyzeCommandRunner>();
         services.AddSingleton<IdentityCommandRunner>();
+        services.AddSingleton<GraphCommandRunner>();
+        services.AddSingleton<DiscoverCommandRunner>();
+        services.AddSingleton<DiscoveryVerifyCommandRunner>();
 
         // ValidateOnBuild turns a missing or unresolvable registration into a failure here rather than when
         // the user runs a command. It is what makes the composition smoke test meaningful.
