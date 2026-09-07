@@ -236,7 +236,11 @@ internal sealed class McpCommandRunner
                 continue;
             }
 
-            builder.AppendLine($"      Tools:      {surface.ToolCount}");
+            builder.AppendLine(
+                $"      Tools:      {surface.ToolCount}"
+                + (surface.Paging is { IsComplete: false }
+                    ? " (seen — the list was not read to the end)"
+                    : string.Empty));
             builder.AppendLine($"      Exposed:    {surface.InitiallyExposed} from the first response");
             builder.AppendLine($"      Write:      {surface.WriteCapableTools.Count}");
             builder.AppendLine($"      Credential: {surface.CredentialCapableTools.Count}");
@@ -259,8 +263,8 @@ internal sealed class McpCommandRunner
 
         builder.AppendLine();
         builder.AppendLine(
-            "Counts come from each server's own tools/list, so they exist only for servers that were probed. "
-                + "A stdio server is never launched.");
+            "Counts come from each server's own tools/list, read to the end over as many pages as the server "
+                + "returns, so they exist only for servers that were probed. A stdio server is never launched.");
         builder.AppendLine(
             "Write, credential and admin are read from tool names, not from what the tools do. No model is used.");
 
@@ -290,6 +294,15 @@ internal sealed class McpCommandRunner
                 ["progressiveDiscovery"] = surface.ProgressiveDiscoveryDetected,
                 ["notProbedReason"] = surface.NotProbedReason,
                 ["risk"] = surface.Risk.ToString().ToLowerInvariant(),
+                ["toolPaging"] = surface.Paging is not { } paging
+                    ? null
+                    : new JsonObject
+                    {
+                        ["pagesRead"] = paging.PagesRead,
+                        ["firstPageToolCount"] = paging.FirstPageToolCount,
+                        ["complete"] = paging.IsComplete,
+                        ["outcome"] = paging.Outcome.ToString(),
+                    },
             })]),
             ["diagnostics"] = new JsonArray([.. report.Diagnostics.Select(finding => (JsonNode)new JsonObject
             {
