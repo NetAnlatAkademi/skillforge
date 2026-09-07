@@ -108,6 +108,51 @@ jobs:
           run eval ./samples/dotnet-api-review > /dev/null
           run pack ./samples/valid-skill --output ./artifacts/packages --no-color
 
+          # A graph is a description, so it must exit 0 over the samples even though two of them are broken
+          # on purpose. All three formats, because each has its own writer.
+          run graph ./samples --no-color > /dev/null
+          run graph ./samples --format json > /dev/null
+          run graph ./samples --format mermaid > /dev/null
+
+          # Determinism is the property that makes a graph reviewable in a pull request, and it is the one
+          # that a change to an ordering or an id scheme silently breaks.
+          first=$(run graph ./samples --format json)
+          second=$(run graph ./samples --format json)
+
+          if [ "$first" != "$second" ]; then
+            echo "Expected two graph runs over unchanged input to be identical"
+            exit 1
+          fi
+
+          # Discovery must not reach the network without being told where. This is the one CI assertion that
+          # would catch a default registry being added, and it runs on a job with no registry available.
+          set +e
+          discover_output=$(run discover postgres --no-color 2>&1)
+          discover_exit=$?
+          set -e
+
+          printf '%s\n' "$discover_output"
+
+          if [ "$discover_exit" -ne 2 ]; then
+            echo "Expected 'discover' with no --registry to be a usage error (2), got $discover_exit"
+            exit 1
+          fi
+
+          if ! printf '%s\n' "$discover_output" | grep -q 'No registry was specified'; then
+            echo "Expected the usage error to say no registry was specified"
+            exit 1
+          fi
+
+          set +e
+          verify_output=$(run discovery verify postgres --no-color 2>&1)
+          verify_exit=$?
+          set -e
+
+          if [ "$verify_exit" -ne 2 ]; then
+            echo "Expected 'discovery verify' with no --registry to be a usage error (2), got $verify_exit"
+            exit 1
+          fi
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v5

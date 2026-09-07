@@ -1,6 +1,7 @@
 using System.Text.Json;
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Migration;
+using SkillForge.Domain.Mcp;
 using SkillForge.Domain.Migration;
 
 namespace SkillForge.Infrastructure.Migration;
@@ -116,7 +117,10 @@ public sealed class JsonMcpConfigurationReader : IMcpConfigurationReader
             server.Name,
             providerId,
             Transport(server.Value, command, url),
-            command ?? url,
+
+            // Redacted here rather than at each printer: a URL carrying user-info holds a credential, and every
+            // output prints an endpoint. See UrlRedaction.
+            UrlRedaction.WithoutCredentials(command ?? url),
             Arguments(server.Value),
             EnvironmentVariableNames(server.Value),
             path,

@@ -230,6 +230,86 @@ separate steps.
 `CRITICAL`, and it is the case where the review that would have caught it is precisely the review that does not
 happen.
 
+## Putting the wiring diagram in the pull request
+
+`graph --format mermaid` renders in a GitHub comment without a toolchain, so a reviewer looking at a change to
+`.mcp.json` can see what it rewired.
+
+```yaml
+      - name: Draw the wiring
+        run: |
+          {
+            echo '## What this repository is wired to'
+            echo
+            echo '```mermaid'
+            skillforge graph . --format mermaid
+            echo '```'
+          } > graph.md
+
+      - name: Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: fs.readFileSync('graph.md', 'utf8'),
+            });
+```
+
+`graph` exits `0` and makes no network request, so it is safe in a job with no egress. It fails only on an MCP
+configuration it could not parse (`SF1015`) — a node missing from a diagram because a file would not read is worse
+than a stated gap.
+
+Two runs over unchanged input produce byte-identical output, which means the diagram can be committed and diffed:
+
+```bash
+skillforge graph . --format mermaid --output docs/wiring.mmd
+git diff --exit-code docs/wiring.mmd   # non-zero when the wiring changed
+```
+
+## Verifying a registry's claims against the servers behind them
+
+```yaml
+      - name: Verify discovered MCP servers
+        run: |
+          skillforge discovery verify "" \
+            --registry https://registry.internal.example/v0/servers \
+            --kind mcp-registry \
+            --probe \
+            --format sarif \
+            --output artifacts/discovery-drift.sarif
+
+      - name: Upload
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: artifacts/discovery-drift.sarif
+          category: skillforge-discovery
+```
+
+Three things worth deciding deliberately before adding this step:
+
+- **It makes network requests, and only the ones you asked for.** One request to the registry, plus one probe per
+  discovered remote HTTP MCP server. There is no default registry, so a job that does not name one makes no request
+  at all. A local stdio server is never launched.
+- **`--probe` is what turns a metadata read into a fleet scan.** Without it the step reads the registry and reports
+  every resource as not probed. On a registry with hundreds of servers, narrow the query or set `--limit` before
+  adding `--probe`.
+- **`--fail-on-drift` is a separate decision.** The step above reports and exits `0`. Whether a tool the registry
+  never listed blocks a merge is the organisation's call, and `policy check --mcp` is where that call belongs — the
+  drift finding describes the difference and does not decide whether it is allowed.
+
+Only the findings go into the SARIF. The resource listing is a search result, and uploading it as static-analysis
+results would put an annotation on the pull request for every server the registry happens to hold. Use
+`--format json` when the listing itself is what a later step needs.
+
+The SARIF carries `SF8201` (a runtime tool the registry never declared) as a warning, and `SF8202`–`SF8204` as
+notes. `SF1016` means the registry could not be read at all, which fails the run whatever `--fail-on-drift` says:
+"no results" and "no answer" are different facts.
+
 ## Consuming the JSON report
 
 `--format json` writes the schema documented in `docs/validation-rules.md`. It is a published contract:

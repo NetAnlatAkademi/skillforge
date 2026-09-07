@@ -1,5 +1,6 @@
 using SkillForge.Application.Abstractions;
 using SkillForge.Application.Migration;
+using SkillForge.Domain.Mcp;
 using SkillForge.Domain.Migration;
 using Tomlyn;
 using Tomlyn.Model;
@@ -110,7 +111,9 @@ public sealed class TomlMcpConfigurationReader : IMcpConfigurationReader
             name,
             providerId,
             Transport(command, url),
-            command ?? url,
+
+            // See UrlRedaction: a URL with user-info carries a credential, and it is removed where it is read.
+            UrlRedaction.WithoutCredentials(command ?? url),
             Arguments(server),
             EnvironmentVariableNames(server),
             path);

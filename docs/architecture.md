@@ -37,6 +37,41 @@ Formats are separate from providers. `IMcpConfigurationReader` declares which *f
 Claude Code, Cursor and VS Code, TOML for Codex — so a provider that switches format changes which reader claims
 its file, and nothing else moves.
 
+### Remote discovery is a third instance of the same seam
+
+`IRemoteResourceDiscoveryAdapter` in `SkillForge.Application/Discovery` is the same shape as
+`IMcpProtocolAdapter`, for the same reason. Discovery formats are younger than MCP was when that abstraction was
+written — Agentic Resource Discovery is a **Proposal**, not a specification — so `ArdDiscoveryAdapter` and
+`McpRegistryDiscoveryAdapter` sit side by side in Infrastructure and nothing above them knows which one answered.
+
+Two rules keep that honest:
+
+- **No registry schema reaches `Domain`.** `DiscoveredResource` has no `@context`, no JSON-LD and no
+  version-specific field. When ARD stabilises, a strict reader for the stable version belongs beside the tolerant
+  one behind the same interface — which is only possible if the core never learned the current shape.
+- **`DiscoveredResource` has no trust field.** No `Trusted`, `Verified`, `Official` or `TrustScore`. A registry's
+  claims are preserved as metadata and there is nowhere for them to be recorded as a verdict. Two tests assert that
+  absence by reflection, so the field cannot appear without somebody deleting a test.
+
+The bounds every registry request is made under live in one class, `RegistryDocumentReader`, shared by both
+adapters. Two adapters with their own idea of how large a response may be would mean one of them is the weak one.
+
+### The graph reuses every reader and owns only the edges
+
+`GraphBuilder` in `SkillForge.Application/Graph` parses nothing itself. Skills come from the discovery and loader
+`validate` uses, their contents from the inspector `inspect` uses, MCP servers from the format readers
+`mcp inspect` uses, plugins from the manifest reader `provenance` uses, and identities from the inference
+`identity inspect` publishes. Two scanners would eventually disagree about a skill, and the one people would
+believe is whichever they ran last.
+
+**No protocol adapter is injected into the builder.** That is what makes "`graph` never touches the network" a
+structural property rather than a promise.
+
+`DiscoveryVerifier` follows the same rule one layer over: it synthesises an `McpServerDeclaration` and hands it to
+the existing `McpProber` rather than probing anything itself. HTTP-only, no stdio execution, and `tools/list` read
+to the end under its three bounds all come for free, and cannot drift apart from what `migrate inspect --probe-mcp`
+reports about the same server.
+
 ## Dependency rules
 
 | Layer | May reference | Must not reference |
@@ -68,7 +103,12 @@ Consequences:
 - **Diagnostics:** every rule owns a stable code (`SF0001`, `SF1001`, `SF2001`, …). Codes are never
   reused or renumbered once released.
 - **Determinism:** diagnostic ordering and package contents are deterministic, so identical input
-  produces an identical hash.
+  produces an identical hash. The same applies to the graph: node ids, edge order and Mermaid identifiers are pure
+  functions of the input, with no counters and no dictionary order, so two runs produce byte-identical output in
+  every format. A report that changes between two identical runs cannot be diffed in a pipeline.
+- **Bounds on anything the other end controls:** a paginated tool list is followed to a page limit with a
+  repeated-cursor stop; a registry response is bounded on time, size, redirects, result count and JSON depth. When
+  a bound fires it is **reported**, never silently absorbed — a count that stopped early must not read as a total.
 
 ## Versioning
 

@@ -27,6 +27,9 @@ public sealed class YamlSkillConfigurationReader : ISkillConfigurationReader
     private const string NetworkSection = "network";
     private const string ShellSection = "shell";
     private const string AllowedField = "allowed";
+    private const string ApprovalSection = "approval";
+    private const string RequiredField = "required";
+    private const string BeforeField = "before";
 
     private readonly IFileSystem _fileSystem;
 
@@ -85,6 +88,7 @@ public sealed class YamlSkillConfigurationReader : ISkillConfigurationReader
 
         var validation = Section(root, ValidationSection);
         var permissions = Section(root, PermissionsSection);
+        var approval = Section(root, ApprovalSection);
 
         var configuration = new SkillConfiguration(
             validation is null ? false : ReadBoolean(validation, StrictField),
@@ -93,6 +97,11 @@ public sealed class YamlSkillConfigurationReader : ISkillConfigurationReader
             Exists = true,
             NetworkAllowed = ReadNullableBoolean(Section(permissions, NetworkSection), AllowedField),
             ShellAllowed = ReadStrings(Section(permissions, ShellSection), AllowedField),
+
+            // The only structured way a skill states a human approval boundary. Read here rather than inferred
+            // anywhere, so that a boundary on the graph always traces back to a field somebody wrote.
+            ApprovalRequired = ReadNullableBoolean(approval, RequiredField),
+            ApprovalBefore = ReadStrings(approval, BeforeField),
         };
 
         return OperationResult<SkillConfiguration>.Success(configuration);

@@ -8,6 +8,152 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
+## [26.250.1] — 2026-09-07
+
+### Added — full MCP tool enumeration, the asset graph, remote discovery and runtime verification
+
+Prompted by a week in which discovery became a standard question and trust did not: Agentic Resource Discovery
+v0.91 as a Proposal, registry-driven on-demand capability discovery, and the gap between what discovery metadata
+declares and what a running server actually offers. The input, and what was deliberately answered differently, is
+recorded in `docs/inputs-2026-09-07-weekly-update.md`. Its claims are secondhand and unverified here: they moved
+the order of the roadmap, not the shape of any rule.
+
+The product decision behind all of it:
+
+> **SkillForge is not a registry and will not become one.** It verifies whether discovery and registry metadata
+> matches the runtime capability actually offered, in the context of provenance and policy.
+
+**`tools/list` is now read to the end.** It used to read the first page only, which made every tool count a
+first-page count wearing a total's clothes — and a declared-versus-runtime comparison built on that would report
+every tool past page one as missing. The walk follows `nextCursor` under three bounds, because following a cursor
+the server controls is unbounded by construction: a hundred pages, a stop when the server hands back a cursor it
+already gave, and a cancellation check before every request rather than only at the start. **`SF8010`** is emitted
+whenever a bound fires, at any tool count and before any threshold is applied — a count that stopped early cannot
+be compared against a threshold, and a reader who is not told will compare it anyway.
+
+A tool listed twice is one tool: the specification identifies tools by name, and the first description wins.
+Comparison is case-sensitive, because the specification does not say `Deploy` and `deploy` are the same tool. The
+merged list is ordered by name rather than by the order the server listed them, so a paging server cannot make two
+identical runs produce two different reports. What the first response carried survives as `mcp surface`'s
+`initiallyExposed`, which is finally a different number from the total for a server that pages.
+
+Reused, not rebuilt: the existing `IMcpProtocolAdapter` and `McpProber`. HTTP probing stays opt-in and **a stdio
+server is still never launched**.
+
+**`skillforge graph [path]`** draws what is wired to what — skills, plugins, MCP servers, instruction files, hooks,
+scripts, external hosts, credential names, identities and declared approval boundaries — in `console`, `json` or
+`mermaid`. It describes and exits `0`.
+
+The rule it is built on is **no evidence, no claim**: every edge carries the file it was read from and, when the
+claim came out of the file's text, the line. There is no transitive closure and no "probably talks to" edge, because
+an edge SkillForge inferred from other edges would look, on a diagram, exactly like one it read. `Declared` means a
+structured field — an `allowed-tools` entry, a manifest, a file's location; `Inferred` means a name matched in
+prose, which is exact evidence and a heuristic conclusion. Where both readings exist for one pair the declared one
+wins, and a server name shorter than four characters is never matched in prose at all.
+
+`GraphBuilder` parses nothing twice: skills come from the discovery and loader `validate` uses, MCP servers from the
+readers `mcp inspect` uses, plugins from the manifest reader `provenance` uses, identities from the inference
+`identity inspect` publishes. **No protocol adapter is injected into it**, which is what makes "`graph` never
+touches the network" structural rather than a promise. `Workflow`, `Harness`, `Automation` and
+`ExecutionEnvironment` are named in the model with no detector, so the JSON contract does not have to grow a value
+later.
+
+**`ApprovalBoundary` nodes come from `approval.required: true` in a skill's own `skillforge.yaml`, and nowhere
+else.** Prose that says "always ask the user before deploying" is a sentence nothing enforces; drawing a boundary
+from it would put a safety control on a diagram that no code implements, and a reviewer who trusted the diagram
+would be worse off than one who had none. There is a test named for that sentence. A host called
+`prod.company.com` is likewise **not** classified as production — that is a string somebody chose. The composition
+rule this makes possible — a production-impacting path with no explicit boundary — is documented as deferred and
+deliberately not published: it has to be measured on real repositories first.
+
+**`skillforge discover <query> --registry <url>`** searches a remote registry and reports what it declares, without
+connecting to any of it. Two adapters behind one `IRemoteResourceDiscoveryAdapter`: `ard` for Agentic Resource
+Discovery and `mcp-registry` for an MCP Registry listing, both feeding the same verification layer.
+
+**`--registry` has no default and will not get one.** `skillforge discover postgres` on its own is a usage error
+that makes no request — a tool that reaches the internet without being told to is one nobody can put in a
+locked-down pipeline. No background refresh, no cache, no telemetry, no auto-install, no auto-connect.
+
+**Registry metadata is untrusted structurally, not by disclaimer.** `DiscoveredResource` has no `Trusted`,
+`Verified`, `Official` or `TrustScore` field — there is nowhere for a registry's claim to be recorded as a verdict,
+and tests assert that absence by reflection. Unrecognised fields, extension namespaces included, are preserved and
+never interpreted: dropping them would lose the evidence a person judging a listing wants, and reading them back to
+decide anything would be trusting them. Registry membership — the official registry's included — is provenance
+evidence about where something was found, not evidence that it is safe.
+
+ARD v0.91 is a **Proposal**, and the adapter says so in how it is written: tolerant about containers and field
+spellings, because an adapter that reads one spelling returns nothing the day the format moves. Nothing is guessed
+at — an unrecognised `@type` becomes `Unknown`, and nothing unclassified is ever probed. No JSON-LD reaches
+`SkillForge.Domain`, so a strict reader for the stable version can sit beside this one later.
+
+Every registry request is bounded on **time, response size, redirect count, result count and JSON depth**, in one
+shared class rather than per adapter — two adapters with different limits would mean one of them is the weak one.
+An oversized body is refused rather than truncated: half a JSON document says something other than what was sent.
+
+**`skillforge discovery verify <query> --registry <url> --probe`** compares what a registry declares about its MCP
+servers with what those servers answer. **`SF8201`** a runtime tool the registry never declared, **`SF8202`** a
+declared tool the server does not have, **`SF8203`** counts that differ with no names to compare, **`SF8204`** a
+version disagreement between the listing and the server's own `serverInfo`. Console, JSON and SARIF;
+`--fail-on-drift` gates the run.
+
+`--probe` is a second decision, separate from the search: without it every resource is reported as not probed and
+nothing is contacted. Only **remote HTTP and HTTPS MCP servers** are ever asked. A `file://` endpoint, a stdio
+server, a skill, an agent and a workflow are all `UnsupportedResource` — none of them can be asked what it exposes
+without being run.
+
+`DiscoveryVerifier` hands a synthesised declaration to the existing `McpProber` rather than probing anything
+itself. **There is no second probing stack**: two of them would eventually disagree about a server, and the
+disagreement would become the command's most interesting output.
+
+**`VerifiedNoDrift` does not mean trusted and does not mean safe**, and every output path says so in those words. A
+server can match its listing exactly and still expose a tool that drops a database. Whether a difference is
+permitted is `policy check`'s answer — discovery describes, policy judges, and the two stay apart so that
+"unexpected runtime tool: `delete_database`" is a description rather than half a verdict.
+
+New docs: `docs/graph.md` and `docs/discovery.md`.
+
+### Decisions taken in this phase
+
+- **`SF8010` is `Info`, not a warning.** SkillForge stopping at its own page limit is a fact about the report, not a
+  defect in the server. The one case that *is* a server defect — a repeated pagination cursor — says so in the
+  suggestion instead of getting its own severity.
+- **Silence is not a claim.** A registry that declares no capabilities has not declared that the server has none, so
+  runtime names are not compared against nothing. Otherwise `SF8201` would fire on every listing that omits an
+  optional field — and the MCP Registry lists no tools at all, so that would be most of them. Those cases get
+  `SF8203`, a count observation.
+- **An incomplete tool list suppresses `SF8202` and not `SF8201`.** A tool that was seen is present whether or not
+  reading finished; a tool that was not seen might be on the page nobody reached. Reporting the second would be a
+  finding produced by SkillForge's own bound.
+- **Endpoint drift has no diagnostic code.** The drift kind is named in the model, and nothing emits it:
+  establishing it needs the URL that answered after redirects, which the prober does not report. A drift kind that
+  cannot be established would be an empty promise on a report.
+- **The severities were measured before the codes were published**, as a test rather than a note. On eight fixture
+  listings `SF8201` fires twice, `SF8202` once, `SF8203` once, and the four matching listings produce nothing
+  between them. That last number is the one that mattered.
+- **`mermaid` is not in `OutputFormat.All`.** It is offered by `graph` alone. A format listed as generally available
+  would have to be implemented by every command that takes `--format`, including the ones whose output is a list of
+  findings — which is not a diagram.
+- **Neither `graph` nor `discover` emits SARIF.** SARIF describes results a scanner produced. `discovery verify`
+  does emit it, for the findings alone, because drift *is* a scanner result while the listing under it is a search
+  result.
+- **`discovery` and `discover` are separate commands, not a flag.** Reading a registry and reaching out to every
+  server it lists are different acts with different consequences, and a command name is the cheapest place to make
+  that visible. A test parses the whole command tree, which is what would catch a collision.
+- **A URL is sent as given.** SkillForge appends its own search parameter only when the supplied URL carries no
+  query of its own. Inventing a registry's query grammar would be guessing at an interface, and a URL somebody
+  constructed by hand should reach the wire as they wrote it.
+
+### Still not done, and deliberately
+
+- Endpoint drift as a published finding — see above.
+- The `ProductionImpactingPath + NoExplicitApprovalBoundary` composition rule. Documented as deferred, measured on
+  nothing yet.
+- Detectors for `Workflow`, `Harness`, `Automation` and `ExecutionEnvironment`. The model leaves room; nothing in a
+  repository declares them in a form that could be read without guessing.
+- Provider-specific execution-environment detectors — no Docker, Vercel, Cursor or Cloudflare detector. The domain
+  model exists so the future is not foreclosed; that is all this release owed it.
+- Anything that installs, connects to, publishes or executes a discovered resource.
+
 ## [26.249.1] — 2026-09-06
 
 ### Added — provenance, update drift, agent identity and MCP tool surface

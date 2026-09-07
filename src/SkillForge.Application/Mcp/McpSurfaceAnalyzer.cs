@@ -103,7 +103,8 @@ public static class McpSurfaceAnalyzer
                 [],
                 false,
                 probe?.Detail ?? NotAskedReason(server, probe),
-                SurfaceRisk.Informational);
+                SurfaceRisk.Informational,
+                null);
         }
 
         var names = probe.ToolsOrEmpty.Select(tool => tool.Name).ToArray();
@@ -120,13 +121,17 @@ public static class McpSurfaceAnalyzer
         return new McpToolSurface(
             server.Name,
             names.Length,
-            names.Length,
+
+            // What one round trip put in the agent's context. Equal to the total for every server that does not
+            // page, which is what makes the pair worth printing rather than one number twice.
+            probe.Paging?.FirstPageToolCount ?? names.Length,
             write,
             credential,
             admin,
             progressive,
             null,
-            RiskOf(names.Length, privileged, thresholds));
+            RiskOf(names.Length, privileged, thresholds),
+            probe.Paging);
     }
 
     /// <summary>
@@ -149,7 +154,30 @@ public static class McpSurfaceAnalyzer
         string path,
         List<Diagnostic> findings)
     {
-        if (surface.NotProbedReason is not null || surface.ToolCount < thresholds.WarningToolCount)
+        if (surface.NotProbedReason is not null)
+        {
+            return;
+        }
+
+        // Reported at any size and before the threshold check, because it is about the number rather than about the
+        // server: a count that stopped early cannot be compared against a threshold, and a reader who is not told
+        // will compare it anyway.
+        if (surface.Paging is { IsComplete: false } paging)
+        {
+            findings.Add(Diagnostic.Info(
+                DiagnosticCodes.McpToolListIncomplete,
+                $"'{surface.ServerName}' returned more tool pages than were read "
+                    + $"({paging.PagesRead} read, {Stopped(paging.Outcome)}), so {surface.ToolCount} is the number "
+                    + "of tools seen and not the number the server has.",
+                path,
+                suggestion: paging.Outcome == McpToolPagingOutcome.CursorLoopDetected
+                    ? "The server handed back a pagination cursor it had already given out. That is a defect in the "
+                        + "server: a client following it would never reach the end of the list."
+                    : "SkillForge reads at most one hundred pages of tools/list. A server past that is larger than "
+                        + "any threshold here can usefully judge."));
+        }
+
+        if (surface.ToolCount < thresholds.WarningToolCount)
         {
             return;
         }
@@ -207,6 +235,13 @@ public static class McpSurfaceAnalyzer
 
     private static bool Contains(string value, IReadOnlyList<string> words) =>
         words.Any(word => value.Contains(word, StringComparison.OrdinalIgnoreCase));
+
+    private static string Stopped(McpToolPagingOutcome outcome) => outcome switch
+    {
+        McpToolPagingOutcome.CursorLoopDetected => "the server repeated a cursor",
+        McpToolPagingOutcome.PageLimitReached => "the page limit was reached",
+        _ => "reading stopped",
+    };
 
     /// <summary>Names a few of them rather than all: a message is read, a list is scrolled past.</summary>
     private static string Sample(IReadOnlyList<string> tools) =>
