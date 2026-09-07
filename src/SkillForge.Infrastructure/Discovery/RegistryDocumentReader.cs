@@ -219,6 +219,34 @@ internal sealed class RegistryDocumentReader
         _ => null,
     };
 
+    /// <summary>
+    /// Reads a value as an absolute URL, but only when the value itself declares a scheme.
+    /// </summary>
+    /// <param name="value">The text a listing gave, or <see langword="null"/>.</param>
+    /// <returns>The URL, or <see langword="null"/> when the value is not one.</returns>
+    /// <remarks>
+    /// <see cref="Uri.TryCreate(string?, UriKind, out Uri?)"/> is not enough on its own, and the difference is
+    /// platform-specific: on Unix a leading slash is a valid absolute path, so <c>/mcp</c> parses as
+    /// <c>file:///mcp</c> and the same listing yields an endpoint on Linux and none on Windows. An endpoint
+    /// SkillForge synthesised out of a relative path is a value the registry never gave — the one thing a report
+    /// built on "no evidence, no claim" must not print.
+    ///
+    /// So the parsed scheme has to be one the text actually wrote. A listing that names <c>file://</c> or some
+    /// other scheme explicitly is still read and still reported; it is simply not verifiable, which is a different
+    /// statement and is made elsewhere.
+    /// </remarks>
+    internal static Uri? AbsoluteUrl(string? value)
+    {
+        if (value is not { Length: > 0 }
+            || !Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || !value.StartsWith(uri.Scheme + ":", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return Domain.Mcp.UrlRedaction.WithoutCredentials(uri);
+    }
+
     private static Exception Innermost(Exception exception)
     {
         var current = exception;

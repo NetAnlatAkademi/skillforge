@@ -194,10 +194,11 @@ public sealed class McpRegistryDiscoveryAdapter : IRemoteResourceDiscoveryAdapte
                 continue;
             }
 
-            if (Uri.TryCreate(Text(remote["url"]), UriKind.Absolute, out var uri))
+            // AbsoluteUrl, not Uri.TryCreate: a schemeless path parses as file:// on Unix and not on Windows, and
+            // it also strips a credential the URL carried.
+            if (RegistryDocumentReader.AbsoluteUrl(Text(remote["url"])) is { } uri)
             {
-                // A credential in the URL is removed where the URL is read — see UrlRedaction.
-                return SkillForge.Domain.Mcp.UrlRedaction.WithoutCredentials(uri);
+                return uri;
             }
         }
 

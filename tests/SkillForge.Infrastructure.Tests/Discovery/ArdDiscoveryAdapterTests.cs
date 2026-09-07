@@ -192,15 +192,41 @@ public sealed class ArdDiscoveryAdapterTests
         result.Resources.Should().ContainSingle().Which.Name.Should().Be("first");
     }
 
-    [Fact]
-    public async Task IgnoresARelativeEndpointRatherThanResolvingItAgainstAGuess()
+    [Theory]
+    [InlineData("/mcp")]
+    [InlineData("./mcp")]
+    [InlineData("mcp")]
+    [InlineData("db.example.test/mcp")]
+    public async Task IgnoresAnEndpointThatDeclaresNoSchemeRatherThanInventingOne(string endpoint)
     {
-        var result = await Search(Responds("""
-            { "resources": [ { "id": "one", "name": "one", "type": "mcp", "endpoint": "/mcp" } ] }
+        // A schemeless path is where this went wrong once, and platform-specifically: on Unix a leading slash is a
+        // valid absolute path, so Uri.TryCreate turns "/mcp" into file:///mcp and the same listing yielded an
+        // endpoint on Linux and none on Windows. An endpoint SkillForge synthesised out of a relative path is a
+        // value the registry never gave.
+        var result = await Search(Responds($$"""
+            { "resources": [ { "id": "one", "name": "one", "type": "mcp", "endpoint": "{{endpoint}}" } ] }
             """));
 
         var resource = result.Resources.Should().ContainSingle().Subject;
         resource.Endpoint.Should().BeNull();
+        resource.IsRemotelyVerifiable.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task StillReadsAnEndpointThatDeclaresANonHttpScheme()
+    {
+        // The other half: a scheme the listing wrote explicitly is read and reported. It is simply not verifiable,
+        // which is a different statement and is made by the verifier rather than by dropping the field.
+        var result = await Search(Responds("""
+            {
+              "resources": [
+                { "id": "one", "name": "one", "type": "mcp", "endpoint": "file:///usr/local/bin/server" }
+              ]
+            }
+            """));
+
+        var resource = result.Resources.Should().ContainSingle().Subject;
+        resource.Endpoint.Should().Be(new Uri("file:///usr/local/bin/server"));
         resource.IsRemotelyVerifiable.Should().BeFalse();
     }
 

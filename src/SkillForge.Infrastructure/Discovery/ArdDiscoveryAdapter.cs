@@ -232,18 +232,20 @@ public sealed class ArdDiscoveryAdapter : IRemoteResourceDiscoveryAdapter
     /// The endpoint, when the listing names one that is an absolute URL.
     /// </summary>
     /// <remarks>
-    /// Absolute only. A relative endpoint would have to be resolved against a base the listing does not state, and
-    /// a guessed base is a URL SkillForge would later print as though the registry had given it.
+    /// Absolute, and only when the value itself declares a scheme. A relative endpoint would have to be resolved
+    /// against a base the listing does not state, and a guessed base is a URL SkillForge would later print as
+    /// though the registry had given it.
     /// </remarks>
     private static Uri? EndpointOf(JsonObject entry)
     {
         foreach (var value in Values(entry, EndpointProperties))
         {
-            if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            // AbsoluteUrl, not Uri.TryCreate: a schemeless path parses as file:// on Unix and not on Windows, and
+            // an endpoint SkillForge synthesised is a value the registry never gave. It also strips any credential
+            // the URL carried — see UrlRedaction.
+            if (RegistryDocumentReader.AbsoluteUrl(value) is { } uri)
             {
-                // A listing may carry a credential in the URL. It is removed here, where the URL is read, rather
-                // than at each printer — see UrlRedaction.
-                return SkillForge.Domain.Mcp.UrlRedaction.WithoutCredentials(uri);
+                return uri;
             }
         }
 
