@@ -604,7 +604,88 @@ internal static partial class SkillForgeCommandLine
                 gate: true),
             BuildMcpDiffCommand(services, globals),
             BuildMcpSurfaceCommand(services, globals),
+            BuildMcpSkillsCommand(services, globals),
         };
+    }
+
+    /// <summary>
+    /// Builds <c>mcp skills</c>, with <c>inspect</c> and <c>verify</c> under it: skills served over the
+    /// <c>io.modelcontextprotocol/skills</c> extension.
+    /// </summary>
+    /// <remarks>
+    /// A group under <c>mcp</c> rather than a new root command: the input is the same MCP configuration file every other
+    /// <c>mcp</c> command takes, and the extension is MCP's. Its <c>inspect</c> does not collide with
+    /// <c>mcp inspect</c> — a command name is resolved within its parent — and the tests pin that.
+    /// </remarks>
+    private static Command BuildMcpSkillsCommand(IServiceProvider services, GlobalOptions globals) =>
+        new("skills", "List and verify skills MCP servers serve over the io.modelcontextprotocol/skills extension.")
+        {
+            BuildMcpSkillsSubcommand(
+                services,
+                globals,
+                "inspect",
+                "List the skills each MCP server serves, from skills/list. Describes; never fails on what it finds.",
+                verify: false),
+            BuildMcpSkillsSubcommand(
+                services,
+                globals,
+                "verify",
+                "Fetch each served skill and check every file's bytes against its manifest's digest and size. "
+                    + "An integrity match is not a statement about trust or safety.",
+                verify: true),
+        };
+
+    private static Command BuildMcpSkillsSubcommand(
+        IServiceProvider services,
+        GlobalOptions globals,
+        string name,
+        string description,
+        bool verify)
+    {
+        var path = new Argument<string>("file") { Description = "MCP configuration file: .json or .toml." };
+        var probe = CreateProbeOption();
+        var format = verify
+            ? CreateFormatOption(OutputFormat.Console, OutputFormat.Json, OutputFormat.Sarif)
+            : CreateFormatOption(OutputFormat.Console, OutputFormat.Json);
+        var output = CreateOutputOption();
+
+        var skill = new Option<string[]>("--skill")
+        {
+            Description = "A skill's SKILL.md URI to verify even when skills/list does not carry it. Repeatable.",
+            AllowMultipleArgumentsPerToken = false,
+        };
+
+        var failOnMismatch = new Option<bool>("--fail-on-mismatch")
+        {
+            Description = "Fail when any served content does not match its manifest (SF8301-SF8306).",
+        };
+
+        var command = new Command(name, description) { path, probe, format, output };
+
+        if (verify)
+        {
+            command.Options.Add(skill);
+            command.Options.Add(failOnMismatch);
+        }
+
+        command.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var runner = services.GetRequiredService<McpSkillsCommandRunner>();
+
+            return await runner.RunAsync(
+                new McpSkillsRequest(
+                    parseResult.GetValue(path) ?? DefaultPath,
+                    parseResult.GetValue(probe),
+                    verify,
+                    verify ? parseResult.GetValue(skill) ?? [] : [],
+                    verify && parseResult.GetValue(failOnMismatch),
+                    parseResult.GetValue(format) ?? OutputFormat.Console,
+                    parseResult.GetValue(output),
+                    globals.Read(parseResult)),
+                cancellationToken).ConfigureAwait(false);
+        });
+
+        return command;
     }
 
     /// <summary>

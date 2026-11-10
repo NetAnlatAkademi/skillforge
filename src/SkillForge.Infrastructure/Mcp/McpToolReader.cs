@@ -38,22 +38,6 @@ internal static class McpToolReader
     }
 
     /// <summary>
-    /// Reads the opaque cursor that asks for the next page.
-    /// </summary>
-    /// <param name="result">The <c>result</c> node of a <c>tools/list</c> response, or <see langword="null"/>.</param>
-    /// <returns>
-    /// The cursor, or <see langword="null"/> when the response carries none — which is how the specification says the
-    /// last page announces itself. An empty string is treated as absent: a server that sends
-    /// <c>"nextCursor": ""</c> has ended the list, and asking for page after page of nothing would be a loop.
-    /// </returns>
-    internal static string? NextCursor(JsonNode? result) =>
-        result?["nextCursor"] is JsonValue value
-            && value.TryGetValue<string>(out var cursor)
-            && cursor.Length > 0
-                ? cursor
-                : null;
-
-    /// <summary>
     /// Reduces the pages of a tool list to one list: one entry per name, ordered by name.
     /// </summary>
     /// <param name="pages">Every page's tools, in the order the pages were read.</param>

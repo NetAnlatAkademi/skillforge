@@ -1,10 +1,10 @@
 using System.Net;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using SkillForge.Application.Mcp;
 using SkillForge.Domain.Mcp;
+using SkillForge.Domain.Mcp.Skills;
 using SkillForge.Domain.Migration;
 
 namespace SkillForge.Infrastructure.Mcp;
@@ -27,36 +27,13 @@ namespace SkillForge.Infrastructure.Mcp;
 public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
 {
     private const string Revision = "2026-07-28";
-    private const string ProtocolVersionKey = "io.modelcontextprotocol/protocolVersion";
-    private const string ClientInfoKey = "io.modelcontextprotocol/clientInfo";
-    private const string ClientCapabilitiesKey = "io.modelcontextprotocol/clientCapabilities";
     private const string ServerInfoKey = "io.modelcontextprotocol/serverInfo";
 
     /// <summary>JSON-RPC's "method not found", which is how a server without discovery answers.</summary>
     private const int MethodNotFound = -32601;
 
-    /// <summary>
-    /// How many <c>tools/list</c> pages one probe will ask for.
-    /// </summary>
-    /// <remarks>
-    /// A hundred, which at any realistic page size is thousands of tools — far past the point where the surface
-    /// report has already said everything there is to say about a server this large. The number exists because the
-    /// cursor comes from the server: without a bound, one that always returns a fresh cursor turns an inspection
-    /// into an unbounded walk. Not configurable, deliberately — a limit nobody has needed to change is not a
-    /// setting, and reaching it is reported rather than silently absorbed.
-    /// </remarks>
-    private const int MaxPages = 100;
-
-    /// <summary>
-    /// What SkillForge calls itself to a server. Not taken from the Reporting layer: Infrastructure may not reference
-    /// it, and the dependency rules are worth more than sharing one string.
-    /// </summary>
-    private const string ClientName = "skillforge";
-
-    private static readonly string ClientVersion =
-        typeof(Mcp20260728ProtocolAdapter).Assembly.GetName().Version?.ToString() ?? "0.0.0";
-
     private readonly HttpClient _client;
+    private readonly McpJsonRpcChannel _channel;
 
     /// <summary>Initialises the adapter.</summary>
     /// <param name="client">The client to send with. Timeouts and headers are the caller's to configure.</param>
@@ -64,6 +41,7 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
     {
         ArgumentNullException.ThrowIfNull(client);
         _client = client;
+        _channel = new McpJsonRpcChannel(client);
     }
 
     /// <inheritdoc />
@@ -196,161 +174,52 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
     /// exposes fifty tools" is a different sentence from "the first page of this server's tools holds fifty", and a
     /// declared-versus-runtime comparison built on the second would report every tool past page one as missing.
     ///
-    /// Three bounds, because following a cursor the server controls is an unbounded walk by construction:
-    /// <see cref="MaxPages"/> pages, a repeated cursor stops it, and the cancellation token is checked before every
-    /// request rather than only at the start. Whichever bound fires is recorded on the result — a count that stopped
-    /// early must never be read as a total.
-    ///
-    /// Failure is deliberately quiet: the probe already succeeded, and a server that answers discovery but refuses
-    /// its tool list has told us something less interesting than what we already have. Pages read before a failure
-    /// are kept, because they are true.
+    /// The walk and its bounds are <see cref="McpCursorWalk"/>'s, shared with <c>skills/list</c>, so no list a server
+    /// pages is walked under different rules. Failure is deliberately quiet: the probe already succeeded, and a server
+    /// that answers discovery but refuses its tool list has told us something less interesting than what we already
+    /// have. Pages read before a failure are kept, because they are true.
     /// </remarks>
     private async Task<McpToolListing> ToolsAsync(string url, CancellationToken cancellationToken)
     {
-        var pages = new List<IReadOnlyList<McpToolSummary>>();
-        var seenCursors = new HashSet<string>(StringComparer.Ordinal);
-        var firstPageCount = 0;
-        var outcome = McpToolPagingOutcome.Complete;
-        string? cursor = null;
-
-        while (true)
-        {
-            // Between pages, not only at the start: a hundred round trips to a slow server is exactly the wait
-            // somebody presses Ctrl+C during.
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var page = await ToolPageAsync(url, cursor, pages.Count + 1, cancellationToken).ConfigureAwait(false);
-
-            if (page is null)
-            {
-                // The server stopped answering. What was read stays, and the list is only called complete when
-                // nothing had been asked for yet — an empty list from a refused first page is the honest result,
-                // while a walk that broke off mid-way has read less than there is.
-                outcome = pages.Count == 0
-                    ? McpToolPagingOutcome.Complete
-                    : McpToolPagingOutcome.PageLimitReached;
-                break;
-            }
-
-            pages.Add(page.Tools);
-
-            if (pages.Count == 1)
-            {
-                firstPageCount = page.Tools.Count;
-            }
-
-            if (page.NextCursor is not { Length: > 0 } next)
-            {
-                break;
-            }
-
-            // A cursor the server has already handed out means following it returns here again. Stopping is the only
-            // termination this walk gets: the cursor is opaque, so it cannot be checked for progress any other way.
-            if (!seenCursors.Add(next))
-            {
-                outcome = McpToolPagingOutcome.CursorLoopDetected;
-                break;
-            }
-
-            if (pages.Count >= MaxPages)
-            {
-                outcome = McpToolPagingOutcome.PageLimitReached;
-                break;
-            }
-
-            cursor = next;
-        }
+        var walk = await McpCursorWalk
+            .WalkAsync<IReadOnlyList<McpToolSummary>>(
+                (cursor, page, token) => ToolPageAsync(url, cursor, page, token),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
 
         return new McpToolListing(
-            McpToolReader.Merge(pages),
-            new McpToolPaging(pages.Count, firstPageCount, outcome));
+            McpToolReader.Merge(walk.Pages),
+            new McpToolPaging(walk.Pages.Count, walk.Pages.Count > 0 ? walk.Pages[0].Count : 0, walk.Outcome));
     }
 
     /// <summary>
-    /// Asks for one page of <c>tools/list</c>.
+    /// Asks for one page of <c>tools/list</c>. The cursor goes in <c>params.cursor</c>, which is where the
+    /// specification's pagination puts it, and is absent on the first request rather than sent as null.
     /// </summary>
-    /// <returns>
-    /// The page, or <see langword="null"/> when the server did not answer with one. Null means "stop", not "empty":
-    /// an empty page is a real answer, and it ends the walk through its missing cursor.
-    /// </returns>
-    private async Task<ToolPage?> ToolPageAsync(
+    private async Task<McpResponse<CursorPage<IReadOnlyList<McpToolSummary>>>> ToolPageAsync(
         string url,
         string? cursor,
         int pageNumber,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Post, url)
-            {
-                Content = new StringContent(ToolsBody(cursor, pageNumber), Encoding.UTF8, "application/json"),
-            };
-
-            request.Headers.TryAddWithoutValidation("MCP-Protocol-Version", Revision);
-
-            using var response = await _client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
-
-            var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-            return JsonNode.Parse(payload)?["result"] is { } result
-                ? new ToolPage(McpToolReader.Read(result["tools"]), McpToolReader.NextCursor(result))
-                : null;
-        }
-        catch (HttpRequestException)
-        {
-            return null;
-        }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// The <c>tools/list</c> request body. The cursor goes in <c>params.cursor</c>, which is where the
-    /// specification's pagination puts it, and is absent on the first request rather than sent as null.
-    /// </summary>
-    private static string ToolsBody(string? cursor, int pageNumber)
-    {
-        var parameters = new JsonObject
-        {
-            ["_meta"] = new JsonObject
-            {
-                [ProtocolVersionKey] = Revision,
-                [ClientInfoKey] = new JsonObject
-                {
-                    ["name"] = ClientName,
-                    ["version"] = ClientVersion,
-                },
-                [ClientCapabilitiesKey] = new JsonObject(),
-            },
-        };
+        var parameters = McpJsonRpcChannel.Parameters();
 
         if (cursor is { Length: > 0 })
         {
             parameters["cursor"] = cursor;
         }
 
-        return new JsonObject
-        {
-            ["jsonrpc"] = "2.0",
-            ["id"] = $"skillforge-tools-{pageNumber}",
-            ["method"] = "tools/list",
-            ["params"] = parameters,
-        }.ToJsonString();
-    }
+        var response = await _channel
+            .CallAsync(url, "tools/list", $"skillforge-tools-{pageNumber}", parameters, cancellationToken)
+            .ConfigureAwait(false);
 
-    /// <summary>One page as it came back: its tools, and the cursor for the next one when there is one.</summary>
-    private sealed record ToolPage(IReadOnlyList<McpToolSummary> Tools, string? NextCursor);
+        return response.Value is { } result
+            ? McpResponse<CursorPage<IReadOnlyList<McpToolSummary>>>.Ok(
+                new CursorPage<IReadOnlyList<McpToolSummary>>(
+                    McpToolReader.Read(result["tools"]),
+                    McpCursorWalk.NextCursor(result)))
+            : McpResponse<CursorPage<IReadOnlyList<McpToolSummary>>>.Failed(response.Error ?? "no answer");
+    }
 
     /// <summary>A whole tool list, with what it took to read it.</summary>
     private sealed record McpToolListing(IReadOnlyList<McpToolSummary> Tools, McpToolPaging Paging);
@@ -361,21 +230,7 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
             ["jsonrpc"] = "2.0",
             ["id"] = "skillforge-discover-1",
             ["method"] = "server/discover",
-            ["params"] = new JsonObject
-            {
-                ["_meta"] = new JsonObject
-                {
-                    [ProtocolVersionKey] = Revision,
-                    [ClientInfoKey] = new JsonObject
-                    {
-                        ["name"] = ClientName,
-                        ["version"] = ClientVersion,
-                    },
-
-                    // Empty on purpose: SkillForge is inspecting, not offering the server anything to call back into.
-                    [ClientCapabilitiesKey] = new JsonObject(),
-                },
-            },
+            ["params"] = McpJsonRpcChannel.Parameters(),
         }.ToJsonString();
 
     private static McpServerProbe Read(string serverName, string payload)
@@ -417,8 +272,34 @@ public sealed class Mcp20260728ProtocolAdapter : IMcpProtocolAdapter
             Names(result["capabilities"]),
             serverInfo?["name"]?.GetValue<string>(),
             serverInfo?["version"]?.GetValue<string>(),
-            Revision);
+            Revision) with
+        {
+            Extensions = Extensions(result["capabilities"]?["extensions"]),
+        };
     }
+
+    /// <summary>
+    /// Reads <c>capabilities.extensions</c>: an object keyed by extension identifier, each value an object of settings.
+    /// </summary>
+    /// <remarks>
+    /// A setting counts as enabled only when it is the JSON literal <see langword="true"/>. <c>"true"</c> as a string
+    /// is not a boolean, and reading it as one would make SkillForge call a method a server never offered.
+    /// </remarks>
+    private static IReadOnlyList<McpExtensionDeclaration> Extensions(JsonNode? node) =>
+        node is JsonObject map
+            ? [.. map
+                .Select(entry => new McpExtensionDeclaration(
+                    entry.Key,
+                    entry.Value is JsonObject settings
+                        ? [.. settings
+                            .Where(setting => setting.Value is JsonValue value
+                                && value.TryGetValue<bool>(out var enabled)
+                                && enabled)
+                            .Select(setting => setting.Key)
+                            .Order(StringComparer.Ordinal)]
+                        : []))
+                .OrderBy(extension => extension.Identifier, StringComparer.Ordinal)]
+            : [];
 
     private static IReadOnlyList<string> Strings(JsonNode? node) =>
         node is JsonArray array

@@ -310,6 +310,29 @@ The SARIF carries `SF8201` (a runtime tool the registry never declared) as a war
 notes. `SF1016` means the registry could not be read at all, which fails the run whatever `--fail-on-drift` says:
 "no results" and "no answer" are different facts.
 
+## Verifying skills an MCP server serves
+
+```yaml
+      - name: Verify MCP-served skills
+        run: |
+          skillforge mcp skills verify ./.mcp.json             --probe             --fail-on-mismatch             --format sarif             --output artifacts/mcp-skills.sarif
+
+      - name: Upload
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: artifacts/mcp-skills.sarif
+          category: skillforge-mcp-skills
+```
+
+- **It makes network requests, and only to the servers the file declares.** One `server/discover` per HTTP server,
+  then the extension's methods on the servers that declare it. A local stdio server is never launched.
+- **The SARIF holds only integrity findings**, `SF8301`–`SF8306`. A dynamic skill (`SF8307`) and an incomplete listing
+  (`SF8308`) are statements about what could be checked and are not annotated.
+- **A server that requires authorization is not read.** SkillForge never reads header values from a configuration.
+- **A match is integrity, not trust.** The digests come from the same server as the content; see
+  [mcp-skills.md](mcp-skills.md).
+
 ## Consuming the JSON report
 
 `--format json` writes the schema documented in `docs/validation-rules.md`. It is a published contract:

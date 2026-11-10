@@ -419,6 +419,52 @@ public static class DiagnosticCodes
     public const string DiscoverySelfReportedVersionDrift = "SF8204";
 
     /// <summary>
+    /// A file an MCP-served skill's manifest names arrived with bytes whose SHA-256 is not the declared digest.
+    /// </summary>
+    /// <remarks>
+    /// <c>SF8301</c>–<c>SF8308</c> are the <c>io.modelcontextprotocol/skills</c> extension, reported by
+    /// <c>mcp skills verify</c>. A match on any of them is integrity, never trust: digests are unsigned, and a server
+    /// that rewrites a file and its digest together stays consistent.
+    /// </remarks>
+    public const string McpSkillDigestMismatch = "SF8301";
+
+    /// <summary>A file an MCP-served skill's manifest names arrived with a byte length other than the declared size.</summary>
+    public const string McpSkillSizeMismatch = "SF8302";
+
+    /// <summary>
+    /// The frontmatter a server described for a skill disagrees with the frontmatter in the <c>SKILL.md</c> it served.
+    /// </summary>
+    public const string McpSkillFrontmatterDrift = "SF8303";
+
+    /// <summary>
+    /// The server's directory listing shows a file under the skill that its manifest does not name. The manifest is the
+    /// approved set; a file outside it is never added to that set.
+    /// </summary>
+    public const string McpSkillUnlistedResource = "SF8304";
+
+    /// <summary>A file an MCP-served skill's manifest names could not be read.</summary>
+    public const string McpSkillMissingResource = "SF8305";
+
+    /// <summary>
+    /// An MCP-served skill's manifest is malformed: a <c>resources</c> value that is neither an array nor
+    /// <c>"dynamic"</c>, a missing or unsupported digest, a missing size, a repeated file, no <c>SKILL.md</c> entry, or
+    /// more than the specification's per-skill limits.
+    /// </summary>
+    public const string McpSkillInvalidManifest = "SF8306";
+
+    /// <summary>
+    /// A skill's resources are <c>"dynamic"</c>, so no static content integrity can be established for it. Not a
+    /// fault: dynamic is a form the specification defines.
+    /// </summary>
+    public const string McpSkillDynamicIntegrityLimit = "SF8307";
+
+    /// <summary>
+    /// A server's <c>skills/list</c> was not read to the end, so the skills reported are a floor rather than the
+    /// whole inventory.
+    /// </summary>
+    public const string McpSkillsPagingIncomplete = "SF8308";
+
+    /// <summary>
     /// The policy file exists but could not be read or parsed, so no policy was applied. An error rather than a
     /// warning, unlike SF1012: a run that was asked to check policies and checked none has not done its job, and a
     /// build that passes because the rules failed to load is the worst possible outcome.
@@ -468,4 +514,18 @@ public static class DiagnosticCodes
     /// for this command asked for those by number.
     /// </remarks>
     public const string PolicyRelaxed = "SF9010";
+
+    /// <summary>
+    /// Whether a code is one of the MCP skill findings about what was served — <c>SF8301</c> to <c>SF8306</c> — as
+    /// opposed to a statement about what could be checked.
+    /// </summary>
+    /// <param name="code">The code to classify.</param>
+    /// <returns><see langword="true"/> for an integrity finding.</returns>
+    public static bool IsMcpSkillIntegrityFinding(string code) =>
+        code is McpSkillDigestMismatch
+            or McpSkillSizeMismatch
+            or McpSkillFrontmatterDrift
+            or McpSkillUnlistedResource
+            or McpSkillMissingResource
+            or McpSkillInvalidManifest;
 }

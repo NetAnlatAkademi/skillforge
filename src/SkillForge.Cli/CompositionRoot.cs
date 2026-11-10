@@ -125,6 +125,14 @@ internal static class CompositionRoot
         services.AddSingleton<DiscoveryVerifier>();
         services.AddSingleton<McpFileInspector>();
 
+        // Skills served over MCP: the same file inspection and the same prober decide which servers declare the
+        // extension; the client below only speaks the extension's methods, on the shared JSON-RPC channel. Thirty
+        // seconds rather than twenty because one resources/read may carry a skill file at the 16 MiB limit.
+        services.AddSingleton<IMcpSkillsClient>(_ => new Mcp20260728SkillsClient(
+            new HttpClient { Timeout = TimeSpan.FromSeconds(30) }));
+        services.AddSingleton<McpSkillVerifier>();
+        services.AddSingleton<McpSkillsInspector>();
+
         // Identity is read on top of the same file inspection: one parse, and a stdio server still never launched.
         services.AddSingleton<McpIdentityInspector>();
 
@@ -184,6 +192,7 @@ internal static class CompositionRoot
         services.AddSingleton<PolicyCheckCommandRunner>();
         services.AddSingleton<PolicyDiffCommandRunner>();
         services.AddSingleton<McpCommandRunner>();
+        services.AddSingleton<McpSkillsCommandRunner>();
         services.AddSingleton<ProvenanceCommandRunner>();
         services.AddSingleton<UpdateAnalyzeCommandRunner>();
         services.AddSingleton<IdentityCommandRunner>();

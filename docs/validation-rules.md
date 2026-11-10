@@ -834,6 +834,67 @@ Whether a difference is *permitted* is `policy check`'s answer. The two layers s
 runtime tool: `delete_database`" is a description and "`delete_database` is not permitted" is a violation, rather
 than one confused sentence that is neither.
 
+## MCP skills
+
+Skills served over the `io.modelcontextprotocol/skills` extension, reported by `mcp skills verify --probe`. The full
+model, and the limits of what it can say, are in [mcp-skills.md](mcp-skills.md).
+
+| Code | Severity | Rule | Reported by |
+|---|---|---|---|
+| SF8301 | Error | A manifest file's bytes do not hash to its declared `sha256` digest | `mcp skills verify --probe` |
+| SF8302 | Error | A manifest file's byte length is not its declared `size` | `mcp skills verify --probe` |
+| SF8303 | Error | The frontmatter `skills/get` described is not the frontmatter in the served `SKILL.md` | `mcp skills verify --probe` |
+| SF8304 | Warning | The server's directory listing shows a file under the skill that the manifest does not name | `mcp skills verify --probe` |
+| SF8305 | Error | A file the manifest names could not be read | `mcp skills verify --probe` |
+| SF8306 | Error | The manifest is malformed, so a host must not load the skill and nothing is read | `mcp skills verify --probe` |
+| SF8307 | Info | The skill's resources are `"dynamic"`: static content integrity cannot be established | `mcp skills verify --probe` |
+| SF8308 | Info | `skills/list` was not read to the end, so the listed skills are a floor | `mcp skills inspect`, `mcp skills verify` |
+
+Each code has one meaning, and each is a sentence of the specification:
+
+- **SF8301, SF8302** — hosts MUST verify every retrieved file against its `digest` and `size`. One finding per file:
+  a file whose length changed almost always has a changed digest too, so SF8302 is reported and SF8301 is not.
+- **SF8303** — hosts MUST compare the fetched `SKILL.md` frontmatter field by field with the entry's. Compared only
+  once the `SKILL.md` bytes have matched; content that already failed verification is not used.
+- **SF8304** — a directory listing does not extend the manifest. The file is reported and **not read**. A Warning, not
+  an Error: the content that was approved still matched, and a server may hold files it does not serve as part of
+  this skill. Only children inside the skill's own subtree are considered; another skill's files, another scheme,
+  and any path with an empty, `.` or `..` segment are ignored rather than followed, and mark the enumeration
+  `partial`.
+- **SF8305** — a file the manifest names did not arrive: a JSON-RPC error, a timeout, or a body over the 24 MiB bound.
+- **SF8306** — `resources` neither an array nor `"dynamic"`; a missing frontmatter object; a missing size or digest;
+  a digest in another algorithm, or not `sha256:` and 64 lowercase hex characters; a file listed twice; no entry for
+  the skill's own `SKILL.md`; more than 512 files or 16 MiB declared.
+- **SF8307** — `"dynamic"` is a form the specification defines. No hash baseline is fabricated for it.
+- **SF8308** — the same three bounds as `tools/list` (SF8010): a hundred pages, a repeated cursor, cancellation.
+
+SF8301–SF8306 are the integrity findings: `--fail-on-mismatch` fails on them, and they are the only codes `verify`
+writes to SARIF. SF8307 and SF8308 are statements about what could be checked, not about what was found.
+
+### Measured before the severities were fixed
+
+Eight fixture skills on one server: four conforming — two static, one with a nested template directory, one dynamic —
+and one each with a changed file, a drifted description, a file outside its manifest, and a file that cannot be read.
+
+| Code | Findings on 8 fixtures |
+|---|---|
+| SF8301, SF8303, SF8304, SF8305 | **1** each — only on the skill with that fault |
+| SF8307 | **1** — the dynamic skill, as information |
+| On the three conforming static skills | **0** between them |
+
+The test is `MeasuredOnFixturesBeforeTheSeveritiesWereFixed` in `McpSkillsVerificationTests`. No real server
+implementing the extension was available to measure against, so prevalence in the wild is not known yet; the
+severities follow the specification's own MUSTs, which is the one basis that does not need a sample.
+
+### What an integrity match does not mean
+
+It means the bytes that arrived are the bytes the manifest described, and the frontmatter agreed.
+
+It does not mean trusted, safe, or published by whom it claims. The digests are unsigned and served by the same server
+as the content, so a server — or anything rewriting its responses — that changes a file and its digest together stays
+perfectly consistent. The specification says so itself: digests are not a security boundary. Every output path says
+it in those words, and the JSON carries `"serverIdentityVerified": false` on every provenance record.
+
 ## Organisation policy
 
 | Code | Rule | Status |

@@ -72,6 +72,18 @@ the existing `McpProber` rather than probing anything itself. HTTP-only, no stdi
 to the end under its three bounds all come for free, and cannot drift apart from what `migrate inspect --probe-mcp`
 reports about the same server.
 
+### Skills over MCP reuse the transport and the parser
+
+`McpSkillsInspector` in `SkillForge.Application/Mcp` reads the configuration through `McpFileInspector` and learns
+which servers declare `io.modelcontextprotocol/skills` from the same `McpProber` every other `mcp` command uses —
+the probe now carries `capabilities.extensions`. `IMcpSkillsClient` speaks only the extension's four methods, and its
+implementation sits on `McpJsonRpcChannel` and `McpCursorWalk`, the request and pagination code `tools/list` was moved
+onto in the same change. One channel decides what a request carries and how much of an answer is read; one walk
+decides when a paginated list stops.
+
+The extension is a transport. What it delivers is parsed by the existing `IFrontmatterParser` — JSON frontmatter
+included, since JSON is valid YAML — and hashed by the existing `IHashCalculator`. There is no second skill parser.
+
 ## Dependency rules
 
 | Layer | May reference | Must not reference |

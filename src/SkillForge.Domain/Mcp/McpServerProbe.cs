@@ -31,6 +31,10 @@ namespace SkillForge.Domain.Mcp;
 /// What it took to read <paramref name="Tools"/>, and whether the whole list was read.
 /// <see langword="null"/> when no tool list was asked for.
 /// </param>
+/// <param name="Extensions">
+/// The protocol extensions the server declared under <c>capabilities.extensions</c>, ordered by identifier.
+/// <see langword="null"/> when the answering revision has no such field.
+/// </param>
 public sealed record McpServerProbe(
     string ServerName,
     McpProbeStatus Status,
@@ -42,10 +46,17 @@ public sealed record McpServerProbe(
     string? AnsweredRevision = null,
     McpAuthorizationChallenge? Authorization = null,
     IReadOnlyList<McpToolSummary>? Tools = null,
-    McpToolPaging? Paging = null)
+    McpToolPaging? Paging = null,
+    IReadOnlyList<McpExtensionDeclaration>? Extensions = null)
 {
     /// <summary>Gets the tools the probe read, or an empty list when it read none.</summary>
     public IReadOnlyList<McpToolSummary> ToolsOrEmpty => Tools ?? [];
+
+    /// <summary>Finds an extension the server declared.</summary>
+    /// <param name="identifier">The extension identifier, compared exactly.</param>
+    /// <returns>The declaration, or <see langword="null"/> when the server did not declare it.</returns>
+    public McpExtensionDeclaration? Extension(string identifier) =>
+        Extensions?.FirstOrDefault(extension => string.Equals(extension.Identifier, identifier, StringComparison.Ordinal));
 
     /// <summary>A server that answered.</summary>
     /// <param name="serverName">The declared name.</param>

@@ -1086,6 +1086,39 @@ request could now leave for a destination nobody reviewed. A removed server or a
 
 Environment variables are compared **by name**. Values are never read, so a rotated token cannot appear in a diff.
 
+### `mcp skills`
+
+Skills a server serves over the `io.modelcontextprotocol/skills` extension. `inspect` lists them; `verify` fetches
+each one and checks every file's bytes against its manifest. The model, and what a match does and does not mean, is
+in [mcp-skills.md](mcp-skills.md).
+
+```bash
+skillforge mcp skills inspect ./.mcp.json --probe
+skillforge mcp skills verify ./.mcp.json --probe
+skillforge mcp skills verify ./.mcp.json --probe --skill skill://acme/billing/SKILL.md
+skillforge mcp skills verify ./.mcp.json --probe --fail-on-mismatch --format sarif -o skills.sarif
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `file` | — | MCP configuration file: `.json` or `.toml` |
+| `--probe` | off | Ask each HTTP server. Without it nothing leaves the machine and every server says why it was not asked |
+| `--skill` | — | `verify` only, repeatable: a skill's `SKILL.md` URI to verify even when `skills/list` does not carry it |
+| `--fail-on-mismatch` | off | `verify` only: exit `1` on any integrity finding, SF8301–SF8306 |
+| `--format`, `-f` | `console` | `console` or `json`; `verify` also takes `sarif` |
+| `--output`, `-o` | stdout | Write to a file |
+
+A server is asked about skills only when it answered `server/discover` in `2026-07-28` **and** declared the extension;
+`resources/directory/read` only when the declaration also set `directoryRead`. A stdio server is never launched.
+Each server that was not asked says why — "serves no skills" and "was never asked" are different facts.
+
+`inspect` describes and exits `0`. `verify` reports evidence and exits `0` unless `--fail-on-mismatch` is given; both
+exit `1` when the configuration file could not be read. SARIF carries only SF8301–SF8306: a dynamic skill (SF8307)
+and an incomplete listing (SF8308) are statements about what could be checked, not findings to annotate.
+
+`inspect` under `mcp skills` and `mcp inspect` are different commands. A name is resolved within its parent, and a
+test pins that neither shadows the other.
+
 ## `skillforge migrate inspect`
 
 Reports the agent tooling installed on this machine, per provider: skills, MCP servers and instruction files.
