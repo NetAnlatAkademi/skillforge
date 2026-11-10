@@ -5,7 +5,7 @@ mirrored into the Obsidian vault under `SkillForge/` for cross-session context.
 
 Legend: `[ ]` open · `[x]` done · `[~]` in progress · `[-]` deliberately deferred
 
-Last updated: 2026-09-07
+Last updated: 2026-11-10
 
 ---
 
@@ -681,6 +681,46 @@ housekeeping.
 - [-] Provider-specific execution-environment detectors. No Docker, Vercel, Cursor or Cloudflare detector, by
   explicit instruction and by preference.
 - [-] Anything that installs, connects to, publishes or executes a discovered resource.
+
+## v0.9 — Skills over MCP (from the master agent prompt of 2026-11-07)
+
+Task 1 of `docs/inputs-2026-11-07-master-agent-prompt.md`, done on 2026-11-10. Confirmed absent first: no
+`skills/list`, `skills/get`, `resources/directory/read` or `io.modelcontextprotocol/skills` anywhere in the tree.
+
+- [x] `skills/list` with the same bounded walk as `tools/list` — shared `McpCursorWalk`, not a copy
+- [x] `skills/get`, including a skill that is not listed (`--skill`)
+- [x] `resources/read`, `text` as UTF-8 and `blob` from base64, never another URI's item
+- [x] `resources/directory/read` only when `directoryRead` is declared; subtree-only, `.`/`..` ignored, 512 directories
+- [x] Static manifest verification: SHA-256 + size, digest syntax and algorithm, spec limits (512 files, 16 MiB)
+- [x] Frontmatter consistency through the existing parser — JSON frontmatter is valid YAML
+- [x] Dynamic skills reported as an integrity limit, no fabricated baseline
+- [x] MCP-served provenance (`McpSkillProvenance`, origin `McpServer`)
+- [x] `mcp skills inspect|verify`; console + JSON; SARIF for integrity findings only
+- [x] `SF8301`–`SF8308`, measured on eight fixtures before publishing
+- [x] Command-name collision test: `mcp skills inspect` vs `mcp inspect`
+- [x] `docs/mcp-skills.md`, validation rules, CLI reference, CI recipe, architecture
+
+### Decisions taken in this phase
+
+- **The transport moved, the tool walk did not change.** `tools/list` was moved onto `McpJsonRpcChannel` and
+  `McpCursorWalk` so the skills methods could not end up bounded differently. Every existing pagination test passed
+  unmodified.
+- **URIs are strings, not `System.Uri`.** The manifest is compared byte for byte with what a directory listing returns;
+  `Uri` normalises case and escaping and would hide the boundary being checked.
+- **`Task`, not `ValueTask`, on `IMcpSkillsClient`.** The brief suggested `ValueTask`; every other async seam here is
+  `Task`, and consistency won.
+- **One finding per file.** A changed length almost always comes with a changed digest; SF8302 is reported and SF8301
+  is not.
+- **SF8304 is a Warning.** What was approved still matched; a server may hold files it does not serve as this skill.
+- **No `AssetOrigin` enum on the existing provenance model yet.** The brief's six-value source enum would have one
+  consumer; MCP-served provenance is its own record with a constant origin until `provenance` itself reads a server.
+
+### Still not done, and deliberately
+
+- [-] `mcp inspect` printing a server's declared extensions. In the model, not in the output.
+- [-] A per-server byte budget. Bounded today by 100 skills × 16 MiB; the upgrade is marked in code.
+- [-] Measurement against a real server implementing the extension. None was available.
+- [-] Git pin resolution and the APM adapter — next in the brief's order, after re-reading this file.
 
 ## Out of scope for v0.1.0
 

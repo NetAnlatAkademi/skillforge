@@ -17,11 +17,12 @@ reaches any service unless a command is handed a URL.
 > verifies the gap between the capability an agent ecosystem *declares* and the capability it actually *offers* —
 > in the context of provenance and policy.
 
-> Status: **released as `26.250.1`** — v0.2 through v0.7 complete: validation, change control, policy-as-code with
-> MCP allow/deny rules, the migration inventory, MCP inspection and tool-surface analysis, provenance, update drift
-> and agent identity. New in v0.8: full `tools/list` pagination, the asset `graph`, remote discovery with an ARD and
-> an MCP Registry adapter, and declared-versus-runtime `discovery verify`. Every command works end to end. CI builds
-> and tests on Linux and Windows, and runs the CLI over the sample skills.
+> Status: **released as `26.314.1`** — v0.2 through v0.8 complete: validation, change control, policy-as-code with
+> MCP allow/deny rules, the migration inventory, MCP inspection and tool-surface analysis, provenance, update drift,
+> agent identity, full `tools/list` pagination, the asset `graph`, remote discovery and declared-versus-runtime
+> `discovery verify`. New in v0.9: skills served over the `io.modelcontextprotocol/skills` extension, listed and
+> integrity-verified by `mcp skills`. Every command works end to end. CI builds and tests on Linux and Windows, and
+> runs the CLI over the sample skills.
 
 ## Try it
 
@@ -72,6 +73,7 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 | `skillforge policy diff <before> <after>` | Compare two policy files and report what the later one permits that the earlier did not |
 | `skillforge mcp inspect\|validate\|diff <file>` | Inspect, gate or compare an MCP configuration file |
 | `skillforge mcp surface <file>` | Measure how many tools a server puts in an agent's context, and how many of them change things |
+| `skillforge mcp skills inspect\|verify <file>` | List the skills MCP servers serve, and check every file's bytes against its manifest |
 | `skillforge provenance [path]` | Report where each skill and plugin came from, and how it gets its next version |
 | `skillforge provenance diff <before> <after>` | Report what drifted: publisher, marketplace, pin, fingerprint |
 | `skillforge update analyze <base> <target>` | Report what an update adds, and what that means given how it arrives |
@@ -83,8 +85,8 @@ SkillForge reports concrete diagnostics and risk signals. It deliberately does *
 | `skillforge migrate inspect` | The same inventory, under the migration group |
 
 Full options are in [docs/cli-reference.md](docs/cli-reference.md); CI usage, including SARIF upload, is in
-[docs/ci.md](docs/ci.md). The graph's evidence model is in [docs/graph.md](docs/graph.md), and the discovery trust
-model in [docs/discovery.md](docs/discovery.md).
+[docs/ci.md](docs/ci.md). The graph's evidence model is in [docs/graph.md](docs/graph.md), the discovery trust
+model in [docs/discovery.md](docs/discovery.md), and skills served over MCP in [docs/mcp-skills.md](docs/mcp-skills.md).
 
 ### Drawing what is wired to what
 

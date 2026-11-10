@@ -35,6 +35,7 @@ Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download) or newer.
 | `skillforge policy check <path>` | Judge skills against `.skillforge/policy.yaml` |
 | `skillforge mcp inspect\|validate\|diff <file>` | Inspect, gate or compare an MCP configuration file |
 | `skillforge mcp surface <file>` | Measure how many tools a server puts in an agent's context, and how many change things |
+| `skillforge mcp skills inspect\|verify <file>` | List the skills MCP servers serve, and check every file's bytes against its manifest |
 | `skillforge provenance [path]` | Report where each skill and plugin came from, and how it gets its next version |
 | `skillforge provenance diff <before> <after>` | Report what drifted: publisher, marketplace, pin, fingerprint |
 | `skillforge update analyze <base> <target>` | Report what an update adds, and what that means given how it arrives |
@@ -246,6 +247,22 @@ are capabilities nobody reviewed — `SF8201`.
 Two adapters, one verification layer: `--kind ard` for Agentic Resource Discovery and `--kind mcp-registry` for an
 MCP Registry listing. Both read-only.
 
+## Skills an MCP server serves
+
+```bash
+skillforge mcp skills inspect ./.mcp.json --probe
+skillforge mcp skills verify ./.mcp.json --probe --fail-on-mismatch --format sarif -o skills.sarif
+```
+
+For servers that declare the `io.modelcontextprotocol/skills` extension: every file a skill's manifest names is read
+and checked against its declared SHA-256 and size, the described frontmatter is compared with the served `SKILL.md`,
+and — when the server offers a directory listing — files outside the manifest are reported and never read
+(`SF8301`–`SF8308`).
+
+- **An integrity match is not trust.** The digests are unsigned and come from the same server as the content.
+- **`--probe` is required to ask anything,** and a local stdio server is never launched.
+- **A dynamic skill is not a fault.** Static content integrity cannot be established for it, and the report says so.
+
 ## What it deliberately does not do
 
 SkillForge reports concrete diagnostics and risk signals. It never labels a skill "safe" or "unsafe": that is a
@@ -263,6 +280,7 @@ to nothing it discovered, and never launches a local server in order to inspect 
 - [Migration inventory](https://github.com/NetAnlatAkademi/skillforge/blob/main/docs/migration.md)
 - [The asset graph](https://github.com/NetAnlatAkademi/skillforge/blob/main/docs/graph.md)
 - [Discovery and runtime verification](https://github.com/NetAnlatAkademi/skillforge/blob/main/docs/discovery.md)
+- [Skills served over MCP](https://github.com/NetAnlatAkademi/skillforge/blob/main/docs/mcp-skills.md)
 - [Changelog](https://github.com/NetAnlatAkademi/skillforge/blob/main/CHANGELOG.md)
 
 MIT licensed.

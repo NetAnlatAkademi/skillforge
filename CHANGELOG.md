@@ -8,6 +8,51 @@ Versions are `YY.DayOfYear.Build` — `26.208.1` is the first build on 27 July 2
 carries no promise about compatibility from its shape. Breaking changes are called out in the notes instead.
 Roadmap milestone names ("v0.1.0 — Local Validator") label scope, not releases; see `docs/architecture.md`.
 
+## [26.314.1] — 2026-11-10
+
+### Added — skills served over MCP, and whether what arrived is what was described
+
+Task 1 of `docs/inputs-2026-11-07-master-agent-prompt.md`: the `io.modelcontextprotocol/skills` extension, read and
+verified, without a second skill parser or a second MCP transport.
+
+**`skillforge mcp skills inspect <file> --probe`** lists the skills each server serves, from `skills/list`.
+**`skillforge mcp skills verify <file> --probe`** fetches each one with `skills/get`, reads every file its manifest
+names with `resources/read`, and checks SHA-256 and byte length against the manifest; compares the frontmatter
+`skills/get` described with the one in the served `SKILL.md`; and, only when the server declared `directoryRead`,
+walks `resources/directory/read` to find files the manifest does not name. `--skill <uri>` verifies a skill the
+listing does not carry — the specification requires servers to answer `skills/get` for those, so not being listed is
+recorded, not judged. Console and JSON for both; SARIF for `verify`, carrying only integrity findings.
+
+**`SF8301`–`SF8308`.** Digest mismatch, size mismatch, frontmatter drift, unlisted resource, missing resource and
+invalid manifest are the integrity findings (`--fail-on-mismatch` gates on them). A `"dynamic"` skill is `SF8307`,
+information: *static content integrity cannot be established*, and no baseline is fabricated. An incomplete
+`skills/list` is `SF8308`. Measured on eight fixture skills before the severities were fixed: each fault fires once,
+the conforming skills produce nothing.
+
+**An integrity match is not trust.** Every output says so, and the JSON carries `"serverIdentityVerified": false` on
+every provenance record. The digests are unsigned and come from the same server as the content.
+
+**MCP-served provenance.** Each verified skill records origin `McpServer`, the endpoint (credentials removed), the
+server's self-reported name and version, the protocol revision, the skill URI, the manifest's digests and sizes, and
+when it was observed.
+
+### Changed
+
+- **`tools/list` now runs on a shared transport.** `McpJsonRpcChannel` sends every post-discovery request, with a
+  24 MiB response bound and a JSON depth limit that `tools/list` did not have before; `McpCursorWalk` is the one
+  bounded pagination walk, used by `tools/list`, `skills/list` and `resources/directory/read`. Behaviour of the tool
+  walk is unchanged, and its tests are untouched.
+- **`McpServerProbe.Extensions`** carries `capabilities.extensions` from `server/discover`. Additive in the model; not
+  yet printed by `mcp inspect`.
+
+### Spec notes
+
+- The extension's specification is **beta** (`specification/beta/skills.mdx`), not stable as the brief said.
+- The specification defines no client-side declaration of the extension; SkillForge declares nothing and calls the
+  extension's methods only after the server declares it.
+- A text resource arrives decoded, so a file stored in an encoding other than UTF-8, or with a byte order mark, cannot
+  be byte-verified from `text`. Documented in `docs/mcp-skills.md`.
+
 ## [26.250.1] — 2026-09-07
 
 ### Added — full MCP tool enumeration, the asset graph, remote discovery and runtime verification

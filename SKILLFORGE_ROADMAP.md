@@ -1883,3 +1883,28 @@ Endpoint drift: redirect sonrası cevaplayan URL bilinmeden kurulamaz, prober b�
 kurulamayan bir drift türü rapordaki boş bir vaat olurdu. Composition rule: gerçek repository'lerde ölçülmeden
 yayınlanamaz, ve approval boundary'yi neredeyse kimse beyan etmezken production hiç sınıflandırılamazken dürüst
 bir ölçüm mümkün değil. Diğerleri için model yer bırakıyor; girdinin istediği de yer, implementasyon değildi.
+
+## 35. Skills-over-MCP — 2026-11-07 master agent prompt
+
+Kaynak: `docs/inputs-2026-11-07-master-agent-prompt.md`. Girdi P0'dan P3'e bir öncelik sırası veriyor; bu bölüm
+yalnızca **Task 1**'i, yani `io.modelcontextprotocol/skills` desteğini kaydeder. Sıradaki iş girdinin kendi sırasıyla:
+Git pin-resolution, ardından APM adapter.
+
+### 35.1 Yapılanlar
+
+| İş | Sonuç |
+|---|---|
+| `skills/list`, `skills/get`, `resources/read`, `resources/directory/read` | `IMcpSkillsClient`, `Mcp20260728SkillsClient` |
+| Statik manifest bütünlüğü | SHA-256 + boyut, digest sözdizimi/algoritması, spec limitleri |
+| Frontmatter tutarlılığı | Mevcut parser — JSON frontmatter geçerli YAML'dır |
+| MCP kaynaklı provenance | `McpSkillProvenance`, origin `McpServer` |
+| CLI | `mcp skills inspect\|verify` |
+| Diagnostic'ler | `SF8301`–`SF8308` |
+
+### 35.2 Bu fazın kararları
+
+- **MCP Skills bir taşıma katmanıdır, içerik formatı değil.** İkinci bir SKILL.md parser'ı yazılmadı.
+- **Tek taşıma, tek sayfalama.** `tools/list` de `McpJsonRpcChannel` ve `McpCursorWalk` üzerine taşındı; mevcut
+  pagination testleri değişmeden geçti.
+- **Integrity ≠ trust.** Digest'ler imzasız ve içerikle aynı sunucudan geliyor; her çıktı bunu söyler.
+- **Spec beta.** Girdinin `stable/` dediği yol yok; alan adları `specification/beta/skills.mdx`'ten alındı.

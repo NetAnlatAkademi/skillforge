@@ -153,6 +153,18 @@ jobs:
             exit 1
           fi
 
+          # MCP skills must not reach a server without --probe. The host below does not resolve, so a request
+          # would show up as an unreachable server rather than as "--probe was not given".
+          skills_config="$RUNNER_TEMP/skills-mcp.json"
+          printf '{ "mcpServers": { "remote": { "url": "https://skills.invalid/mcp" } } }' > "$skills_config"
+          skills_output=$(run mcp skills verify "$skills_config" --no-color)
+
+          if ! printf '%s\n' "$skills_output" | grep -q -- '--probe was not given'; then
+            echo "Expected 'mcp skills verify' without --probe to ask nothing"
+            printf '%s\n' "$skills_output"
+            exit 1
+          fi
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v5
